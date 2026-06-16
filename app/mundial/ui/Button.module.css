@@ -1,0 +1,67 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--m-space-2);
+  min-height: 52px;
+  padding: 0 var(--m-space-6);
+  border: none;
+  border-radius: var(--m-radius-pill);
+  font-family: var(--m-font-body);
+  font-size: var(--m-text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform var(--m-duration) var(--m-ease),
+    box-shadow var(--m-duration) var(--m-ease),
+    background var(--m-duration) var(--m-ease);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.full {
+  width: 100%;
+}
+
+.primary {
+  background: var(--m-accent);
+  color: var(--m-white);
+  box-shadow: var(--m-shadow-btn);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--m-accent-hover);
+  box-shadow: var(--m-shadow-glow);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--m-body);
+  border: 1px solid var(--m-border-strong);
+  box-shadow: none;
+  min-height: 48px;
+}
+
+.ghost:hover:not(:disabled) {
+  border-color: var(--m-accent-border);
+  color: var(--m-white);
+}
+
+.soft {
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+  border: 1px solid var(--m-accent-border);
+  box-shadow: none;
+  min-height: 48px;
+}
+
+.soft:hover:not(:disabled) {
+  box-shadow: var(--m-shadow-glow-sm);
+}

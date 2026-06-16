@@ -1,0 +1,11 @@
+.groupLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  line-height: 1.3;
+}
+
+.groupMeta {
+  opacity: 0.92;
+}

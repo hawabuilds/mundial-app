@@ -1,0 +1,91 @@
+📌 Mundial — FAQ (PIN THIS)
+
+Play: mundial.xyz
+Disclaimer: mundial.xyz/disclaimer
+
+— — —
+
+Q: What is Mundial?
+A: A free skill-based football prediction game. Reply on X with your score before kickoff, earn points, climb the leaderboard. Top 20 each day can win BNB. No wallet needed to play — only to claim prizes.
+
+Q: Is this gambling?
+A: It’s a skill-based prediction game, not a sportsbook. Not financial or gambling advice. Eligibility varies by region — check your local laws. Full disclaimer: mundial.xyz/disclaimer
+
+Q: Are you affiliated with FIFA or any club/league?
+A: No. We are not affiliated with FIFA, any league, or any club.
+
+Q: Do I need crypto or a wallet to play?
+A: No. You only need X to predict and earn points. You need MetaMask on BSC only when claiming BNB after finishing in the top 20.
+
+— — —
+
+Q: How do I play?
+A: 1) Sign in at mundial.xyz with X. 2) Check today’s matches on the site (UTC times). 3) Reply on the @mundialX match post with your score BEFORE kickoff — not in the app. Example: Netherlands 2-1 Uzbekistan. 4) Points update after full time. 5) If you’re top 20 at the daily snapshot, claim BNB in the Wallet + Claim tabs.
+
+Q: Where do I post my prediction?
+A: As a reply on the official @mundialX match post for that fixture. Not on random tweets.
+
+Q: What’s the deadline?
+A: Before kickoff (UTC). Replies at or after kickoff do not count.
+
+Q: Can I change my prediction?
+A: Your first valid pre-kickoff reply on that match post counts. Only one reply per X account per match.
+
+Q: Why wasn’t my reply counted?
+A: Usually: replied after kickoff, wrong thread, unreadable score format, no match post yet, or match cancelled. Include your @handle, match, and reply link if you need help.
+
+Q: Do extra time or penalties count?
+A: No. We use 90 minutes + injury time only. ET and pens do not change your points.
+
+— — —
+
+Q: How are points scored?
+A: Exact score = 5 pts. Correct outcome (winner/draw, wrong score) = 3 pts. Wrong outcome = 1 pt. Valid pre-kickoff predictions always get at least 1 pt when the match is scored.
+
+Q: How does the leaderboard work?
+A: One rank per X account. Total points = sum of all scored matches. Higher points = higher rank. It does not reset every day.
+
+— — —
+
+Q: Who gets paid?
+A: Only the top 20 on the leaderboard at the daily snapshot (12:00 UTC).
+
+Q: When is the snapshot?
+A: Every day at 12:00 UTC. That locks the top 20 for that calendar day’s prizes.
+
+Q: How is the prize pool split?
+A: Of that day’s pool — Ranks 1–5: 10% each. Ranks 6–10: 5% each. Ranks 11–20: 2.5% each.
+
+Q: How big is the daily pool?
+A: It changes every day — not a fixed amount. Funded mainly by $SCORE token taxes (see below) plus BNB in the payout contract. More volume can mean more tax, but nothing is guaranteed.
+
+Q: How do I claim?
+A: Sign in with the same X account → Wallet tab (connect MetaMask on BSC) → Claim tab → confirm transaction. Keep a small amount of BNB for gas.
+
+Q: I’m top 20 but Claim is empty — why?
+A: Check: snapshot already ran for that day, same X account signed in, epoch opened and contract funded. Ask in chat with screenshots if stuck.
+
+— — —
+
+Q: What is $SCORE?
+A: The project token on BNB Smart Chain (BSC), launched on flap.sh. You do not need to hold or buy $SCORE to play. DYOR — not investment advice.
+
+Q: What are the $SCORE taxes?
+A: 3% on buys and 3% on sells (3/3).
+
+Q: Where do $SCORE taxes go?
+A: 50% of all taxes → buyback & burn $SCORE.
+   50% → Flap split vault, split 80/20:
+   • 80% → daily leaderboard winner payouts (BNB)
+   • 20% → football charity
+
+Q: How does $SCORE connect to the game?
+A: The 80% vault share helps fund daily BNB prizes for top-20 winners. Amounts vary daily based on trading volume and setup.
+
+— — —
+
+Q: I need help — what should I send?
+A: Your @X handle, match + date, link to your reply (predictions) or screenshot (wallet/claim issues).
+
+Q: Where are the full rules?
+A: mundial.xyz/disclaimer and our community FAQ docs.

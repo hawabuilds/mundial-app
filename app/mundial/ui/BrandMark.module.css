@@ -1,0 +1,42 @@
+.mark {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+}
+
+.logo,
+.logoLg {
+  display: block;
+  border-radius: var(--m-radius-sm);
+  object-fit: cover;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+}
+
+.logoLg {
+  width: 40px;
+  height: 40px;
+}
+
+.trophy {
+  display: none;
+}
+
+.name,
+.nameLg {
+  font-family: var(--m-font-display);
+  font-weight: 700;
+  letter-spacing: var(--m-tracking-tight);
+  color: var(--m-white);
+}
+
+.name {
+  font-size: var(--m-text-lg);
+}
+
+.nameLg {
+  font-size: var(--m-text-xl);
+}

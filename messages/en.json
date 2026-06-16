@@ -1,0 +1,548 @@
+{
+  "metadata": {
+    "title": "Mundial",
+    "description": "World Cup scoreline arena on X. Reply, rank, withdraw BNB."
+  },
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "done": "Done",
+    "youSuffix": " · you",
+    "vs": "vs",
+    "versusShort": "vs",
+    "bnb": "BNB",
+    "usdc": "USDC",
+    "usd": "USD",
+    "rank": "Rank",
+    "rankHash": "Rank #{rank}",
+    "pointsShort": "pts",
+    "pointsLabel": "Points",
+    "connecting": "Connecting…",
+    "sending": "Sending…",
+    "loading": "Loading…",
+    "loadingEllipsis": "Loading…",
+    "scoreBrand": "Mundial",
+    "scoreLogoAlt": "Mundial logo",
+    "scoreNavLogoAlt": "Mundial logo",
+    "trophyAlt": "Trophy",
+    "seeAll": "View all",
+    "emDash": "—",
+    "approxUsd": "≈ {amount} USD",
+    "approxUsdInline": "≈ {amount}",
+    "rewardDays": "{count} reward days",
+    "multiDays": "{count} days",
+    "claimAll": "Claim all ({count})",
+    "claimedOn": "Claimed {date}",
+    "rankMeta": "Rank #{rank} · {tier} · {pts} pts",
+    "dayDate": "{day} · {date}",
+    "playersCount": "{count} in the arena · Updates after each final whistle",
+    "playersCountShort": "{count} active"
+  },
+  "landing": {
+    "title": "Mundial",
+    "subtitle": "A scoreline arena built on X. Reply before kickoff, rise in live standings, take BNB when you place.",
+    "heroTag": "World Cup 2026",
+    "signInWithX": "Open with X",
+    "trustLine": "Free to play. Wallet only needed when you withdraw winnings.",
+    "upcomingMatches": "Schedule",
+    "noUpcomingMatches": "Calendar is clear for now.",
+    "statPlayers": "Active",
+    "statPrizePool": "Pool",
+    "statPayout": "Cadence",
+    "statPayoutValue": "Daily",
+    "featuredKickoff": "Next",
+    "moreMatchesTeaser": "+{count} inside",
+    "howItWorks": "Rules",
+    "step1Title": "Join",
+    "step1Desc": "One X login. Your handle is your player ID.",
+    "step2Title": "Reply",
+    "step2Desc": "Post your scoreline under our match thread before kickoff.",
+    "step3Title": "Withdraw",
+    "step3Desc": "Top 20 when the day locks — BNB sent to your wallet."
+  },
+  "social": {
+    "followXAria": "Follow Mundial on X (opens in new tab)",
+    "joinTelegramAria": "Join our Telegram community (opens in new tab)"
+  },
+  "dashboard": {
+    "greetingHey": "",
+    "greetingRanked": "position #{rank} today",
+    "greetingFirstPrediction": "no position yet — reply to a match thread",
+    "yourRank": "Position",
+    "scoreToRank": "Reply to appear",
+    "pointsScoring": "Exact 5 · Result 3 · Entry 1",
+    "claimRewardsAria": "Open rewards",
+    "rewardsToClaim": "BNB ready",
+    "rewardsReady": "{amount} BNB · ≈ {usd}",
+    "fixturesSection": "Today's matches",
+    "nextMatch": "Now",
+    "upcomingMatch": "Later",
+    "kickoffToday": "Today",
+    "showAllFixtures": "Expand · {count} today",
+    "showFewerFixtures": "Collapse",
+    "noUpcomingMatches": "Queue is empty.",
+    "predictOnX": "Reply on X",
+    "leaderboard": "Standings snapshot",
+    "leaderboardEmpty": "Standings go live after the first final whistle."
+  },
+  "leaderboard": {
+    "navTitle": "Standings",
+    "title": "Standings",
+    "subtitle": "Refreshed after every final score",
+    "columnPlayer": "Player",
+    "loadingRankings": "Loading standings…",
+    "loadFailed": "Standings unavailable",
+    "emptyState": "Nobody on the board yet. Reply to a match thread to appear here."
+  },
+  "tiers": {
+    "tier1Name": "Tier 1",
+    "tier1Range": "Top 3",
+    "tier2Name": "Tier 2",
+    "tier2Range": "Ranks 4–10",
+    "tier3Name": "Tier 3",
+    "tier3Range": "Ranks 11–20"
+  },
+  "wallet": {
+    "navTitle": "Wallet",
+    "connectedTitle": "Wallet connected",
+    "connectTitle": "Connect your wallet",
+    "connectedSub": "Your prize winnings (paid in BNB) will be sent to this wallet.",
+    "connectSub": "This is where your winnings get sent. Prizes are paid in crypto (BNB). No wallet needed just to play.",
+    "status": "Status",
+    "connected": "Connected",
+    "network": "Network",
+    "networkBsc": "BNB Smart Chain",
+    "networkBscTestnet": "BSC Testnet",
+    "networkWrong": "Wrong network — switch to BNB Smart Chain",
+    "address": "Address",
+    "walletBalance": "Wallet balance",
+    "disconnect": "Disconnect",
+    "connectWallet": "Connect Wallet",
+    "payoutWalletLinked": "Payout wallet linked",
+    "payoutWalletLinkFailed": "Could not save payout wallet.",
+    "payoutWalletRetry": "Try again",
+    "signInXToLink": "Sign in with X first, then connect your wallet to link payouts.",
+    "signOutOfX": "Sign out of X",
+    "skipForNow": "Skip for now",
+    "disclaimerShort": "Skill-based prediction game. Not financial advice. Eligibility varies by region.",
+    "disclaimerFullLink": "Full disclaimer"
+  },
+  "disclaimer": {
+    "pageTitle": "Disclaimer",
+    "fullText": "Disclaimer: Mundial is a Skill-based prediction game. Nothing on this site or in our communications constitutes financial, investment, legal, or gambling advice, or an offer or solicitation to buy any asset. Eligibility varies by region; please check your local laws. Mundial is not affiliated with FIFA or any league/club. DYOR.",
+    "backHome": "Back to home",
+    "footerLink": "Disclaimer"
+  },
+  "docs": {
+    "footerLink": "Docs",
+    "brandName": "Mundial",
+    "sidebarTagline": "Everything you need to know about the game",
+    "copyContractTitle": "Copy contract address",
+    "copy": "Copy",
+    "copied": "Copied",
+    "nav": {
+      "overview": "Overview",
+      "how-to-play": "How to play",
+      "rewards": "Daily rewards",
+      "token": "The $SCORE token",
+      "contract": "Rewards contract",
+      "webapp": "The web app",
+      "community": "Community and growth",
+      "links": "Official links",
+      "disclaimer": "Disclaimer"
+    },
+    "hero": {
+      "live": "Live",
+      "chain": "BNB Smart Chain",
+      "launchpad": "Launched on flap.sh",
+      "title1": "Predict the score",
+      "title2": "and win in BNB",
+      "subtitle": "Mundial is a football prediction game that lives on X. You reply with your score before kickoff, watch your points build on the daily leaderboard, and if you finish in the top 20 you get a share of that day's rewards paid in BNB."
+    },
+    "overview": {
+      "eyebrow": "01 Overview",
+      "title": "What this is",
+      "p1": "Mundial is a football score prediction game built around X. When we post a real fixture, you reply under that post from <xHandle>@copamundialapp</xHandle> with the score you think it will finish. Get it right and you earn points. Those points stack on a daily leaderboard, and every day the top 20 players share a pool of rewards paid in BNB.",
+      "p2": "We kept the barrier to entry as low as we could. You do not need to download an app or create an account just to play. A reply on X before kickoff is enough to enter. When you want to follow fixtures, check where you stand, or claim something you have won, that is what <site>mundial.xyz</site> is for."
+    },
+    "howToPlay": {
+      "eyebrow": "02 How to play",
+      "title": "All you do is reply on X",
+      "step1": "<xHandle>@copamundialapp</xHandle> posts a match thread, something like <em>Mexico vs South Africa, drop your score below</em>, and that is your cue to join in.",
+      "step2": "Reply with the score you are predicting <strong>before kickoff</strong> and make sure both teams are named, for example <mono>Mexico 2-1 South Africa</mono>.",
+      "step3": "Once the match has finished we score your prediction against the real result and add the points to your total.",
+      "step4": "Your points show up on the daily leaderboard, usually within a short while after full time.",
+      "step5": "At 12:00 UTC each day we lock the leaderboard for that period and assign rewards to whoever finished in the top 20.",
+      "step6": "If you are one of those winners you sign in with X at mundial.xyz, connect a wallet, and claim your BNB whenever you are ready. There is no expiry on a valid win.",
+      "scoringTitle": "How points work",
+      "scoring": {
+        "exact": { "label": "Exact scoreline", "note": "You called the score perfectly" },
+        "outcome": { "label": "Correct outcome", "note": "Right winner or draw, wrong numbers" },
+        "wrong": { "label": "Wrong outcome", "note": "You still get a point for playing" }
+      },
+      "scoringNote": "You only receive one score per match and we count the best tier you qualify for. Your first valid reply is the one that counts, and it has to land before the scheduled kickoff.",
+      "formatTitle": "How to write your prediction",
+      "format1": "Include both team names and a score. The order does not change what we record, so <mono>Mexico 2-1 South Africa</mono> and <mono>South Africa 1-2 Mexico</mono> are treated as the same prediction.",
+      "format2": "We recognise common nicknames for teams, but small misspellings do not count.",
+      "format3": "If you edit your reply or post again we ignore it. The first valid reply you leave is the one that stands."
+    },
+    "rewards": {
+      "eyebrow": "03 Daily rewards",
+      "title": "How the top 20 share the pool",
+      "tier1": { "ranks": "Ranks 1 to 3", "share": "28% of the daily pool", "each": "9.3% each" },
+      "tier2": { "ranks": "Ranks 4 to 10", "share": "39% of the daily pool", "each": "5.6% each" },
+      "tier3": { "ranks": "Ranks 11 to 20", "share": "33% of the daily pool", "each": "3.3% each" },
+      "note": "Shares follow a 10 : 6 : 3.5 per-person ratio across the three tiers (100% of the pot). On a $1,500 pool that works out to about $140 / $84 / $49 per winner. On days when fewer than 20 players score, whatever is left over stays in the rewards contract and helps fund future pools. If two players finish level we give the higher rank to whoever predicted earlier."
+    },
+    "token": {
+      "eyebrow": "04 The token",
+      "title": "$SCORE on BNB Smart Chain",
+      "table": {
+        "contractAddress": "Contract address",
+        "chain": "Chain",
+        "chainValue": "BNB Smart Chain (BEP-20)",
+        "launchpad": "Launchpad",
+        "launchpadValue": "flap.sh",
+        "tax": "Tax",
+        "taxValue": "3% on buys and 3% on sells"
+      },
+      "taxTitle": "Where the tax goes",
+      "tax": {
+        "buyback": { "pct": "40%", "title": "Buyback and burn", "body": "This keeps buy pressure on the token and slowly reduces the supply over time." },
+        "payouts": { "pct": "40%", "title": "Leaderboard payouts", "body": "This side of the tax helps fund the daily BNB pools that go to the best predictors on the board." },
+        "development": { "pct": "20%", "title": "Development", "body": "This covers the running costs of the project, including API fees, charity, marketing, listings and community giveaways." }
+      },
+      "note": "The share that goes to leaderboard payouts arrives as BNB in the rewards contract. Each day's pool is reserved on chain so anything already owed to winners stays protected."
+    },
+    "contract": {
+      "eyebrow": "05 Rewards contract",
+      "title": "How payouts actually work on chain",
+      "intro": "Daily rewards are paid out through a dedicated smart contract on BNB Smart Chain. We kept it deliberately simple, but the contract itself sets hard limits on what can ever be paid so the rules are not just promises on a website.",
+      "epochsTitle": "Daily reward pools",
+      "epochsBody": "Every day at 12:00 UTC we open that day's reward pool on chain as what the contract calls an epoch, with a fixed amount of BNB set aside for that day. The contract reserves that money straight away. BNB that belongs to a day's winners cannot be spent again, moved somewhere else, or pulled out by anyone on the team. We can only open a new epoch if the contract really holds enough unreserved BNB to cover it.",
+      "claimTitle": "Claiming with a signed voucher",
+      "claim": {
+        "verify": { "title": "Verify", "body": "You sign in with X at mundial.xyz and our server checks that you were a genuine top 20 finisher for that day." },
+        "authorise": { "title": "Authorise", "body": "We work out your exact reward from the final leaderboard and sign a voucher for the wallet you want to use." },
+        "claim": { "title": "Claim", "body": "Your wallet sends that voucher to the contract, the contract checks the signature on chain, and the BNB is transferred to you." }
+      },
+      "safetyTitle": "What the contract enforces",
+      "safety": {
+        "rule1": "Every voucher works once. A successful claim cannot be replayed or claimed twice.",
+        "rule2": "The total paid out for a day can never go above the pool that was opened for that day. The contract enforces that, not us.",
+        "rule3": "Vouchers only work with this contract on BNB Smart Chain. They cannot be reused on another chain or another project.",
+        "rule4": "There is no deadline to claim. If you won, your share stays reserved until you come back and collect it.",
+        "rule5": "Transfers are protected against re-entrancy attacks and the contract can be paused if something serious needs to be stopped quickly.",
+        "rule6": "Any recovery function can only touch spare funds sitting in the contract, never BNB that is already reserved for winners."
+      },
+      "callout": "<highlight>The simple version is this.</highlight> Once a day's pool has been opened on chain, that BNB is for that day's winners and the contract is what makes that true, not a line in our docs."
+    },
+    "webapp": {
+      "eyebrow": "06 The web app",
+      "title": "mundial.xyz",
+      "features": {
+        "fixtures": { "title": "Fixtures", "body": "See which matches are coming up and check kickoff times in your own timezone." },
+        "leaderboard": { "title": "Leaderboard", "body": "Follow daily standings and how your season points are building." },
+        "signIn": { "title": "Sign in with X", "body": "Your predictions and any rewards you win stay tied to the X account you sign in with." },
+        "wallet": { "title": "Wallet and claim", "body": "Connect a BNB Smart Chain wallet when you are ready and claim rewards you have already won." }
+      }
+    },
+    "community": {
+      "eyebrow": "07 Community",
+      "title": "Community and growth",
+      "intro": "The leaderboard is the centre of the game, but it is not the only reason to stick around and it is not the only way to earn. We want an active community where people actually get rewarded for showing up, and that has been part of the plan from the start.",
+      "findUsTitle": "Where to find us",
+      "telegram": {
+        "title": "Daily AMAs",
+        "body": "We run a daily AMA in our Telegram group where you can ask the team anything you want to know.",
+        "link": "t.me/MundialTG"
+      },
+      "xSpaces": {
+        "title": "X Spaces",
+        "body": "We host live Spaces on @copamundialapp a few times a week when there is something worth talking through together.",
+        "link": "@copamundialapp"
+      },
+      "earnTitle": "Other ways to earn BNB",
+      "earnIntro": "If you miss the top 20 on the board, that is not the end of the story. Part of the development allocation goes back into the community as BNB rewards, including things like",
+      "earn": {
+        "quizzes": "<strong>Regular quizzes</strong> where winners can pick up BNB prizes.",
+        "activeMember": "<strong>Active member rewards</strong> for people who consistently add something useful to the community.",
+        "bounty": "<strong>Bounty app coming soon</strong>, which is our own bounty site where we post tasks for the community, and strong submissions or content that travels well can earn BNB."
+      },
+      "callout": "You do not have to finish in the top 20 every day to earn here. Quizzes, community rewards and bounties are funded from the development side of the token tax."
+    },
+    "links": {
+      "eyebrow": "08 Links",
+      "title": "Official links",
+      "items": {
+        "webapp": { "label": "Web app", "value": "mundial.xyz" },
+        "x": { "label": "X", "value": "@copamundialapp" },
+        "telegram": { "label": "Telegram", "value": "t.me/MundialTG" },
+        "disclaimer": { "label": "Disclaimer", "value": "mundial.xyz/disclaimer" }
+      },
+      "contractLabel": "$SCORE contract",
+      "trustNote": "Please only trust links that come from <xHandle>@copamundialapp</xHandle> or that you see on mundial.xyz itself. Our admins will never message you first in a DM."
+    },
+    "disclaimer": {
+      "eyebrow": "09 Disclaimer",
+      "title": "Disclaimer",
+      "body": "Mundial is a skill based prediction game. Nothing on this site or in anything we publish is financial advice, investment advice, legal advice, or gambling advice, and nothing here should be read as an offer to buy any asset. Whether you can take part depends on where you live, so please check your local rules. We are not affiliated with FIFA or with any league or club. Crypto prices move quickly, so only take part with money you can afford to lose. Rewards depend on how the game runs, what results come in, and what funds are available at the time. Do your own research."
+    }
+  },
+  "faq": {
+    "pageTitle": "FAQ",
+    "subtitle": "Search FAQs about playing, points, payouts, or $SCORE…",
+    "searchPlaceholder": "Search questions…",
+    "clearSearch": "Clear search",
+    "noResults": "No questions match your search. Try different words or browse all questions below.",
+    "resultsCount": "{count, plural, one {# question} other {# questions}}",
+    "copyAnswer": "Copy",
+    "answerCopied": "Copied",
+    "loading": "Loading FAQ…",
+    "backHome": "Back to home",
+    "footerLink": "FAQ",
+    "items": {
+      "whatIs": {
+        "question": "What is Mundial?",
+        "answer": "A free skill-based football prediction game. Reply on X with your score before kickoff, earn points, climb the leaderboard. Top 20 each day can win BNB. No wallet needed to play — only to claim prizes."
+      },
+      "isGambling": {
+        "question": "Is this gambling?",
+        "answer": "It’s a skill-based prediction game, not a sportsbook. Not financial or gambling advice. Eligibility varies by region — check your local laws. Full disclaimer: mundial.xyz/disclaimer"
+      },
+      "fifaAffiliation": {
+        "question": "Are you affiliated with FIFA or any club/league?",
+        "answer": "No. We are not affiliated with FIFA, any league, or any club."
+      },
+      "needWalletToPlay": {
+        "question": "Do I need crypto or a wallet to play?",
+        "answer": "No. You only need X to predict and earn points. You need MetaMask on BSC only when claiming BNB after finishing in the top 20."
+      },
+      "howToPlay": {
+        "question": "How do I play?",
+        "answer": "1) Sign in at mundial.xyz with X. 2) Check today’s matches on the site (UTC times). 3) Reply on the @copamundialapp match post with your score BEFORE kickoff — not in the app. Example: Netherlands 2-1 Uzbekistan. 4) Points update after full time. 5) If you’re top 20 at the daily snapshot, claim BNB in the Wallet + Claim tabs."
+      },
+      "whereToPost": {
+        "question": "Where do I post my prediction?",
+        "answer": "As a reply on the official @copamundialapp match post for that fixture. Not on random tweets."
+      },
+      "deadline": {
+        "question": "What’s the deadline?",
+        "answer": "Before kickoff (UTC). Replies at or after kickoff do not count."
+      },
+      "changePrediction": {
+        "question": "Can I change my prediction?",
+        "answer": "Your first valid pre-kickoff reply on that match post counts. Only one reply per X account per match."
+      },
+      "replyNotCounted": {
+        "question": "Why wasn’t my reply counted?",
+        "answer": "Usually: replied after kickoff, wrong thread, unreadable score format, no match post yet, or match cancelled. Include your @handle, match, and reply link if you need help."
+      },
+      "extraTime": {
+        "question": "Do extra time or penalties count?",
+        "answer": "No. We use 90 minutes + injury time only. ET and pens do not change your points."
+      },
+      "pointsScoring": {
+        "question": "How does scoring work?",
+        "answer": "Exact score = 5 pts. Correct outcome (winner/draw, wrong score) = 3 pts. Wrong outcome = 1 pt. Valid pre-kickoff predictions always get at least 1 pt when the match is scored."
+      },
+      "pointsUpdated": {
+        "question": "When are points updated?",
+        "answer": "After the match finishes and we have the final 90+ injury time score. Points and the leaderboard usually update automatically within about 15 minutes of full time — refresh the app if you don’t see them yet."
+      },
+      "leaderboard": {
+        "question": "How does the leaderboard work?",
+        "answer": "One rank per X account. Total points = sum of all scored matches. Higher points = higher rank. It does not reset every day."
+      },
+      "whoGetsPaid": {
+        "question": "Who wins prizes?",
+        "answer": "Only the Top 20 players at the daily 12:00 UTC snapshot qualify for prizes."
+      },
+      "snapshotWhen": {
+        "question": "When is the snapshot?",
+        "answer": "Every day at 12:00 UTC. That locks the top 20 for that calendar day’s prizes."
+      },
+      "prizeSplit": {
+        "question": "How is the prize pool split?",
+        "answer": "Top 20 split the full daily pool at a 10 : 6 : 3.5 per-person ratio — Ranks 1–3: ~9.3% each. Ranks 4–10: ~5.6% each. Ranks 11–20: ~3.3% each. On a $1,500 pool that’s about $140, $84, and $49 per winner."
+      },
+      "poolSize": {
+        "question": "How big is the daily pool?",
+        "answer": "Prize pools vary based on daily trading volume. Higher volume can generate more $SCORE tax revenue, which may increase the prize pool. However, prize amounts are not guaranteed and can change from day to day."
+      },
+      "howToClaim": {
+        "question": "How do I claim?",
+        "answer": "Sign in with the same X account → Wallet tab (connect MetaMask on BSC) → Claim tab → confirm transaction. Keep a small amount of BNB for gas."
+      },
+      "claimEmpty": {
+        "question": "I’m Top 20 but Claim is empty — why?",
+        "answer": "Check that:\n\n• The daily snapshot has already occurred\n• You’re signed in with the correct X account\n• The claim period is open\n• The payout contract has been funded\n\nIf you’re still having issues, contact support with screenshots."
+      },
+      "whatIsScoreToken": {
+        "question": "What is $SCORE?",
+        "answer": "$SCORE is the project token on BSC, launched on flap.sh. You do not need to buy or hold $SCORE to play. DYOR — this is not financial advice."
+      },
+      "scoreTaxes": {
+        "question": "What are the $SCORE taxes?",
+        "answer": "3% on buys and 3% on sells (3/3)."
+      },
+      "scoreTaxSplit": {
+        "question": "Where do $SCORE taxes go?",
+        "answer": "• 40% → buyback & burn $SCORE\n• 40% → daily leaderboard winner payouts (BNB)\n• 20% → development\n\nThe payout and development shares (60% total) flow through the Flap split vault, split 67/33."
+      },
+      "scoreConnectsGame": {
+        "question": "How does $SCORE connect to the game?",
+        "answer": "The vault’s 67% share (40% of all taxes) helps fund daily BNB prizes for top-20 winners. Amounts vary daily based on trading volume and setup."
+      },
+      "needHelp": {
+        "question": "I need help — what should I send?",
+        "answer": "Your @X handle, match + date, link to your reply (predictions) or screenshot (wallet/claim issues)."
+      },
+      "fullRules": {
+        "question": "Where are the full rules?",
+        "answer": "mundial.xyz/disclaimer and mundial.xyz/faq"
+      }
+    }
+  },
+  "claim": {
+    "navTitle": "Claim Reward",
+    "emptyTitle": "No rewards yet",
+    "emptySub": "Finish a day in the top 20 to win. Your claimable rewards will appear here.",
+    "makePrediction": "Make a prediction",
+    "totalReady": "Total ready to claim",
+    "readyToClaim": "Ready to claim",
+    "claimHistory": "Claim history",
+    "claim": "Claim",
+    "toastClaimed": "Reward claimed ✓",
+    "toastOpeningX": "Opening X…",
+    "dayToday": "Today",
+    "dayYesterday": "Yesterday",
+    "dayMon": "Mon",
+    "daySun": "Sun",
+    "signInTitle": "Sign in to claim",
+    "signInSub": "Sign in with the X account that won on the leaderboard.",
+    "signInButton": "Sign in with X",
+    "loadingRewards": "Loading your rewards…",
+    "loadFailedTitle": "Could not load rewards",
+    "retry": "Try again",
+    "claimFailed": "Claim failed — check wallet network and try again",
+    "claimWcHint": "You connected with a QR code. For claims, use MetaMask in this same browser instead (Wallet → MetaMask). QR often fails after you confirm on your phone.",
+    "claimWcBusy": "Confirm on your phone, then return to this browser tab immediately and keep it open until the claim finishes.",
+    "claimSuccess": "Reward claimed on-chain",
+    "claimSuccessTestnet": "Reward claimed on BSC Testnet",
+    "viewOnBscScan": "View transaction on BscScan",
+    "linkingWallet": "Linking this MetaMask address for payouts…"
+  },
+  "predictionModal": {
+    "ariaLabel": "Predict on X",
+    "title": "Predict on X",
+    "replyUnder": "Reply under {account}'s match post with your score. Example:",
+    "findingPost": "Finding the match post…",
+    "replyOnX": "Reply on X",
+    "viewPostOnX": "View match post on X",
+    "loadError": "Could not load the match post. Try again in a moment.",
+    "noMatchPost": "No match post found yet. {account} needs to post this fixture with both team names."
+  },
+  "celebrationCard": {
+    "ariaLabel": "Celebration",
+    "winner": "WINNER",
+    "prizeWon": "Prize won",
+    "paidOn": "paid on {network}",
+    "tagline": "mundial · predict & win daily",
+    "saveHint": "Press & hold the image to save it",
+    "snapshotAlt": "Your win — press and hold to save",
+    "shareOnX": "Share on X",
+    "shareTweetText": "@copamundialapp",
+    "sharePasteHint": "Opening X — paste your win image into the post",
+    "preparingImage": "Preparing image…",
+    "tweetWon": "@copamundialapp",
+    "tweetWonFallback": "@copamundialapp",
+    "tweetAmount": "{bnb} BNB (≈ {usd})"
+  },
+  "tabBar": {
+    "home": "Matches",
+    "ranks": "Rank",
+    "wallet": "Wallet",
+    "claim": "Claim"
+  },
+  "bounty": {
+    "pageTitle": "Bounties",
+    "pageSub": "Complete community bounties, post your video, and win BNB. The admin picks one winner per bounty after the timer ends.",
+    "backHome": "Back to home",
+    "loading": "Loading bounties…",
+    "noBounties": "No bounties yet — check back soon.",
+    "noBountiesFiltered": "No bounties in this view.",
+    "statsLive": "Live bounties",
+    "statsSubmissions": "Submissions",
+    "statsUnclaimed": "Unclaimed rewards",
+    "tabAll": "All",
+    "tabLive": "Live",
+    "tabJudging": "Judging",
+    "tabCompleted": "Completed",
+    "entriesCount": "{count, plural, =0 {No entries} one {# entry} other {# entries}}",
+    "closeDetail": "Close",
+    "genericError": "Something went wrong. Try again.",
+    "signIn": "Sign in",
+    "signInPrompt": "Sign in with X to submit your entry.",
+    "signInWithX": "Sign in with X",
+    "statusOpen": "Open",
+    "statusJudging": "Judging",
+    "statusWon": "Winner selected",
+    "statusPaid": "Paid",
+    "rewardLabel": "Reward",
+    "endsIn": "Ends in",
+    "deadlineLabel": "Deadline",
+    "submissionsClosed": "Closed",
+    "submissionsTitle": "Submissions ({count})",
+    "noSubmissions": "No submissions yet — be the first.",
+    "winnerBadge": "Winner",
+    "mineBadge": "Yours",
+    "viewPost": "View social post",
+    "selectWinner": "Select as winner",
+    "selectingWinner": "Selecting…",
+    "submitTitle": "Submit your entry",
+    "submitTitleAgain": "Update your entry",
+    "submitVideoLabel": "Video (.mp4, .webm, .mov)",
+    "submitPostLabel": "Link to your social post",
+    "submitHint": "Upload your video and paste the public link to your post on X, TikTok, Instagram, YouTube or Telegram. One entry per account — resubmitting replaces your previous entry.",
+    "submitButton": "Submit entry",
+    "submitButtonAgain": "Replace my entry",
+    "submitPreparing": "Preparing upload…",
+    "submitUploading": "Uploading video…",
+    "submitSaving": "Saving entry…",
+    "submitDone": "Entry received — good luck!",
+    "submitErrorVideo": "Choose a video file first",
+    "submitErrorPost": "Paste the link to your social post",
+    "claimTitle": "You won this bounty! 🏆",
+    "claimText": "{amount} BNB (≈ {usd}) will be sent to your linked payout wallet. No linked wallet yet? Connect it in the app's Wallet tab first.",
+    "claimButton": "Claim {amount} BNB",
+    "claimSending": "Sending BNB…",
+    "claimViewTx": "View payout transaction",
+    "adminNewBounty": "Admin · New bounty",
+    "adminTitle": "Title",
+    "adminDescription": "Description",
+    "adminImage": "Cover image (.jpg, .png, .webp, .gif)",
+    "adminUploadingImage": "Uploading image…",
+    "adminErrorImage": "Choose a cover image",
+    "adminReward": "Reward (BNB)",
+    "adminDeadline": "Deadline",
+    "adminCreate": "Post bounty",
+    "adminCreating": "Posting…",
+    "adminErrorFields": "Title and description are required",
+    "adminErrorReward": "Enter a reward in BNB",
+    "adminErrorDeadline": "Deadline must be in the future"
+  },
+  "switchXAccount": {
+    "title": "Switch X account",
+    "body": "X keeps you logged in across tabs. To use a different account, open X and switch accounts there first, then come back.",
+    "openX": "Open X to switch accounts",
+    "continueSignIn": "Continue — Sign in with X"
+  },
+  "nav": {
+    "accountMenu": "Account menu",
+    "switchXAccount": "Switch X account",
+    "signOutOfX": "Sign out of X",
+    "walletAccount": "Wallet account",
+    "connectWallet": "Connect wallet"
+  }
+}

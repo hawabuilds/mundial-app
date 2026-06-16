@@ -1,0 +1,79 @@
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  background: var(--ds-bg-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  transition: border-color var(--ds-duration-fast);
+}
+
+.cardMe {
+  border-color: var(--ds-border-accent);
+  background: var(--ds-accent-soft);
+}
+
+.cardCompact {
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 132px;
+  flex-shrink: 0;
+  padding: var(--ds-space-3) var(--ds-space-4);
+}
+
+.rank {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  color: var(--ds-text-muted);
+  min-width: 28px;
+}
+
+.rankTop {
+  font-size: var(--ds-text-lg);
+  color: var(--ds-accent-bright);
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.handle {
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  color: var(--ds-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handleMe {
+  color: var(--ds-accent-bright);
+}
+
+.points {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+  margin-top: 2px;
+}
+
+.scroll {
+  display: flex;
+  gap: var(--ds-space-2);
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}

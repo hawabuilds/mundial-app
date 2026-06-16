@@ -1,0 +1,30 @@
+.footer {
+  flex-shrink: 0;
+  padding: var(--ds-space-5) var(--ds-space-6) calc(var(--ds-space-4) + env(safe-area-inset-bottom));
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  border-top: 1px solid var(--ds-border);
+  background: linear-gradient(180deg, transparent, rgba(0, 102, 255, 0.03));
+}
+
+.sep {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-faint);
+}
+
+.link {
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  color: var(--ds-text-muted);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: color var(--ds-duration) var(--ds-ease);
+}
+
+.link:hover {
+  color: var(--ds-accent-bright);
+}

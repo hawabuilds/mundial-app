@@ -1,0 +1,252 @@
+.root {
+  --black: #09090b;
+  --white: #ffffff;
+  --w2: rgba(255, 255, 255, 0.6);
+  --w3: rgba(255, 255, 255, 0.25);
+  --green: #0066FF;
+  --bdr: rgba(255, 255, 255, 0.09);
+
+  min-height: 100vh;
+  background: var(--ds-gradient-page);
+  color: var(--ds-text-primary);
+  font-family: var(--ds-font-display);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+.app {
+  max-width: 430px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: calc(12px + env(safe-area-inset-top)) 20px 0;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--w2);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 0;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.back svg {
+  width: 18px;
+  height: 18px;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px 16px;
+}
+
+.logo {
+  height: 56px;
+  width: auto;
+  display: block;
+  margin: 0 auto 20px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  margin: 0 0 8px;
+  color: var(--white);
+  text-align: center;
+}
+
+.subtitle {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--w2);
+  text-align: center;
+}
+
+.searchWrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--w3);
+  pointer-events: none;
+}
+
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 40px 12px 42px;
+  border-radius: 12px;
+  border: 1px solid var(--bdr);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--white);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.search::placeholder {
+  color: var(--w3);
+}
+
+.search:focus {
+  border-color: rgba(0, 102, 255, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.clearSearch {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--w2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.clearSearch svg {
+  width: 16px;
+  height: 16px;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--w3);
+  margin: 0 0 12px;
+  font-family: var(--font-dm-mono), "DM Mono", monospace;
+}
+
+.noResults {
+  margin: 24px 0;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px dashed var(--bdr);
+  color: var(--w2);
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item {
+  border: 1px solid var(--bdr);
+  border-radius: 14px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  scroll-margin-top: 16px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.itemHighlighted {
+  border-color: rgba(0, 102, 255, 0.5);
+  background: rgba(0, 102, 255, 0.08);
+}
+
+.question {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--white);
+}
+
+.answer {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--w2);
+  white-space: pre-line;
+}
+
+.itemFooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.copyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--w2);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.copyButton svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.copyButton:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--white);
+}
+
+.copyButtonCopied {
+  border-color: rgba(0, 102, 255, 0.45);
+  background: rgba(0, 102, 255, 0.1);
+  color: var(--green);
+}
+
+.inlineLink {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.loading {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--w2);
+  font-size: 14px;
+}

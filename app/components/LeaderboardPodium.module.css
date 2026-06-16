@@ -1,0 +1,144 @@
+.podium {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  align-items: end;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-5) var(--ds-space-3) var(--ds-space-4);
+  margin-bottom: var(--ds-space-4);
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.slotFirst {
+  margin-bottom: var(--ds-space-3);
+}
+
+.rankBadge {
+  font-family: var(--ds-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: var(--ds-radius-pill);
+  border: 1px solid var(--ds-border);
+  color: var(--ds-text-muted);
+}
+
+.rankBadgeGold {
+  color: #fcd34d;
+  border-color: rgba(252, 211, 77, 0.35);
+  background: rgba(252, 211, 77, 0.08);
+}
+
+.rankBadgeSilver {
+  color: #cbd5e1;
+  border-color: rgba(203, 213, 225, 0.3);
+  background: rgba(203, 213, 225, 0.06);
+}
+
+.rankBadgeBronze {
+  color: #d97706;
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.avatarWrap {
+  position: relative;
+}
+
+.avatarWrapGold::before,
+.avatarWrapSilver::before,
+.avatarWrapBronze::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  z-index: 0;
+}
+
+.avatarWrapGold::before {
+  background: linear-gradient(135deg, #fcd34d, #f59e0b);
+}
+
+.avatarWrapSilver::before {
+  background: linear-gradient(135deg, #e2e8f0, #94a3b8);
+}
+
+.avatarWrapBronze::before {
+  background: linear-gradient(135deg, #fbbf24, #b45309);
+}
+
+.avatarInner {
+  position: relative;
+  z-index: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--ds-bg-base);
+  padding: 2px;
+}
+
+.avatarInnerLarge {
+  width: 56px;
+  height: 56px;
+}
+
+.avatarInnerSmall {
+  width: 44px;
+  height: 44px;
+}
+
+.handle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ds-text-primary);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.handleMe {
+  color: var(--ds-accent-bright);
+}
+
+.points {
+  font-family: var(--ds-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ds-text-muted);
+}
+
+.pointsMe {
+  color: var(--ds-accent-bright);
+}
+
+.pedestal {
+  width: 100%;
+  border-radius: var(--ds-radius-sm) var(--ds-radius-sm) 0 0;
+  background: var(--ds-bg-elevated);
+  border: 1px solid var(--ds-border);
+  border-bottom: none;
+}
+
+.pedestalGold {
+  height: 48px;
+  background: linear-gradient(180deg, rgba(252, 211, 77, 0.12), var(--ds-bg-elevated));
+  border-color: rgba(252, 211, 77, 0.2);
+}
+
+.pedestalSilver {
+  height: 32px;
+}
+
+.pedestalBronze {
+  height: 24px;
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.08), var(--ds-bg-elevated));
+  border-color: rgba(217, 119, 6, 0.15);
+}

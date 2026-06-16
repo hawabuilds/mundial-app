@@ -1,0 +1,90 @@
+@import "tailwindcss";
+@import "./styles/theme.css";
+
+:root {
+  --background: var(--ds-bg-base);
+  --foreground: var(--ds-text-primary);
+  --brand: var(--ds-accent);
+  --brand-bright: var(--ds-accent-bright);
+  --brand-soft: var(--ds-accent-soft);
+  --brand-muted: var(--ds-accent-muted);
+  --surface-950: var(--ds-bg-base);
+  --surface-900: var(--ds-bg-elevated);
+  --surface-800: var(--ds-bg-surface);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--ds-bg-base);
+  color: var(--ds-text-primary);
+  font-family: var(--ds-font-display);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--ds-accent-soft);
+  color: var(--ds-text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ds-accent-bright);
+  outline-offset: 2px;
+}
+
+/* Mobile: pass-through wrappers */
+.app-viewport,
+.app-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100%;
+}
+
+/* Desktop: premium device frame */
+@media (min-width: 481px) {
+  html,
+  body {
+    min-height: 100vh;
+    background: var(--ds-gradient-page);
+  }
+
+  .app-viewport {
+    flex: 1;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+
+  .app-shell {
+    flex: none;
+    width: 100%;
+    max-width: 430px;
+    min-height: calc(100vh - 48px);
+    border: 1px solid var(--ds-border);
+    border-radius: var(--ds-radius-md);
+    box-shadow: var(--ds-shadow-lg);
+    overflow: hidden;
+    background: var(--ds-bg-base);
+  }
+}

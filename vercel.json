@@ -1,0 +1,23 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cron/kickoff",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/score-finished",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-match-posts",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/snapshot-epoch",
+      "schedule": "0 22 * * *"
+    }
+  ]
+}
