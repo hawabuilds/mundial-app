@@ -16,3 +16,8 @@ export function mundialHomePath(): string {
 export function mundialDocsPath(): string {
   return isCopaMundialHost() ? "/docs" : "/mundial/docs";
 }
+
+/** Links — `/links` on copamundial.app, `/mundial/links` elsewhere. */
+export function mundialLinksPath(): string {
+  return isCopaMundialHost() ? "/links" : "/mundial/links";
+}

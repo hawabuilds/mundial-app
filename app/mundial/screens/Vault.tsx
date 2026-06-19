@@ -304,7 +304,7 @@ export default function Vault({ onTabChange }: Props) {
       {!rewardsLoading && !rewardsError && open.length === 0 && rewards.length === 0 ? (
         <p className={styles.hint}>
           No finalized rewards yet. Finish in the top 20 on a scored day to
-          appear here.
+          appear here. Snapshot and claims run daily at 10:00 UTC.
         </p>
       ) : null}
 

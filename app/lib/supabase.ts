@@ -360,6 +360,35 @@ async function scoreStoredPredictionsOnly(
   return { predictionsScored, breakdown };
 }
 
+async function persistMatchFinalScore(
+  supabase: SupabaseClient,
+  matchId: number,
+  finalScore: MatchScore,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const existing = await getMatchState(matchId);
+  const payload = {
+    scored_at: now,
+    final_home_score: finalScore.homeScore,
+    final_away_score: finalScore.awayScore,
+  };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("match_state")
+      .update(payload)
+      .eq("match_id", matchId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await supabase.from("match_state").insert({
+    match_id: matchId,
+    ...payload,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function scoreMatchPredictions(
   matchId: number,
   finalScore: MatchScore,
@@ -392,25 +421,24 @@ export async function scoreMatchPredictions(
       predictions ?? [],
     );
 
-    const now = new Date().toISOString();
-    if (matchState) {
-      const { error } = await supabase
-        .from("match_state")
-        .update({
-          scored_at: now,
-          final_home_score: finalScore.homeScore,
-          final_away_score: finalScore.awayScore,
-        })
-        .eq("match_id", matchId);
-
-      if (error) throw new Error(error.message);
-    }
+    await persistMatchFinalScore(supabase, matchId, finalScore);
 
     return {
       matchId,
       finalScore,
       predictionsScored,
       breakdown,
+    };
+  }
+
+  // API auto-settle before X collection: record FT now; rescore when replies arrive.
+  if ((predictions ?? []).length === 0) {
+    await persistMatchFinalScore(supabase, matchId, finalScore);
+    return {
+      matchId,
+      finalScore,
+      predictionsScored: 0,
+      breakdown: { exact: 0, outcome: 0, participation: 0 },
     };
   }
 
@@ -515,30 +543,7 @@ export async function scoreMatchPredictions(
     predictionsScored += 1;
   }
 
-  const now = new Date().toISOString();
-  const existing = await getMatchState(matchId);
-
-  if (existing) {
-    const { error } = await supabase
-      .from("match_state")
-      .update({
-        scored_at: now,
-        final_home_score: finalScore.homeScore,
-        final_away_score: finalScore.awayScore,
-      })
-      .eq("match_id", matchId);
-
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await supabase.from("match_state").insert({
-      match_id: matchId,
-      scored_at: now,
-      final_home_score: finalScore.homeScore,
-      final_away_score: finalScore.awayScore,
-    });
-
-    if (error) throw new Error(error.message);
-  }
+  await persistMatchFinalScore(supabase, matchId, finalScore);
 
   return {
     matchId,

@@ -45,12 +45,12 @@ export { isReplyBeforeKickoff } from "./predictionEligibility";
 
 
 export async function collectPredictionsForFixture(
-
   fixture: Fixture,
-
+  tweetIdOverride?: string,
 ): Promise<CollectResult> {
-
-  const tweetId = await resolveMatchTweetId(fixture, CRON_MATCH_POST_OPTIONS);
+  const tweetId =
+    tweetIdOverride?.trim() ||
+    (await resolveMatchTweetId(fixture, CRON_MATCH_POST_OPTIONS));
 
   if (!tweetId) {
 

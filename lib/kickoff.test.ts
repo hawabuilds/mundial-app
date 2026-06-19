@@ -3,142 +3,75 @@ import assert from "node:assert/strict";
 import { FIXTURES, fixtureDateTime } from "../app/data/fixtures";
 
 import {
-
   COLLECTION_RETRY_OFFSETS_MINUTES,
-
+  COLLECTION_WINDOW_MINUTES_AFTER_KICKOFF,
   getFixturesDueForCollection,
-
   isCollectionRetryDue,
-
   isWithinCollectionWindow,
-
   shouldCollectPredictions,
-
 } from "./kickoff";
 
-
-
 const fixture = FIXTURES[0]!;
-
 const kickoff = fixtureDateTime(fixture);
 
-
-
 assert.equal(
-
   getFixturesDueForCollection(new Date(kickoff.getTime() - 1000)).length,
-
   0,
-
   "before kickoff: nothing in window",
-
 );
 
-
-
 assert.equal(
-
   isWithinCollectionWindow(fixture, new Date(kickoff.getTime() + 60_000)),
-
   true,
-
   "after kickoff: in window",
-
 );
 
-
-
 assert.equal(
-
   isWithinCollectionWindow(
-
     fixture,
-
-    new Date(kickoff.getTime() + 49 * 60 * 60 * 1000),
-
+    new Date(kickoff.getTime() + (COLLECTION_WINDOW_MINUTES_AFTER_KICKOFF + 5) * 60_000),
   ),
-
   false,
-
-  "more than 48h after kickoff: out of window",
-
+  "past collection window: out",
 );
 
-
-
 assert.equal(
-
-  shouldCollectPredictions(fixture, new Date(kickoff.getTime() + 5 * 60_000), null),
-
+  shouldCollectPredictions(fixture, new Date(kickoff.getTime() + 6 * 60_000), null),
   true,
-
-  "never collected: due during bootstrap window",
-
+  "first slot (+5 min): due",
 );
-
-
 
 assert.equal(
-
   shouldCollectPredictions(
-
     fixture,
-
     new Date(kickoff.getTime() + 3 * 60 * 60 * 1000),
-
-    new Date(kickoff.getTime() + 10 * 60_000),
-
+    null,
   ),
-
   false,
-
-  "collected at +10m: not due between retry slots",
-
+  "outside window: not due",
 );
 
-
+assert.equal(
+  shouldCollectPredictions(
+    fixture,
+    new Date(kickoff.getTime() + 40 * 60_000),
+    new Date(kickoff.getTime() + 6 * 60_000),
+  ),
+  false,
+  "collected in slot 1: not due between slots",
+);
 
 const retryOffset = COLLECTION_RETRY_OFFSETS_MINUTES[1]!;
-
 assert.equal(
-
   isCollectionRetryDue(
-
     fixture,
-
-    new Date(kickoff.getTime() + (retryOffset + 2) * 60_000),
-
-    new Date(kickoff.getTime() + 5 * 60_000),
-
+    new Date(kickoff.getTime() + retryOffset * 60_000),
+    new Date(kickoff.getTime() + 6 * 60_000),
   ),
-
   true,
-
-  "collected before +15m slot: due in +15m window",
-
+  "collected in slot 1: due in slot 2",
 );
 
-
-
-assert.equal(
-
-  isCollectionRetryDue(
-
-    fixture,
-
-    new Date(kickoff.getTime() + 5 * 60_000),
-
-    new Date(kickoff.getTime() - 30 * 60_000),
-
-  ),
-
-  true,
-
-  "collected before kickoff: due after kickoff for final reply sweep",
-
-);
-
-
+assert.equal(COLLECTION_RETRY_OFFSETS_MINUTES.length, 3, "exactly 3 collection attempts");
 
 console.log("kickoff.test.ts: ok");
-

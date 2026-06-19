@@ -100,7 +100,7 @@ export const FAQ_ITEMS = [
     id: "snapshot-when",
     key: "snapshotWhen",
     topics: ["payout"],
-    keywords: ["snapshot", "12:00 utc", "utc", "daily", "lock", "when"],
+    keywords: ["snapshot", "10:00 utc", "utc", "daily", "lock", "when"],
   },
   {
     id: "prize-split",

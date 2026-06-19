@@ -25,6 +25,7 @@ export type FootballDataMatch = {
 
 import {
   ApiFootballBudgetError,
+  API_FOOTBALL_MIN_RESERVE,
   canUseApiFootball,
   FIXTURE_CACHE_LIVE_TTL_MS,
   FIXTURE_CACHE_TTL_MS,
@@ -69,13 +70,16 @@ type ApiSportsFixturesResponse = {
   errors?: Record<string, string>;
 };
 
-async function apiFetch(path: string): Promise<Response> {
+async function apiFetch(
+  path: string,
+  minReserve = API_FOOTBALL_MIN_RESERVE,
+): Promise<Response> {
   const key = getApiKey();
   if (!key) {
     throw new Error("API_FOOTBALL_KEY is not configured");
   }
 
-  if (!canUseApiFootball()) {
+  if (!canUseApiFootball(minReserve)) {
     throw new ApiFootballBudgetError(
       "API-Football daily quota reserve reached — set fixture.result or wait for reset",
     );
@@ -255,13 +259,19 @@ export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
 
 export async function fetchApiMatch(
   externalFixtureId: number,
+  options?: { fresh?: boolean },
 ): Promise<FootballDataMatch | null> {
-  const cached = getCachedFixture(externalFixtureId);
-  if (cached !== undefined) return cached;
+  if (!options?.fresh) {
+    const cached = getCachedFixture(externalFixtureId);
+    if (cached !== undefined) return cached;
+  }
 
   try {
     const rows = await parseFixturesResponse(
-      await apiFetch(`/fixtures?id=${externalFixtureId}`),
+      await apiFetch(
+        `/fixtures?id=${externalFixtureId}`,
+        options?.fresh ? 0 : API_FOOTBALL_MIN_RESERVE,
+      ),
     );
     const row = rows[0];
     const match = row ? normalizeFixtureRow(row) : null;

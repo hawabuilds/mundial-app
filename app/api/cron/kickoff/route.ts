@@ -1,21 +1,9 @@
-import {
-  getMatchState,
-  isMatchScored,
-  markMatchCollected,
-  rescoreCollectedMatch,
-} from "@/app/lib/supabase";
-import { collectPredictionsForFixture } from "@/lib/collectPredictions";
 import { isCronAuthorized } from "@/lib/cronAuth";
+import { runDuePredictionCollection } from "@/lib/runDueCollection";
 import {
-  filterFixturesForCollection,
-  getFixturesDueForCollection,
-} from "@/lib/kickoff";
-import {
-  healStaleCollectionState,
-  shouldMarkMatchCollected,
-} from "@/lib/collectionComplete";
-import { CRON_MATCH_POST_OPTIONS, resolveMatchPost } from "@/lib/resolveMatchTweet";
-import { autoScoreFinishedMatches, getFixturesPendingAutoScore } from "@/lib/scoreFinishedMatches";
+  autoScoreFinishedMatches,
+  getFixturesPendingAutoScore,
+} from "@/lib/scoreFinishedMatches";
 import {
   registryGap,
   syncFixtureRegistryToSupabase,
@@ -37,67 +25,7 @@ export async function GET(request: NextRequest) {
     // Score before X collection so a slow collect cannot block leaderboard updates.
     const pendingScore = await getFixturesPendingAutoScore();
     const scoreResults = await autoScoreFinishedMatches(pendingScore);
-
-    const dueFixtures = await filterFixturesForCollection(
-      getFixturesDueForCollection(),
-      async (matchId) => {
-        const state = await getMatchState(matchId);
-        const at = state?.predictions_collected_at;
-        return at ? new Date(at) : null;
-      },
-    );
-
-    const results: Array<Record<string, unknown>> = [];
-
-    for (const fixture of dueFixtures) {
-      try {
-        if (await healStaleCollectionState(fixture)) {
-          results.push({
-            matchId: fixture.id,
-            status: "healed",
-            reason: "Cleared stale collected flag (0 predictions) — will retry",
-          });
-        }
-
-        const alreadyScored = await isMatchScored(fixture.id);
-
-        const post = await resolveMatchPost(fixture, CRON_MATCH_POST_OPTIONS);
-        if (!post) {
-          results.push({
-            matchId: fixture.id,
-            status: "error",
-            error: `No match post found for fixture ${fixture.id}`,
-          });
-          continue;
-        }
-
-        const result = await collectPredictionsForFixture(fixture);
-        if (shouldMarkMatchCollected(result)) {
-          await markMatchCollected(fixture.id);
-          const rescore = alreadyScored
-            ? await rescoreCollectedMatch(fixture.id)
-            : null;
-          results.push({
-            matchId: fixture.id,
-            status: "collected",
-            result,
-            ...(rescore ? { rescored: rescore } : {}),
-          });
-        } else {
-          results.push({
-            matchId: fixture.id,
-            status: "skipped",
-            reason:
-              "No replies on match post — not marking collected (will retry; check tweet id)",
-            tweetId: post.tweetId,
-            result,
-          });
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Collection failed";
-        results.push({ matchId: fixture.id, status: "error", error: message });
-      }
-    }
+    const collection = await runDuePredictionCollection();
 
     return NextResponse.json({
       checkedAt: new Date().toISOString(),
@@ -110,9 +38,8 @@ export async function GET(request: NextRequest) {
         skipped: registry.skipped,
         errors: registry.errors,
       },
-      dueForCollection: dueFixtures.map((f) => f.id),
-      collection: results,
       scoring: scoreResults,
+      collection,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Kickoff cron failed";

@@ -74,7 +74,7 @@ export async function snapshotEpochLeaderboard(
     const first = getFirstSnapshotEpochId()!.toString();
     return {
       status: "skipped",
-      reason: `First snapshot is scheduled for epoch ${first} (12:00 UTC that day)`,
+      reason: `First snapshot is scheduled for epoch ${first} (10:00 UTC that day)`,
       epochId: calendarEpochId.toString(),
     };
   }

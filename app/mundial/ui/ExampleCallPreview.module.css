@@ -61,3 +61,13 @@
   color: var(--m-muted);
   line-height: var(--m-leading-normal);
 }
+
+.hintLink {
+  color: var(--m-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.hintLink:hover {
+  text-decoration: underline;
+}

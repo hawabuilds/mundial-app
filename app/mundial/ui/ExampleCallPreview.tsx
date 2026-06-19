@@ -14,11 +14,13 @@ type ExampleCallPreviewProps = {
 export default function ExampleCallPreview({ fixture }: ExampleCallPreviewProps) {
   const example = formatExampleReply(fixture.home, fixture.away);
   const [busy, setBusy] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
+  const [notPostedYet, setNotPostedYet] = useState(false);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
 
   const openReply = useCallback(async () => {
     setBusy(true);
-    setHint(null);
+    setNotPostedYet(false);
+    setErrorHint(null);
     try {
       const post = await fetchMatchPost(fixture.id);
       const example = formatExampleReply(fixture.home, fixture.away);
@@ -27,13 +29,13 @@ export default function ExampleCallPreview({ fixture }: ExampleCallPreviewProps)
         window.open(url, "_blank", "noopener,noreferrer");
         return;
       }
-      setHint(post.hint ?? "Match thread not live yet — check back closer to kickoff.");
+      setNotPostedYet(true);
     } catch {
-      setHint("Could not open the match thread. Try again shortly.");
+      setErrorHint("Could not open the match thread. Try again shortly.");
     } finally {
       setBusy(false);
     }
-  }, [fixture.id]);
+  }, [fixture.home, fixture.away, fixture.id]);
 
   return (
     <div className={styles.wrap}>
@@ -47,7 +49,21 @@ export default function ExampleCallPreview({ fixture }: ExampleCallPreviewProps)
         <span className={styles.text}>{example}</span>
         <span className={styles.action}>{busy ? "Opening…" : "Tap to reply"}</span>
       </button>
-      {hint ? <p className={styles.hint}>{hint}</p> : null}
+      {notPostedYet ? (
+        <p className={styles.hint}>
+          This match post has not been posted yet. Follow{" "}
+          <a
+            href="https://x.com/copamundialapp"
+            className={styles.hintLink}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            @copamundialapp
+          </a>{" "}
+          on X to keep an eye out.
+        </p>
+      ) : null}
+      {errorHint ? <p className={styles.hint}>{errorHint}</p> : null}
     </div>
   );
 }

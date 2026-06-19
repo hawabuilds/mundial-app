@@ -46,7 +46,10 @@ export function middleware(request: NextRequest) {
 
   if (isLegacyMundialVercelHost(host)) {
     const { pathname, search } = request.nextUrl;
-    if (isAuthCallbackPath(pathname)) {
+    // API (incl. Vercel cron, which calls the *.vercel.app deployment URL),
+    // static assets, and OAuth callbacks must run here — never 308-redirect them,
+    // because cron requests do not follow redirects.
+    if (isPassthroughPath(pathname) || isAuthCallbackPath(pathname)) {
       return NextResponse.next();
     }
     const target = new URL(copaPathFromLegacy(pathname) + search, COPA_ORIGIN);
@@ -85,6 +88,13 @@ export function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     const sub = pathname === "/docs" ? "" : pathname.slice("/docs".length);
     url.pathname = `/mundial/docs${sub}`;
+    return NextResponse.rewrite(url);
+  }
+
+  if (pathname === "/links" || pathname.startsWith("/links/")) {
+    const url = request.nextUrl.clone();
+    const sub = pathname === "/links" ? "" : pathname.slice("/links".length);
+    url.pathname = `/mundial/links${sub}`;
     return NextResponse.rewrite(url);
   }
 

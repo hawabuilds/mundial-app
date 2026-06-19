@@ -1,25 +1,26 @@
 import { isCronAuthorized } from "@/lib/cronAuth";
-import { autoScoreFinishedMatches } from "@/lib/scoreFinishedMatches";
-import { syncFixtureRegistryToSupabase } from "@/lib/syncFixtureRegistry";
+import {
+  autoScoreFinishedMatches,
+  getFixturesPendingAutoScore,
+} from "@/lib/scoreFinishedMatches";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** Manual / backup only — kickoff cron runs scoring every 5 min in production. */
 export async function GET(request: NextRequest) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const registry = await syncFixtureRegistryToSupabase();
-    const results = await autoScoreFinishedMatches();
+    const pendingScore = await getFixturesPendingAutoScore();
+    const results = await autoScoreFinishedMatches(pendingScore);
+
     return NextResponse.json({
       checkedAt: new Date().toISOString(),
-      registry: {
-        expected: registry.expectedMatchIds,
-        registered: registry.registeredMatchIds,
-      },
+      note: "Backup scorer — production uses /api/cron/kickoff every 5 min",
       results,
     });
   } catch (error) {

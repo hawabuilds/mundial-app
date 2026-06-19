@@ -8,7 +8,6 @@ import {
 } from "@/app/data/fixtures";
 
 import {
-  getMatchState,
   isEffectivelyCollected,
   isMatchScored,
   scoreMatchPredictions,
@@ -30,15 +29,7 @@ import {
 
 } from "./apiFootball";
 
-import {
-  fixtureAutoSettlesFromApi,
-  WORLD_CUP_SCORE_POLL_EXTRA_MINUTES,
-} from "./fixtureAutoSettle";
-import {
-  isScoreApiPollDue,
-  SCORE_API_POLL_OFFSETS_MINUTES,
-  SCORE_API_POLL_WINDOW_MINUTES,
-} from "./scoreApiSchedule";
+import { fixtureAutoSettlesFromApi } from "./fixtureAutoSettle";
 
 
 
@@ -116,32 +107,6 @@ function fixtureFinalScore(
 
 
 
-/** Stop API polling this long after the last scheduled poll window. */
-
-export function isWithinScoreApiPollingPeriod(
-
-  fixture: Fixture,
-
-  now: Date = new Date(),
-
-): boolean {
-
-  const kickoffMs = fixtureDateTime(fixture).getTime();
-
-  const elapsedMin = (now.getTime() - kickoffMs) / 60_000;
-
-  const lastOffset = SCORE_API_POLL_OFFSETS_MINUTES.at(-1)!;
-  const tailMinutes =
-    SCORE_API_POLL_WINDOW_MINUTES +
-    30 +
-    (fixtureAutoSettlesFromApi(fixture) ? WORLD_CUP_SCORE_POLL_EXTRA_MINUTES : 0);
-
-  return elapsedMin < lastOffset + tailMinutes;
-
-}
-
-
-
 /** Fixtures that may need an API-Football score check (past window, not yet scored). */
 
 export function getFixturesDueForAutoScore(
@@ -158,15 +123,18 @@ export function getFixturesDueForAutoScore(
 
 
 
-const AUTO_SCORE_MAX_HOURS_AFTER_KICKOFF = 72;
+/** Regular time + ET/PEN + API lag — not days of polling. */
+const AUTO_SCORE_MAX_HOURS_AFTER_KICKOFF = 4;
 
 
 
 /**
 
- * Unscored matches worth scoring — API only in scheduled poll windows.
+ * Unscored finished matches to poll for a final score.
 
- * `fixture.result` can score any time without API.
+ * Polled every cron tick from 90 min after kickoff until scored (or 72h old).
+
+ * `fixture.result` can score any time without the API.
 
  */
 
@@ -198,7 +166,6 @@ export async function getFixturesPendingAutoScore(
 
 
 
-    const state = await getMatchState(fixture.id);
     const manualResult = fixtureFinalScore(fixture);
 
     const apiAutoSettle = fixtureAutoSettlesFromApi(fixture);
@@ -212,12 +179,9 @@ export async function getFixturesPendingAutoScore(
       continue;
     }
 
-
-
-    if (!isWithinScoreApiPollingPeriod(fixture, now)) continue;
-
-    if (!isScoreApiPollDue(fixture, now)) continue;
-
+    // Poll API-Football every cron tick (5 min) from 90 min after kickoff until
+    // the match is scored — bounded only by AUTO_SCORE_MAX_HOURS_AFTER_KICKOFF.
+    // No fixed poll windows, so a finished match can never get stuck unscored.
     pending.push(fixture);
 
   }
@@ -252,7 +216,7 @@ async function resolveFinalScoreFromApi(
 
 
 
-  const match = await fetchApiMatch(fixture.externalFixtureId);
+  const match = await fetchApiMatch(fixture.externalFixtureId, { fresh: true });
 
   if (!match) return { finalScore: null, live: null };
 
@@ -424,9 +388,7 @@ export async function autoScoreFinishedMatches(
 
             status: "skipped",
 
-            reason:
-
-              "Awaiting FT from API (poll windows) or set fixture.result",
+            reason: "Awaiting FT from API or set fixture.result",
 
           });
 

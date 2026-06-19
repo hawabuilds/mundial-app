@@ -172,7 +172,7 @@
       "step2": "Reply with the score you are predicting <strong>before kickoff</strong> and make sure both teams are named, for example <mono>Mexico 2-1 South Africa</mono>.",
       "step3": "Once the match has finished we score your prediction against the real result and add the points to your total.",
       "step4": "Your points show up on the daily leaderboard, usually within a short while after full time.",
-      "step5": "At 12:00 UTC each day we lock the leaderboard for that period and assign rewards to whoever finished in the top 20.",
+      "step5": "At 23:00 UTC each day we lock the leaderboard for that period and assign rewards to whoever finished in the top 20.",
       "step6": "If you are one of those winners you sign in with X at mundial.xyz, connect a wallet, and claim your BNB whenever you are ready. There is no expiry on a valid win.",
       "scoringTitle": "How points work",
       "scoring": {
@@ -219,7 +219,7 @@
       "title": "How payouts actually work on chain",
       "intro": "Daily rewards are paid out through a dedicated smart contract on BNB Smart Chain. We kept it deliberately simple, but the contract itself sets hard limits on what can ever be paid so the rules are not just promises on a website.",
       "epochsTitle": "Daily reward pools",
-      "epochsBody": "Every day at 12:00 UTC we open that day's reward pool on chain as what the contract calls an epoch, with a fixed amount of BNB set aside for that day. The contract reserves that money straight away. BNB that belongs to a day's winners cannot be spent again, moved somewhere else, or pulled out by anyone on the team. We can only open a new epoch if the contract really holds enough unreserved BNB to cover it.",
+      "epochsBody": "Every day at 23:00 UTC we open that day's reward pool on chain as what the contract calls an epoch, with a fixed amount of BNB set aside for that day. The contract reserves that money straight away. BNB that belongs to a day's winners cannot be spent again, moved somewhere else, or pulled out by anyone on the team. We can only open a new epoch if the contract really holds enough unreserved BNB to cover it.",
       "claimTitle": "Claiming with a signed voucher",
       "claim": {
         "verify": { "title": "Verify", "body": "You sign in with X at mundial.xyz and our server checks that you were a genuine top 20 finisher for that day." },
@@ -356,11 +356,11 @@
       },
       "whoGetsPaid": {
         "question": "Who wins prizes?",
-        "answer": "Only the Top 20 players at the daily 12:00 UTC snapshot qualify for prizes."
+        "answer": "Only the Top 20 players at the daily 23:00 UTC snapshot qualify for prizes."
       },
       "snapshotWhen": {
         "question": "When is the snapshot?",
-        "answer": "Every day at 12:00 UTC. That locks the top 20 for that calendar day’s prizes."
+        "answer": "Every day at 23:00 UTC. That locks the top 20 for that calendar day’s prizes."
       },
       "prizeSplit": {
         "question": "How is the prize pool split?",

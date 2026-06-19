@@ -2,7 +2,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { FIXTURES, formatFixtureLabel, getFixtureById } from "../app/data/fixtures";
-import { getMatchState, isMatchScored, markMatchCollected } from "../app/lib/supabase";
+import { getMatchState, isEffectivelyCollected, isMatchScored, markMatchCollected } from "../app/lib/supabase";
 import { shouldMarkMatchCollected } from "../lib/collectionComplete";
 import { collectPredictionsForFixture } from "../lib/collectPredictions";
 import {
@@ -27,6 +27,7 @@ async function main() {
             const at = state?.predictions_collected_at;
             return at ? new Date(at) : null;
           },
+          isEffectivelyCollected,
         )
       : FIXTURES;
 

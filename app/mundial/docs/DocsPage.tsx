@@ -88,7 +88,7 @@ export default function DocsPage() {
       <main className={styles.main}>
         <section id="top" className={styles.hero}>
           <div className={styles.heroCopy}>
-            <p className={styles.kicker}>World Cup 2026 · Solana · pump.fun</p>
+            <p className={styles.kicker}>World Cup 2026 on Solana via pump.fun</p>
             <h1 className={styles.heroTitle}>
               Predict.
               <br />
@@ -98,8 +98,8 @@ export default function DocsPage() {
             </h1>
             <p className={styles.heroLede}>
               Copa Mundial is a score prediction game on X. Reply before kickoff,
-              climb the daily board, and share a USDC pool funded entirely by
-              pump.fun creator fees.
+              climb the board, and share a USDC pool funded by pump.fun
+              creator fees.
             </p>
             <div className={styles.heroBadges}>
               <span className={styles.badge}>Daily USDC</span>
@@ -128,8 +128,7 @@ export default function DocsPage() {
               <span>${POOL_MAX.toLocaleString()} cap</span>
             </div>
             <p className={styles.panelNote}>
-              Pool scales with creator fee volume — grows as trading activity
-              increases.
+              The pool grows as trading volume goes up.
             </p>
           </div>
         </section>
@@ -148,20 +147,20 @@ export default function DocsPage() {
               <span className={styles.step}>Step 1</span>
               <h3>Find the match thread</h3>
               <p>
-                We post each fixture on X with teams, kickoff time, and a thread
-                for your call. Follow{" "}
+                We post each match on X with the teams, kickoff time, and a thread
+                for your prediction. Follow{" "}
                 <a href="https://x.com/copamundialapp" className={styles.inlineLink}>
                   @copamundialapp
                 </a>{" "}
-                so you never miss one.
+                so you do not miss one.
               </p>
             </article>
             <article className={styles.bentoCard}>
               <span className={styles.step}>Step 2</span>
               <h3>Reply your score</h3>
               <p>
-                Before kickoff, reply with both teams and a score — e.g.{" "}
-                <code className={styles.code}>Brazil 2-1 Morocco</code>. First
+                Reply before kickoff with both teams and a score, for example{" "}
+                <code className={styles.code}>Brazil 2-1 Morocco</code>. Your first
                 valid reply counts.
               </p>
             </article>
@@ -169,16 +168,18 @@ export default function DocsPage() {
               <span className={styles.step}>Step 3</span>
               <h3>Earn points</h3>
               <p>
-                Exact scoreline earns the most. Correct winner or draw still
-                scores. Every match adds to your daily total.
+                Exact scorelines score the most. Correct winner or draw still
+                earns points. Every match adds to your total for the current
+                leaderboard period.
               </p>
             </article>
             <article className={`${styles.bentoCard} ${styles.bentoAccent}`}>
               <span className={styles.step}>Step 4</span>
               <h3>Make top 20</h3>
               <p>
-                At 12:00 UTC we lock the board. Top 20 players that day qualify
-                for USDC from the prize pool.
+                Each day at 10:00 UTC we snapshot the top 20 and open USDC claims
+                for winners. The leaderboard resets every 3 days so everyone gets
+                a fair chance to climb — you are not chasing points from weeks ago.
               </p>
             </article>
           </div>
@@ -204,7 +205,7 @@ export default function DocsPage() {
             <span className={styles.sectionNum}>02</span>
             <h2 className={styles.sectionTitle}>Prize pool</h2>
             <p className={styles.sectionSub}>
-              Funded by creator fees — not promises, not treasury tricks.
+              Funded by creator fees from pump.fun trading.
             </p>
           </div>
 
@@ -212,23 +213,23 @@ export default function DocsPage() {
             <div className={styles.splitMain}>
               <p className={styles.prose}>
                 When Copa Mundial launches on{" "}
-                <strong className={styles.strong}>pump.fun</strong>, trading
-                creator fees flow straight into the daily USDC prize pool. We
-                start at <strong className={styles.strong}>$1,000</strong> per
-                day and scale toward{" "}
-                <strong className={styles.strong}>$2,000</strong> as fee volume
-                grows.
+                <strong className={styles.strong}>pump.fun</strong>, creator fees
+                from trading go into the daily USDC prize pool. We start at{" "}
+                <strong className={styles.strong}>$1,000</strong> per day and can
+                scale up to <strong className={styles.strong}>$2,000</strong> as
+                volume grows.
               </p>
               <p className={styles.prose}>
-                Prizes are paid in <strong className={styles.strong}>USDC on Solana</strong>.
-                The pool size updates with real revenue — busier days can mean
-                bigger prizes for the same top-20 finish.
+                Prizes are paid in{" "}
+                <strong className={styles.strong}>USDC on Solana</strong>. A bigger
+                pool means bigger payouts for the same top 20 finish.
               </p>
               <ul className={styles.bulletList}>
                 <li>Minimum daily pool: $1,000 USDC</li>
                 <li>Target at full volume: $2,000 USDC</li>
-                <li>Snapshot &amp; payout: 12:00 UTC daily</li>
-                <li>20 winners per day — always</li>
+                <li>Snapshot &amp; claims: 10:00 UTC daily</li>
+                <li>Leaderboard resets every 3 days for a fair shot at the top</li>
+                <li>20 winners per day</li>
               </ul>
             </div>
 
@@ -270,7 +271,7 @@ export default function DocsPage() {
             <span className={styles.sectionNum}>03</span>
             <h2 className={styles.sectionTitle}>Payout tiers</h2>
             <p className={styles.sectionSub}>
-              Top 20 · 10 : 6 : 3.5 per-person ratio · 100% of pool paid out
+              Top 20. Split 10 : 6 : 3.5 per person. Full pool paid out.
             </p>
           </div>
 
@@ -330,7 +331,7 @@ export default function DocsPage() {
             <span className={styles.sectionNum}>04</span>
             <h2 className={styles.sectionTitle}>Wallet &amp; payouts</h2>
             <p className={styles.sectionSub}>
-              Play on X · Collect on Solana
+              Play on X. Claim on Solana.
             </p>
           </div>
 
@@ -338,19 +339,19 @@ export default function DocsPage() {
             <div className={styles.flowStep}>
               <span className={styles.flowIcon}>𝕏</span>
               <h3>Sign in with X</h3>
-              <p>Link your account at copamundial.app to track standings and claims.</p>
+              <p>Sign in at copamundial.app with X to see your rank and claim prizes.</p>
             </div>
             <div className={styles.flowArrow} aria-hidden />
             <div className={styles.flowStep}>
               <span className={styles.flowIcon}>◎</span>
               <h3>Connect Solana wallet</h3>
-              <p>Phantom, Solflare, or Backpack — in Wallet tab. Payout address saves to your account.</p>
+              <p>Connect Phantom, Solflare, or Backpack in the Wallet tab. We save that address for payouts.</p>
             </div>
             <div className={styles.flowArrow} aria-hidden />
             <div className={styles.flowStep}>
               <span className={styles.flowIcon}>$</span>
               <h3>Receive USDC</h3>
-              <p>Winners collect daily prizes in USDC. You can change your payout wallet before each claim.</p>
+              <p>Top 20 winners claim USDC at 10:00 UTC each day. You can switch wallets before you claim.</p>
             </div>
           </div>
         </section>
@@ -359,7 +360,7 @@ export default function DocsPage() {
           <div className={styles.sectionHead}>
             <span className={styles.sectionNum}>05</span>
             <h2 className={styles.sectionTitle}>Token &amp; creator fees</h2>
-            <p className={styles.sectionSub}>Launched on pump.fun · Solana</p>
+            <p className={styles.sectionSub}>Launched on pump.fun on Solana</p>
           </div>
 
           <div className={styles.tokenCard}>
@@ -371,17 +372,14 @@ export default function DocsPage() {
               <p className={styles.prose}>
                 Copa Mundial launches on{" "}
                 <strong className={styles.strong}>pump.fun</strong> on Solana.
-                Creator fees from token trading are allocated to fund the daily
-                USDC prize pool — the community literally trades the prizes into
-                existence.
+                Creator fees from token trading fund the daily USDC prize pool.
               </p>
               <p className={styles.prose}>
-                Contract address will be published on{" "}
+                We will post the contract address on{" "}
                 <a href="https://x.com/copamundialapp" className={styles.inlineLink}>
                   @copamundialapp
                 </a>{" "}
-                at launch. Only trust links from our official channels or this
-                site.
+                at launch. Only use links from our official channels or this site.
               </p>
             </div>
           </div>
@@ -396,19 +394,37 @@ export default function DocsPage() {
           <dl className={styles.faq}>
             <div className={styles.faqItem}>
               <dt>Do I need a wallet to play?</dt>
-              <dd>No. Reply on X before kickoff. Wallet only needed to receive USDC if you finish top 20.</dd>
+              <dd>No. Reply on X before kickoff. You only need a wallet if you finish in the top 20.</dd>
             </div>
             <div className={styles.faqItem}>
               <dt>When is the daily snapshot?</dt>
-              <dd>12:00 UTC. That locks ranks and prize eligibility for that calendar day.</dd>
+              <dd>
+                10:00 UTC. That locks the top 20 and opens claims for that
+                day&apos;s USDC payout.
+              </dd>
+            </div>
+            <div className={styles.faqItem}>
+              <dt>When can I claim my reward?</dt>
+              <dd>
+                At 10:00 UTC — the same time as the snapshot. Winners can collect
+                USDC in the Wallet tab once the daily run completes.
+              </dd>
+            </div>
+            <div className={styles.faqItem}>
+              <dt>Does the leaderboard reset?</dt>
+              <dd>
+                Yes — every 3 days. Points and ranks clear so new players are not
+                stuck behind an early lead. Snapshots and claims still run at
+                10:00 UTC during each period.
+              </dd>
             </div>
             <div className={styles.faqItem}>
               <dt>Can I change my payout wallet?</dt>
-              <dd>Yes — disconnect and connect a new wallet anytime before you claim. Already-paid prizes stay on the old address.</dd>
+              <dd>Yes. Disconnect and connect a new wallet before you claim. Prizes already paid stay on the old address.</dd>
             </div>
             <div className={styles.faqItem}>
               <dt>What if fewer than 20 people score?</dt>
-              <dd>Remaining pool share stays in the rewards system for future days.</dd>
+              <dd>What is left stays in the rewards system for future days.</dd>
             </div>
             <div className={styles.faqItem}>
               <dt>Is this gambling?</dt>
@@ -423,7 +439,7 @@ export default function DocsPage() {
           <BrandMark />
         </Link>
         <p className={styles.footerCopy}>
-          Skill-based prediction game · Not financial advice · copamundial.app
+          Skill-based prediction game. Not financial advice. copamundial.app
         </p>
         <a href={mundialDocsPath()} className={styles.footerDocs}>
           {mundialDocsPath()}

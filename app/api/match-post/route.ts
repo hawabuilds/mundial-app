@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
           fixture: `${fixture.home} vs ${fixture.away}`,
           found: false,
           account: process.env.X_MATCH_ACCOUNT?.replace("@", "") || "copamundialapp",
-          hint: "Post a match tweet from the main account with both team names before kickoff.",
+          hint: "This match post has not been posted yet. Follow @copamundialapp on X to keep an eye out.",
         },
         { status: 404 },
       );
