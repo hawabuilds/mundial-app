@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "scripts", "_mundial-rewards-spec", "playground"]
+  "exclude": ["node_modules", "scripts", "solana-program"]
 }

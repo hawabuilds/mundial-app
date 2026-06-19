@@ -20,6 +20,10 @@ Live at [copamundial.app](https://copamundial.app).
 - next-intl for translations, CSS Modules for styling
 - Vercel, with cron routes for kickoff collection, scoring, and the daily snapshot
 
+## Smart contract
+
+The Solana payout program lives in [`solana-program/`](solana-program/) (Anchor/Rust). It custodies the USDC vault and pays winners against off-chain **signed vouchers**: an operator opens each daily epoch with a fixed pot, the server signs a per-winner voucher, and `claim` verifies the ed25519 signature on-chain before transferring USDC. Vouchers are single-use, and each epoch reserves its pot against the vault balance so total claims can never exceed funds held.
+
 ## The parts that took the most work
 
 - Pulling the first valid reply per user out of the X API and staying inside rate limits around kickoff.

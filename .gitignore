@@ -47,5 +47,4 @@ scripts/_*.png
 /agent-transcripts/
 /terminals/
 /mcps/
-/canvases/node_modules/
-/playground/
+/canvases/
