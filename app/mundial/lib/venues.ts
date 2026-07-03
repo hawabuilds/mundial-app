@@ -1,5 +1,5 @@
 import { WORLD_CUP_2026_FIXTURES } from "@/app/data/fixtures";
-import { teamNamesMatch } from "@/lib/txodds";
+import { teamNamesMatch } from "@/lib/teamNames";
 
 /** Host cities for World Cup 2026 fixtures (FIFA group stage schedule). */
 export type MatchVenue = {
