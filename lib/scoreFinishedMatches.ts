@@ -13,6 +13,8 @@ import {
   scoreMatchPredictions,
 } from "@/app/lib/supabase";
 
+import { ensureMatchOddsForFixture } from "@/lib/ensureMatchOdds";
+
 import {
 
   ApiFootballBudgetError,
@@ -391,6 +393,8 @@ export async function autoScoreFinishedMatches(
       }
 
 
+
+      await ensureMatchOddsForFixture(fixture).catch(() => null);
 
       await scoreMatchPredictions(fixture.id, finalScore);
 

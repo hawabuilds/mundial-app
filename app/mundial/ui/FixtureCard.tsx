@@ -101,6 +101,14 @@ export default function FixtureCard({
         <p className={styles.venue}>{fixture.venueLine}</p>
       ) : null}
 
+      {!showLive && fixture.marketOdds ? (
+        <p className={styles.market}>
+          Market · {fixture.home} {Math.round(fixture.marketOdds.homePct)}% · Draw{" "}
+          {Math.round(fixture.marketOdds.drawPct)}% · {fixture.away}{" "}
+          {Math.round(fixture.marketOdds.awayPct)}%
+        </p>
+      ) : null}
+
       {withReply && !showLive ? <ExampleCallPreview fixture={fixture} /> : null}
     </Card>
   );

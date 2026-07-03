@@ -3,6 +3,7 @@ import type {
   UpcomingMatch,
   FixturePhase,
   MatchGoalInfo,
+  MatchMarketOdds,
 } from "@/app/lib/leaderboard-client";
 import {
   formatVenueLine,
@@ -29,8 +30,9 @@ export type MundialFixture = {
   awayScore: number | null;
   elapsed: number | null;
   phase: FixturePhase;
-  /** Goal timeline for live/finished matches (empty otherwise). */
   goals: MundialGoal[];
+  /** Locked pre-kickoff 1X2 market (TxLINE). */
+  marketOdds: MatchMarketOdds | null;
 };
 
 export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
@@ -56,6 +58,7 @@ export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
     elapsed: live?.elapsed ?? null,
     phase: fixture.phase ?? "upcoming",
     goals: fixture.goals ?? [],
+    marketOdds: fixture.marketOdds ?? null,
   };
 }
 
@@ -67,6 +70,7 @@ const FALLBACK_LIVE = {
   elapsed: null,
   phase: "upcoming" as const,
   goals: [] as MundialGoal[],
+  marketOdds: null,
 };
 
 export const FALLBACK_FIXTURES: MundialFixture[] = [

@@ -124,14 +124,21 @@ export type MatchGoalInfo = {
   ownGoal: boolean;
 };
 
+export type MatchMarketOdds = {
+  homePct: number;
+  drawPct: number;
+  awayPct: number;
+};
+
 export type UpcomingMatch = Fixture & {
   statusLabel?: string | null;
   live?: MatchLiveInfo;
   phase?: FixturePhase;
-  /** Present for TxLINE-sourced board fixtures (may be empty to hide). */
+  /** Stadium line or competition label for board fixtures. */
   venueLine?: string;
-  /** Goal timeline (scorer + minute) for live/finished board fixtures. */
   goals?: MatchGoalInfo[];
+  /** Pre-kickoff 1X2 implied % from TxLINE (locked at first board fetch). */
+  marketOdds?: MatchMarketOdds | null;
 };
 
 export type ApiUpcomingMatchesResponse = {

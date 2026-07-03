@@ -154,23 +154,20 @@ export function venueLineForMatch(
     date,
   );
   if (pairMatch) return venueFromFixture(pairMatch);
-
-  const homeAsHost = pickClosestFixture(
-    WORLD_CUP_2026_FIXTURES.filter((fixture) => teamNamesMatch(fixture.home, home)),
-    date,
-  );
-  if (homeAsHost) return venueFromFixture(homeAsHost);
-
-  const homeInvolved = pickClosestFixture(
-    WORLD_CUP_2026_FIXTURES.filter(
-      (fixture) =>
-        teamNamesMatch(fixture.home, home) || teamNamesMatch(fixture.away, home),
-    ),
-    date,
-  );
-  if (homeInvolved) return venueFromFixture(homeInvolved);
-
   return "";
+}
+
+/** Card footer when TxLINE has no venue — exact stadium, else honest competition label. */
+export function boardVenueLine(
+  home: string,
+  away: string,
+  date: string,
+  competition?: string,
+): string {
+  const exact = venueLineForMatch(home, away, date);
+  if (exact) return exact;
+  const label = sanitizeTournamentLabel(competition ?? "World Cup");
+  return label || "World Cup 2026";
 }
 
 /** World Cup branding without naming the governing body. */

@@ -183,6 +183,18 @@
 
 }
 
+.market {
+  margin: 0;
+  font-family: var(--m-font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--m-muted);
+  line-height: var(--m-leading-normal);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 
 
 .list {

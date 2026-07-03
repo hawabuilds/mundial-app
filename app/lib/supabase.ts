@@ -1,6 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getFixtureById, type Fixture } from "@/app/data/fixtures";
-import { scorePrediction, type MatchScore } from "@/lib/scoring";
+import {
+  scorePrediction,
+  scorePredictionDetailed,
+  tierToBreakdownBucket,
+  type MatchScore,
+} from "@/lib/scoring";
 import {
   isReplyBeforeKickoff,
   loadEligiblePreKickoffPredictions,
@@ -281,6 +286,54 @@ export async function getMatchGoals(fixtureId: number): Promise<StoredGoal[]> {
   }));
 }
 
+export type StoredMatchOdds = {
+  homePct: number;
+  drawPct: number;
+  awayPct: number;
+  lockedAt: string;
+};
+
+/**
+ * Pre-kickoff 1X2 odds locked for scoring (first write wins — snapshot at lock).
+ * Requires table: match_odds (fixture_id PK, home_pct, draw_pct, away_pct, locked_at).
+ */
+export async function saveMatchOdds(
+  fixtureId: number,
+  odds: Omit<StoredMatchOdds, "lockedAt">,
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("match_odds").upsert(
+    {
+      fixture_id: fixtureId,
+      home_pct: odds.homePct,
+      draw_pct: odds.drawPct,
+      away_pct: odds.awayPct,
+      locked_at: new Date().toISOString(),
+    },
+    { onConflict: "fixture_id", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(error.message);
+}
+
+export async function getMatchOdds(fixtureId: number): Promise<StoredMatchOdds | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_odds")
+    .select("home_pct, draw_pct, away_pct, locked_at")
+    .eq("fixture_id", fixtureId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  return {
+    homePct: Number(data.home_pct),
+    drawPct: Number(data.draw_pct),
+    awayPct: Number(data.away_pct),
+    lockedAt: data.locked_at as string,
+  };
+}
+
 export async function getMatchState(matchId: number): Promise<MatchStateRow | null> {
   const supabase = getSupabaseClient();
 
@@ -374,6 +427,7 @@ async function scoreStoredPredictionsOnly(
     away_score: number;
     replied_at?: string | null;
   }>,
+  odds: { homePct: number; drawPct: number; awayPct: number } | null,
 ): Promise<Pick<ScoreMatchResult, "predictionsScored" | "breakdown">> {
   const breakdown = { exact: 0, outcome: 0, participation: 0 };
   let predictionsScored = 0;
@@ -393,26 +447,26 @@ async function scoreStoredPredictionsOnly(
       return null;
     }
 
-    const points = scorePrediction(
+    const scored = scorePredictionDetailed(
       { homeScore: row.home_score, awayScore: row.away_score },
       finalScore,
+      odds,
     );
 
     const { error: updateError } = await supabase
       .from("predictions")
-      .update({ points })
+      .update({ points: scored.points })
       .eq("user_id", row.user_id)
       .eq("match_id", matchId);
 
     if (updateError) throw new Error(updateError.message);
-    return points;
+    return scored;
   });
 
-  for (const points of await Promise.all(updates)) {
-    if (points === null) continue;
-    if (points === 5) breakdown.exact += 1;
-    else if (points === 3) breakdown.outcome += 1;
-    else breakdown.participation += 1;
+  for (const scored of await Promise.all(updates)) {
+    if (scored === null) continue;
+    const bucket = tierToBreakdownBucket(scored.tier);
+    breakdown[bucket] += 1;
     predictionsScored += 1;
   }
 
@@ -460,6 +514,14 @@ export async function scoreMatchPredictions(
     throw new Error(`Unknown matchId: ${matchId}`);
   }
 
+  const storedOdds = await getMatchOdds(matchId).catch(() => null);
+  const odds = storedOdds
+    ? {
+        homePct: storedOdds.homePct,
+        drawPct: storedOdds.drawPct,
+        awayPct: storedOdds.awayPct,
+      }
+    : null;
   const matchState = await getMatchState(matchId);
 
   const { data: predictions, error: fetchError } = await supabase
@@ -478,6 +540,7 @@ export async function scoreMatchPredictions(
       fixture,
       finalScore,
       predictions ?? [],
+      odds,
     );
 
     await persistMatchFinalScore(supabase, matchId, finalScore);
@@ -522,20 +585,19 @@ export async function scoreMatchPredictions(
       continue;
     }
 
-    const points = scorePrediction(
+    const scored = scorePredictionDetailed(
       {
         homeScore: eligiblePrediction.homeScore,
         awayScore: eligiblePrediction.awayScore,
       },
       finalScore,
+      odds,
     );
 
-    if (points === 5) breakdown.exact += 1;
-    else if (points === 3) breakdown.outcome += 1;
-    else breakdown.participation += 1;
+    breakdown[tierToBreakdownBucket(scored.tier)] += 1;
 
     const scoreUpdate: Record<string, unknown> = {
-      points,
+      points: scored.points,
       home_score: eligiblePrediction.homeScore,
       away_score: eligiblePrediction.awayScore,
       user_handle: eligiblePrediction.userHandle,
@@ -577,21 +639,20 @@ export async function scoreMatchPredictions(
       replied_at: eligiblePrediction.repliedAt,
     });
 
-    const points = scorePrediction(
+    const scored = scorePredictionDetailed(
       {
         homeScore: eligiblePrediction.homeScore,
         awayScore: eligiblePrediction.awayScore,
       },
       finalScore,
+      odds,
     );
 
-    if (points === 5) breakdown.exact += 1;
-    else if (points === 3) breakdown.outcome += 1;
-    else breakdown.participation += 1;
+    breakdown[tierToBreakdownBucket(scored.tier)] += 1;
 
     const { error: updateError } = await supabase
       .from("predictions")
-      .update({ points })
+      .update({ points: scored.points })
       .eq("user_id", eligiblePrediction.userId)
       .eq("match_id", matchId);
 

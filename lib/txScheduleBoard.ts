@@ -17,13 +17,16 @@ import {
   type FixturePhase,
 } from "./enrichFixtures";
 import { getMatchGoals, saveMatchGoals } from "@/app/lib/supabase";
-import { venueLineForMatch } from "@/app/mundial/lib/venues";
+import { boardVenueLine } from "@/app/mundial/lib/venues";
+import { ensureMatchOddsLocked } from "@/lib/ensureMatchOdds";
+import type { Match1x2Odds } from "@/lib/scoring";
 import { fetchFixturesSnapshot, isTxoddsConfigured, type TxFixture } from "./txodds";
 
-/** Board fixture carrying a display venue/competition line + live goals. */
+/** Board fixture carrying venue/competition line, live goals, and locked 1X2 odds. */
 export type ScheduleBoardFixture = BoardFixture & {
   venueLine: string;
   goals: MatchGoal[];
+  marketOdds: Match1x2Odds | null;
 };
 
 /** Only look up live scores for matches that kicked off within this window. */
@@ -89,10 +92,24 @@ export async function getTxScheduleBoard(
   for (const fx of sorted) {
     const fixture = txToFixture(fx);
     const kickoffMs = fx.StartTime;
-    // TxLINE has no venue field; reuse the real WC schedule's venue when the
-    // teams match (blank for TxLINE-only demo fixtures).
-    const venueLine = venueLineForMatch(fixture.home, fixture.away, fixture.date);
-    const base = { ...fixture, apiConfigured: true, venueLine, goals: [] as MatchGoal[] };
+    const venueLine = boardVenueLine(
+      fixture.home,
+      fixture.away,
+      fixture.date,
+      fx.Competition,
+    );
+    const marketOdds = await ensureMatchOddsLocked(fx.FixtureId, {
+      home: fixture.home,
+      away: fixture.away,
+      kickoffMs,
+    }).catch(() => null);
+    const base = {
+      ...fixture,
+      apiConfigured: true,
+      venueLine,
+      goals: [] as MatchGoal[],
+      marketOdds,
+    };
 
     if (kickoffMs > nowMs) {
       board.push({ ...base, live: null, phase: "upcoming" });

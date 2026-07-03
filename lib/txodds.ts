@@ -143,6 +143,69 @@ export async function fetchFixturesSnapshot(
 }
 
 // ---------------------------------------------------------------------------
+// Odds snapshot (1X2 StablePrice — used for upset bonus at kickoff lock)
+// ---------------------------------------------------------------------------
+
+export type TxOddsRow = {
+  FixtureId: number;
+  Ts?: number;
+  SuperOddsType?: string;
+  MarketPeriod?: string | null;
+  PriceNames?: string[];
+  Pct?: string[];
+};
+
+export type Match1x2Odds = {
+  homePct: number;
+  drawPct: number;
+  awayPct: number;
+};
+
+export async function fetchOddsSnapshot(fixtureId: number): Promise<TxOddsRow[]> {
+  const res = await txFetch(`/api/odds/snapshot/${fixtureId}`);
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`TxLINE odds snapshot failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Full-time 1X2 implied percentages (part1 / draw / part2). */
+export function parse1x2FullTime(rows: TxOddsRow[]): Match1x2Odds | null {
+  const candidates = rows.filter(
+    (row) =>
+      row.SuperOddsType === "1X2_PARTICIPANT_RESULT" &&
+      (!row.MarketPeriod || row.MarketPeriod === "null"),
+  );
+  if (candidates.length === 0) return null;
+
+  const latest = candidates.reduce((best, row) =>
+    (row.Ts ?? 0) >= (best.Ts ?? 0) ? row : best,
+  );
+  const names = latest.PriceNames ?? [];
+  const pcts = latest.Pct ?? [];
+  const idx = (key: string) => names.indexOf(key);
+  const read = (key: string) => {
+    const i = idx(key);
+    if (i < 0 || !pcts[i] || pcts[i] === "NA") return null;
+    const n = Number.parseFloat(pcts[i]!);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const homePct = read("part1");
+  const drawPct = read("draw");
+  const awayPct = read("part2");
+  if (homePct == null || drawPct == null || awayPct == null) return null;
+
+  return { homePct, drawPct, awayPct };
+}
+
+// ---------------------------------------------------------------------------
 // Scores snapshot (full event sequence for a fixture)
 // ---------------------------------------------------------------------------
 
