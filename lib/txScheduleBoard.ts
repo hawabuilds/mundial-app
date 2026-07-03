@@ -94,18 +94,25 @@ export async function getTxScheduleBoard(
       }
     }
 
-    const finished = live
-      ? isFinishedStatus(live.status)
-      : nowMs - kickoffMs >= MATCH_ASSUMED_DURATION_MIN * 60_000;
+    const assumedFinished =
+      nowMs - kickoffMs >= MATCH_ASSUMED_DURATION_MIN * 60_000;
+    const finished = (live ? isFinishedStatus(live.status) : false) || assumedFinished;
+
+    // Devnet feeds can stay stuck "in play" long after a match ends. Once we
+    // consider it finished, present it as FT so the card shows a final result.
+    const displayLive: LiveMatchData | null =
+      finished && live && !isFinishedStatus(live.status)
+        ? { ...live, status: "FT", elapsed: null }
+        : live;
 
     if (!finished) {
-      board.push({ ...base, live, goals, phase: "live" });
+      board.push({ ...base, live: displayLive, goals, phase: "live" });
       continue;
     }
 
     // Finished: keep the result up until the next match kicks off.
     if (nowMs < nextKickoffAfter(kickoffMs)) {
-      board.push({ ...base, live, goals, phase: "recent" });
+      board.push({ ...base, live: displayLive, goals, phase: "recent" });
     }
   }
 

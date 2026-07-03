@@ -35,6 +35,24 @@ export default function FixtureCard({
           ? `LIVE ${fixture.elapsed}'`
           : "LIVE";
 
+  const homeGoals = fixture.goals.filter((g) => g.side === "home");
+  const awayGoals = fixture.goals.filter((g) => g.side === "away");
+
+  const renderScorers = (goals: typeof fixture.goals) =>
+    showLive && goals.length > 0 ? (
+      <ul className={styles.scorers}>
+        {goals.map((goal, index) => (
+          <li key={`${goal.minute}-${index}`} className={styles.scorer}>
+            {goal.minute != null ? <span className={styles.scorerMin}>{goal.minute}&rsquo;</span> : null}
+            <span className={styles.scorerName}>
+              {goal.player ?? "Goal"}
+              {goal.ownGoal ? " (OG)" : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+    ) : null;
+
   return (
     <Card glow={featured} className={featured ? styles.featured : styles.compact}>
       <div className={styles.meta}>
@@ -57,10 +75,11 @@ export default function FixtureCard({
         )}
       </div>
 
-      <div className={styles.matchup}>
+      <div className={`${styles.matchup} ${showLive ? styles.matchupLive : ""}`}>
         <div className={styles.side}>
           <Flag code={fixture.homeCode} size={featured ? "lg" : "md"} />
           <span className={styles.team}>{fixture.home}</span>
+          {renderScorers(homeGoals)}
         </div>
         {showLive && hasScore ? (
           <span className={styles.score}>
@@ -74,32 +93,9 @@ export default function FixtureCard({
         <div className={styles.side}>
           <Flag code={fixture.awayCode} size={featured ? "lg" : "md"} />
           <span className={styles.team}>{fixture.away}</span>
+          {renderScorers(awayGoals)}
         </div>
       </div>
-
-      {showLive && fixture.goals.length > 0 ? (
-        <ul className={styles.goals}>
-          {fixture.goals.map((goal, index) => (
-            <li
-              key={`${goal.side}-${goal.minute}-${index}`}
-              className={`${styles.goalRow} ${
-                goal.side === "home" ? styles.goalHome : styles.goalAway
-              }`}
-            >
-              <span className={styles.goalBall} aria-hidden>
-                ⚽
-              </span>
-              {goal.minute != null ? (
-                <span className={styles.goalMin}>{goal.minute}&rsquo;</span>
-              ) : null}
-              <span className={styles.goalPlayer}>
-                {goal.player ?? "Goal"}
-                {goal.ownGoal ? " (OG)" : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
 
       {fixture.venueLine ? (
         <p className={styles.venue}>{fixture.venueLine}</p>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchUpcomingMatches } from "@/app/lib/leaderboard-client";
-import { FALLBACK_FIXTURES, toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { fetchBoardMatches } from "@/app/lib/leaderboard-client";
+import { toMundialFixture, type MundialFixture } from "../lib/fixtures";
 import ExampleCallPreview from "../ui/ExampleCallPreview";
 import Flag from "../ui/Flag";
 import { AppShell } from "../ui/TabBar";
@@ -47,18 +47,24 @@ function MatchSummary({ fixture }: { fixture: MundialFixture }) {
 }
 
 export default function Call({ onTabChange, vaultDot }: Props) {
-  const [fixture, setFixture] = useState<MundialFixture>(FALLBACK_FIXTURES[0]!);
+  const [fixture, setFixture] = useState<MundialFixture | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const load = () => {
-      void fetchUpcomingMatches(1)
+      void fetchBoardMatches()
         .then((rows) => {
-          if (cancelled || !rows[0]) return;
-          setFixture(toMundialFixture(rows[0]));
+          if (cancelled) return;
+          // Next game to reply to = soonest upcoming match on the live board.
+          const next = rows.find((r) => r.phase === "upcoming") ?? rows[0];
+          setFixture(next ? toMundialFixture(next) : null);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setLoaded(true);
+        });
     };
 
     load();
@@ -78,8 +84,16 @@ export default function Call({ onTabChange, vaultDot }: Props) {
         </p>
       </div>
 
-      <MatchSummary fixture={fixture} />
-      <ExampleCallPreview fixture={fixture} />
+      {!loaded ? (
+        <p className="m-body">Loading the next match…</p>
+      ) : fixture ? (
+        <>
+          <MatchSummary fixture={fixture} />
+          <ExampleCallPreview fixture={fixture} />
+        </>
+      ) : (
+        <p className="m-body">No upcoming match right now — check back soon.</p>
+      )}
     </AppShell>
   );
 }

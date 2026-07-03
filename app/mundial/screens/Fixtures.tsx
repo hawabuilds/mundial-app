@@ -6,7 +6,7 @@ import {
   fetchBoardMatches,
   fetchMyLeaderboardStats,
 } from "@/app/lib/leaderboard-client";
-import { FALLBACK_FIXTURES, toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { toMundialFixture, type MundialFixture } from "../lib/fixtures";
 import Card from "../ui/Card";
 import FixtureCard from "../ui/FixtureCard";
 import ProfileMenu from "../ui/ProfileMenu";
@@ -21,7 +21,8 @@ type Props = {
 
 export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const { status } = useSession();
-  const [fixtures, setFixtures] = useState<MundialFixture[]>(FALLBACK_FIXTURES);
+  const [fixtures, setFixtures] = useState<MundialFixture[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [rank, setRank] = useState<number | null>(null);
   const [points, setPoints] = useState<number | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -33,14 +34,13 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       void fetchBoardMatches()
         .then((rows) => {
           if (cancelled) return;
-          if (rows.length === 0) {
-            setFixtures([]);
-            return;
-          }
           setFixtures(rows.map(toMundialFixture));
         })
         .catch(() => {
-          /* keep fallback */
+          /* keep whatever we last had */
+        })
+        .finally(() => {
+          if (!cancelled) setLoaded(true);
         });
     };
 
@@ -81,21 +81,17 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   );
   const upcomingList = fixtures.filter((f) => f.phase === "upcoming");
 
-  // The next 4 upcoming matches get a "tap to reply" prompt.
-  const replyIds = new Set(upcomingList.slice(0, 4).map((f) => f.id));
+  const featuredLive = liveList[0] ?? null;
+  const liveRest = liveList.slice(1);
+  // Only the next game (soonest upcoming) gets a tap-to-reply prompt.
+  const nextGame = upcomingList[0] ?? null;
+  const comingUp = upcomingList.slice(1);
 
-  const featuredIsLive = liveList.length > 0;
-  const headline = liveList[0] ?? upcomingList[0] ?? null;
-  const liveRest = featuredIsLive ? liveList.slice(1) : [];
-  const upcomingToList = featuredIsLive ? upcomingList : upcomingList.slice(1);
-
-  const headlineLabel = !headline
+  const featuredLiveLabel = !featuredLive
     ? null
-    : headline.status === "LIVE" || headline.status === "HT"
+    : featuredLive.status === "LIVE" || featuredLive.status === "HT"
       ? "Live now"
-      : headline.status === "FT" || headline.phase === "recent"
-        ? "Full time"
-        : "Next whistle";
+      : "Full time";
   const rankLabel = statsLoading ? "—" : rank != null ? `#${rank}` : "—";
   const ptsLabel =
     statsLoading ? "—" : points != null ? points.toLocaleString() : "0";
@@ -119,40 +115,49 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
         </div>
       </Card>
 
-      {headline ? (
-        <section className={styles.section}>
-          <p className="m-label">{headlineLabel}</p>
-          <FixtureCard
-            fixture={headline}
-            featured
-            withReply={replyIds.has(headline.id)}
-          />
-          {liveRest.length > 0 ? (
-            <ul className={styles.list}>
-              {liveRest.map((f) => (
-                <li key={f.id}>
-                  <FixtureCard fixture={f} />
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
+      {!loaded ? (
+        <p className={styles.emptyFixtures}>Loading matches…</p>
+      ) : fixtures.length === 0 ? (
+        <p className={styles.emptyFixtures}>No matches right now — check back soon.</p>
       ) : (
-        <p className={styles.emptyFixtures}>No upcoming matches — check back soon.</p>
-      )}
+        <>
+          {featuredLive ? (
+            <section className={styles.section}>
+              <p className="m-label">{featuredLiveLabel}</p>
+              <FixtureCard fixture={featuredLive} featured />
+              {liveRest.length > 0 ? (
+                <ul className={styles.list}>
+                  {liveRest.map((f) => (
+                    <li key={f.id}>
+                      <FixtureCard fixture={f} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
 
-      {upcomingToList.length > 0 ? (
-        <section className={styles.section}>
-          <p className="m-label">Coming up</p>
-          <ul className={styles.list}>
-            {upcomingToList.map((f) => (
-              <li key={f.id}>
-                <FixtureCard fixture={f} withReply={replyIds.has(f.id)} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+          {nextGame ? (
+            <section className={styles.section}>
+              <p className="m-label">Next whistle</p>
+              <FixtureCard fixture={nextGame} featured withReply />
+            </section>
+          ) : null}
+
+          {comingUp.length > 0 ? (
+            <section className={styles.section}>
+              <p className="m-label">Coming up</p>
+              <ul className={styles.list}>
+                {comingUp.map((f) => (
+                  <li key={f.id}>
+                    <FixtureCard fixture={f} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
+      )}
 
       <p className={styles.tzNote}>Kickoff times shown in your local timezone.</p>
     </AppShell>
