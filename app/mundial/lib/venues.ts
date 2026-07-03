@@ -1,4 +1,5 @@
 import { WORLD_CUP_2026_FIXTURES } from "@/app/data/fixtures";
+import { teamNamesMatch } from "@/lib/txodds";
 
 /** Host cities for World Cup 2026 fixtures (FIFA group stage schedule). */
 export type MatchVenue = {
@@ -96,42 +97,80 @@ export function formatVenueLine(venue: MatchVenue): string {
   return `${venue.stadium} · ${venue.city}, ${venue.country}`;
 }
 
-function normalizeTeam(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+function teamsMatchFixture(
+  home: string,
+  away: string,
+  fixture: (typeof WORLD_CUP_2026_FIXTURES)[number],
+): boolean {
+  return (
+    (teamNamesMatch(fixture.home, home) && teamNamesMatch(fixture.away, away)) ||
+    (teamNamesMatch(fixture.home, away) && teamNamesMatch(fixture.away, home))
+  );
+}
+
+function kickoffDayMs(date?: string): number | null {
+  if (!date) return null;
+  return new Date(`${date}T12:00:00Z`).getTime();
+}
+
+function pickClosestFixture(
+  fixtures: (typeof WORLD_CUP_2026_FIXTURES)[number][],
+  date?: string,
+): (typeof WORLD_CUP_2026_FIXTURES)[number] | null {
+  if (fixtures.length === 0) return null;
+  if (fixtures.length === 1) return fixtures[0]!;
+  const target = kickoffDayMs(date);
+  if (target == null) return fixtures[0]!;
+  return fixtures.reduce((best, fixture) => {
+    const day = new Date(`${fixture.date}T12:00:00Z`).getTime();
+    const bestDay = new Date(`${best.date}T12:00:00Z`).getTime();
+    return Math.abs(day - target) < Math.abs(bestDay - target) ? fixture : best;
+  });
+}
+
+function venueFromFixture(
+  fixture: (typeof WORLD_CUP_2026_FIXTURES)[number],
+): string {
+  const venue = getVenueForMatch(fixture.id);
+  if (venue.city === "TBD") return "";
+  return formatVenueLine(venue);
 }
 
 /**
  * Venue line for a live-board fixture. TxLINE gives no stadium/city, so we match
- * the fixture back to the static World Cup 2026 schedule by team names (and,
- * where possible, kickoff date) and reuse that match's known venue. Returns ""
- * when the teams are not part of the real tournament schedule.
+ * back to the World Cup 2026 schedule by team names (fuzzy aliases like Cape Verde
+ * / Cape Verde Islands). When the exact pairing is not in our schedule — common on
+ * the TxLINE devnet bracket — we use the listed home team's nearest WC venue.
  */
 export function venueLineForMatch(
   home: string,
   away: string,
   date?: string,
 ): string {
-  const h = normalizeTeam(home);
-  const a = normalizeTeam(away);
+  const pairMatch = pickClosestFixture(
+    WORLD_CUP_2026_FIXTURES.filter((fixture) =>
+      teamsMatchFixture(home, away, fixture),
+    ),
+    date,
+  );
+  if (pairMatch) return venueFromFixture(pairMatch);
 
-  const candidates = WORLD_CUP_2026_FIXTURES.filter((fixture) => {
-    const fh = normalizeTeam(fixture.home);
-    const fa = normalizeTeam(fixture.away);
-    return (fh === h && fa === a) || (fh === a && fa === h);
-  });
-  if (candidates.length === 0) return "";
+  const homeAsHost = pickClosestFixture(
+    WORLD_CUP_2026_FIXTURES.filter((fixture) => teamNamesMatch(fixture.home, home)),
+    date,
+  );
+  if (homeAsHost) return venueFromFixture(homeAsHost);
 
-  const match =
-    (date ? candidates.find((fixture) => fixture.date === date) : undefined) ??
-    candidates[0]!;
+  const homeInvolved = pickClosestFixture(
+    WORLD_CUP_2026_FIXTURES.filter(
+      (fixture) =>
+        teamNamesMatch(fixture.home, home) || teamNamesMatch(fixture.away, home),
+    ),
+    date,
+  );
+  if (homeInvolved) return venueFromFixture(homeInvolved);
 
-  const venue = getVenueForMatch(match.id);
-  if (venue.city === "TBD") return "";
-  return formatVenueLine(venue);
+  return "";
 }
 
 /** World Cup branding without naming the governing body. */
