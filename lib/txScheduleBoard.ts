@@ -16,6 +16,8 @@ import {
   type BoardFixture,
   type FixturePhase,
 } from "./enrichFixtures";
+import { getMatchGoals, saveMatchGoals } from "@/app/lib/supabase";
+import { venueLineForMatch } from "@/app/mundial/lib/venues";
 import { fetchFixturesSnapshot, isTxoddsConfigured, type TxFixture } from "./txodds";
 
 /** Board fixture carrying a display venue/competition line + live goals. */
@@ -30,6 +32,24 @@ const LIVE_LOOKUP_MAX_HOURS_AFTER_KICKOFF = 4;
 function txStartToDateTime(startMs: number): { date: string; time: string } {
   const iso = new Date(startMs).toISOString();
   return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
+}
+
+/**
+ * Persist freshly-seen goals and return the accumulated set for the fixture.
+ * Best-effort — if Supabase is not configured, the current snapshot goals are
+ * returned unchanged.
+ */
+async function accumulateGoals(
+  fixtureId: number,
+  freshGoals: MatchGoal[],
+): Promise<MatchGoal[]> {
+  try {
+    if (freshGoals.length > 0) await saveMatchGoals(fixtureId, freshGoals);
+    const stored = await getMatchGoals(fixtureId);
+    return stored.length > 0 ? stored : freshGoals;
+  } catch {
+    return freshGoals;
+  }
 }
 
 function txToFixture(fx: TxFixture): Fixture {
@@ -69,7 +89,10 @@ export async function getTxScheduleBoard(
   for (const fx of sorted) {
     const fixture = txToFixture(fx);
     const kickoffMs = fx.StartTime;
-    const base = { ...fixture, apiConfigured: true, venueLine: "", goals: [] as MatchGoal[] };
+    // TxLINE has no venue field; reuse the real WC schedule's venue when the
+    // teams match (blank for TxLINE-only demo fixtures).
+    const venueLine = venueLineForMatch(fixture.home, fixture.away, fixture.date);
+    const base = { ...fixture, apiConfigured: true, venueLine, goals: [] as MatchGoal[] };
 
     if (kickoffMs > nowMs) {
       board.push({ ...base, live: null, phase: "upcoming" });
@@ -105,14 +128,18 @@ export async function getTxScheduleBoard(
         ? { ...live, status: "FT", elapsed: null }
         : live;
 
+    // The snapshot only exposes the latest goal, so accumulate what we see across
+    // polls. Falls back to snapshot-only goals if Supabase is unavailable.
+    const mergedGoals = await accumulateGoals(fx.FixtureId, goals);
+
     if (!finished) {
-      board.push({ ...base, live: displayLive, goals, phase: "live" });
+      board.push({ ...base, live: displayLive, goals: mergedGoals, phase: "live" });
       continue;
     }
 
     // Finished: keep the result up until the next match kicks off.
     if (nowMs < nextKickoffAfter(kickoffMs)) {
-      board.push({ ...base, live: displayLive, goals, phase: "recent" });
+      board.push({ ...base, live: displayLive, goals: mergedGoals, phase: "recent" });
     }
   }
 

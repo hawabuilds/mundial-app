@@ -1,3 +1,5 @@
+import { WORLD_CUP_2026_FIXTURES } from "@/app/data/fixtures";
+
 /** Host cities for World Cup 2026 fixtures (FIFA group stage schedule). */
 export type MatchVenue = {
   city: string;
@@ -92,6 +94,44 @@ export function getVenueForMatch(matchId: number): MatchVenue {
 
 export function formatVenueLine(venue: MatchVenue): string {
   return `${venue.stadium} · ${venue.city}, ${venue.country}`;
+}
+
+function normalizeTeam(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Venue line for a live-board fixture. TxLINE gives no stadium/city, so we match
+ * the fixture back to the static World Cup 2026 schedule by team names (and,
+ * where possible, kickoff date) and reuse that match's known venue. Returns ""
+ * when the teams are not part of the real tournament schedule.
+ */
+export function venueLineForMatch(
+  home: string,
+  away: string,
+  date?: string,
+): string {
+  const h = normalizeTeam(home);
+  const a = normalizeTeam(away);
+
+  const candidates = WORLD_CUP_2026_FIXTURES.filter((fixture) => {
+    const fh = normalizeTeam(fixture.home);
+    const fa = normalizeTeam(fixture.away);
+    return (fh === h && fa === a) || (fh === a && fa === h);
+  });
+  if (candidates.length === 0) return "";
+
+  const match =
+    (date ? candidates.find((fixture) => fixture.date === date) : undefined) ??
+    candidates[0]!;
+
+  const venue = getVenueForMatch(match.id);
+  if (venue.city === "TBD") return "";
+  return formatVenueLine(venue);
 }
 
 /** World Cup branding without naming the governing body. */

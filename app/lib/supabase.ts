@@ -222,6 +222,65 @@ export async function clearMatchTweetId(matchId: number): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** A goal captured from the live feed, oriented onto home/away sides. */
+export type StoredGoal = {
+  minute: number | null;
+  side: "home" | "away";
+  player: string | null;
+  ownGoal: boolean;
+};
+
+/** Stable per-goal key so repeated polls of the same goal upsert (not duplicate). */
+function goalKey(goal: StoredGoal): string {
+  return `${goal.side}|${goal.minute ?? "?"}|${goal.player ?? ""}|${goal.ownGoal ? 1 : 0}`;
+}
+
+/**
+ * Accumulate goals for a fixture. The TxLINE snapshot only exposes the latest
+ * goal at a time, so we persist each one we see (deduped) to build the full list
+ * across polls. Idempotent — safe to call on every board refresh.
+ */
+export async function saveMatchGoals(
+  fixtureId: number,
+  goals: StoredGoal[],
+): Promise<void> {
+  if (goals.length === 0) return;
+  const supabase = getSupabaseAdminClient();
+  const rows = goals.map((goal) => ({
+    fixture_id: fixtureId,
+    goal_key: goalKey(goal),
+    minute: goal.minute,
+    side: goal.side,
+    player: goal.player,
+    own_goal: goal.ownGoal,
+  }));
+
+  const { error } = await supabase
+    .from("match_goals")
+    .upsert(rows, { onConflict: "fixture_id,goal_key", ignoreDuplicates: true });
+
+  if (error) throw new Error(error.message);
+}
+
+/** All goals accumulated for a fixture, ordered by minute. */
+export async function getMatchGoals(fixtureId: number): Promise<StoredGoal[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_goals")
+    .select("minute, side, player, own_goal")
+    .eq("fixture_id", fixtureId)
+    .order("minute", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => ({
+    minute: row.minute as number | null,
+    side: (row.side as "home" | "away") ?? "home",
+    player: (row.player as string | null) ?? null,
+    ownGoal: Boolean(row.own_goal),
+  }));
+}
+
 export async function getMatchState(matchId: number): Promise<MatchStateRow | null> {
   const supabase = getSupabaseClient();
 
