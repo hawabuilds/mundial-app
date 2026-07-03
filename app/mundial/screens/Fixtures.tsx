@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
+  fetchBoardMatches,
   fetchMyLeaderboardStats,
-  fetchUpcomingMatches,
 } from "@/app/lib/leaderboard-client";
 import { FALLBACK_FIXTURES, toMundialFixture, type MundialFixture } from "../lib/fixtures";
 import Card from "../ui/Card";
@@ -30,7 +30,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     let cancelled = false;
 
     const load = () => {
-      void fetchUpcomingMatches()
+      void fetchBoardMatches()
         .then((rows) => {
           if (cancelled) return;
           if (rows.length === 0) {
@@ -45,7 +45,8 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     };
 
     load();
-    const interval = window.setInterval(load, 60_000);
+    // Poll often enough to keep the live clock + score fresh during a match.
+    const interval = window.setInterval(load, 30_000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -75,7 +76,26 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     };
   }, [status]);
 
-  const [headline, ...rest] = fixtures;
+  const liveList = fixtures.filter(
+    (f) => f.phase === "live" || f.phase === "recent",
+  );
+  const upcomingList = fixtures.filter((f) => f.phase === "upcoming");
+
+  // The next 4 upcoming matches get a "tap to reply" prompt.
+  const replyIds = new Set(upcomingList.slice(0, 4).map((f) => f.id));
+
+  const featuredIsLive = liveList.length > 0;
+  const headline = liveList[0] ?? upcomingList[0] ?? null;
+  const liveRest = featuredIsLive ? liveList.slice(1) : [];
+  const upcomingToList = featuredIsLive ? upcomingList : upcomingList.slice(1);
+
+  const headlineLabel = !headline
+    ? null
+    : headline.status === "LIVE" || headline.status === "HT"
+      ? "Live now"
+      : headline.status === "FT" || headline.phase === "recent"
+        ? "Full time"
+        : "Next whistle";
   const rankLabel = statsLoading ? "—" : rank != null ? `#${rank}` : "—";
   const ptsLabel =
     statsLoading ? "—" : points != null ? points.toLocaleString() : "0";
@@ -101,20 +121,33 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
 
       {headline ? (
         <section className={styles.section}>
-          <p className="m-label">Next whistle</p>
-          <FixtureCard fixture={headline} featured />
+          <p className="m-label">{headlineLabel}</p>
+          <FixtureCard
+            fixture={headline}
+            featured
+            withReply={replyIds.has(headline.id)}
+          />
+          {liveRest.length > 0 ? (
+            <ul className={styles.list}>
+              {liveRest.map((f) => (
+                <li key={f.id}>
+                  <FixtureCard fixture={f} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </section>
       ) : (
         <p className={styles.emptyFixtures}>No upcoming matches — check back soon.</p>
       )}
 
-      {rest.length > 0 ? (
+      {upcomingToList.length > 0 ? (
         <section className={styles.section}>
           <p className="m-label">Coming up</p>
           <ul className={styles.list}>
-            {rest.map((f) => (
+            {upcomingToList.map((f) => (
               <li key={f.id}>
-                <FixtureCard fixture={f} />
+                <FixtureCard fixture={f} withReply={replyIds.has(f.id)} />
               </li>
             ))}
           </ul>

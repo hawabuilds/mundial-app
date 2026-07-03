@@ -192,3 +192,129 @@
 
 }
 
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-family: var(--m-font-body);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.pillSolo {
+  margin-inline: auto;
+}
+
+.statusLive {
+  color: #ff5c6c;
+  background: rgba(255, 92, 108, 0.12);
+  border: 1px solid rgba(255, 92, 108, 0.35);
+}
+
+.statusDone {
+  color: var(--m-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff5c6c;
+  animation: fixturePulse 1.4s ease-out infinite;
+}
+
+@keyframes fixturePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 92, 108, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 92, 108, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 92, 108, 0);
+  }
+}
+
+.score {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--m-font-match);
+  font-weight: 700;
+  font-size: 1.125rem;
+  letter-spacing: 0.04em;
+  color: var(--m-white);
+  font-variant-numeric: tabular-nums;
+}
+
+.featured .score {
+  font-size: 1.5rem;
+}
+
+.scoreDash {
+  color: var(--m-faint);
+  font-weight: 600;
+}
+
+.goals {
+  list-style: none;
+  margin: 0;
+  padding: var(--m-space-3) 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.goalRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--m-font-body);
+  font-size: 0.8125rem;
+  color: var(--m-white);
+}
+
+.goalHome {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.goalAway {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.goalBall {
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.goalMin {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--m-muted);
+  min-width: 2.4ch;
+}
+
+.goalAway .goalMin {
+  text-align: right;
+}
+
+.goalPlayer {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

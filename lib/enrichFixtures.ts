@@ -1,8 +1,7 @@
 import type { Fixture } from "@/app/data/fixtures";
-import { fixtureDateTime } from "@/app/data/fixtures";
+import { fixtureDateTime, getActiveFixtures } from "@/app/data/fixtures";
 import { fixtureAutoSettlesFromApi } from "@/lib/fixtureAutoSettle";
 import {
-  ApiFootballBudgetError,
   fetchLiveMatch,
   isApiFootballConfigured,
   isFinishedStatus,
@@ -52,12 +51,9 @@ async function resolveLive(fixture: Fixture): Promise<LiveMatchData | null> {
     return null;
   }
 
-  if (!fixture.externalFixtureId) return null;
-
   try {
-    return await fetchLiveMatch(fixture.externalFixtureId);
-  } catch (error) {
-    if (error instanceof ApiFootballBudgetError) return null;
+    return await fetchLiveMatch(fixture);
+  } catch {
     return null;
   }
 }
@@ -97,9 +93,7 @@ export async function enrichFixtures(
     }
 
     const mayUseApi =
-      shouldEnrichFixtureFromApi(fixture, now) &&
-      fixture.externalFixtureId &&
-      apiCalls < maxApiCalls;
+      shouldEnrichFixtureFromApi(fixture, now) && apiCalls < maxApiCalls;
 
     if (!mayUseApi) {
       results.push({
@@ -143,6 +137,95 @@ export async function enrichNextFixture(
 ): Promise<EnrichedFixture | null> {
   const upcoming = await enrichUpcomingFixtures(fixtures, now);
   return upcoming[0] ?? null;
+}
+
+/**
+ * When the live feed has no data yet, assume a match is still in progress for
+ * this long after kickoff (90 + halftime + stoppage + a safety buffer).
+ */
+export const MATCH_ASSUMED_DURATION_MIN = 130;
+
+/** Extra live lookups allowed for the board — covers simultaneous kickoffs. */
+export const BOARD_API_MAX_CALLS = 6;
+
+export type FixturePhase = "live" | "recent" | "upcoming";
+
+export type BoardFixture = EnrichedFixture & { phase: FixturePhase };
+
+function isFixtureFinished(
+  fixture: Fixture,
+  live: LiveMatchData | null,
+  now: Date,
+): boolean {
+  if (fixture.result) return true;
+  if (live) return isFinishedStatus(live.status);
+  const kickoffMs = fixtureDateTime(fixture).getTime();
+  return now.getTime() - kickoffMs >= MATCH_ASSUMED_DURATION_MIN * 60_000;
+}
+
+/**
+ * Fixtures for the app's live board. Unlike {@link enrichUpcomingFixtures}, a
+ * match is kept on screen once it kicks off:
+ *  - "live": started and not yet finished — shows running clock + score.
+ *  - "recent": finished, kept until the next match kicks off (so the result
+ *    lingers instead of vanishing at full time).
+ *  - "upcoming": not started yet.
+ * Ordered live first, then recent, then upcoming (each by kickoff).
+ */
+export async function enrichBoardFixtures(
+  fixtures: Fixture[],
+  now: Date = new Date(),
+): Promise<BoardFixture[]> {
+  const active = getActiveFixtures(fixtures);
+
+  const kickoffs = Array.from(
+    new Set(active.map((f) => fixtureDateTime(f).getTime())),
+  ).sort((a, b) => a - b);
+  const nextKickoffAfter = (ms: number): number => {
+    for (const k of kickoffs) if (k > ms) return k;
+    return Number.POSITIVE_INFINITY;
+  };
+
+  // Started matches sort earliest, so they win the live-lookup budget first.
+  const enriched = await enrichFixtures(active, {
+    now,
+    maxApiCalls: BOARD_API_MAX_CALLS,
+  });
+
+  const board: BoardFixture[] = [];
+  const nowMs = now.getTime();
+
+  for (const fixture of enriched) {
+    const kickoffMs = fixtureDateTime(fixture).getTime();
+
+    if (kickoffMs > nowMs) {
+      board.push({ ...fixture, phase: "upcoming" });
+      continue;
+    }
+
+    if (!isFixtureFinished(fixture, fixture.live, now)) {
+      board.push({ ...fixture, phase: "live" });
+      continue;
+    }
+
+    // Finished: keep the result up until the next match begins.
+    if (nowMs < nextKickoffAfter(kickoffMs)) {
+      board.push({ ...fixture, phase: "recent" });
+    }
+  }
+
+  const phaseRank: Record<FixturePhase, number> = {
+    live: 0,
+    recent: 1,
+    upcoming: 2,
+  };
+  board.sort((a, b) => {
+    const byPhase = phaseRank[a.phase] - phaseRank[b.phase];
+    if (byPhase !== 0) return byPhase;
+    return fixtureDateTime(a).getTime() - fixtureDateTime(b).getTime();
+  });
+
+  return board;
 }
 
 export function formatMatchStatus(live: LiveMatchData | null): string | null {

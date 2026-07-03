@@ -1,10 +1,16 @@
-import type { Fixture } from "@/app/data/fixtures";
 import { getTeamCountryCode } from "@/app/data/fixtures";
+import type {
+  UpcomingMatch,
+  FixturePhase,
+  MatchGoalInfo,
+} from "@/app/lib/leaderboard-client";
 import {
   formatVenueLine,
   fixtureMetaLabel,
   getVenueForMatch,
 } from "./venues";
+
+export type MundialGoal = MatchGoalInfo;
 
 export type MundialFixture = {
   id: number;
@@ -16,10 +22,20 @@ export type MundialFixture = {
   time: string;
   group: string | null;
   venueLine: string;
+  /** Live match state (null when not started / no feed data). */
+  status: string | null;
+  statusLabel: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  elapsed: number | null;
+  phase: FixturePhase;
+  /** Goal timeline for live/finished matches (empty otherwise). */
+  goals: MundialGoal[];
 };
 
-export function toMundialFixture(fixture: Fixture): MundialFixture {
+export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
   const venue = getVenueForMatch(fixture.id);
+  const live = fixture.live ?? null;
   return {
     id: fixture.id,
     home: fixture.home,
@@ -29,9 +45,29 @@ export function toMundialFixture(fixture: Fixture): MundialFixture {
     date: fixture.date,
     time: fixture.time,
     group: fixtureMetaLabel(fixture.group),
-    venueLine: formatVenueLine(venue),
+    venueLine:
+      fixture.venueLine !== undefined
+        ? fixture.venueLine
+        : formatVenueLine(venue),
+    status: live?.status ?? null,
+    statusLabel: fixture.statusLabel ?? null,
+    homeScore: live?.homeScore ?? null,
+    awayScore: live?.awayScore ?? null,
+    elapsed: live?.elapsed ?? null,
+    phase: fixture.phase ?? "upcoming",
+    goals: fixture.goals ?? [],
   };
 }
+
+const FALLBACK_LIVE = {
+  status: null,
+  statusLabel: null,
+  homeScore: null,
+  awayScore: null,
+  elapsed: null,
+  phase: "upcoming" as const,
+  goals: [] as MundialGoal[],
+};
 
 export const FALLBACK_FIXTURES: MundialFixture[] = [
   {
@@ -44,6 +80,7 @@ export const FALLBACK_FIXTURES: MundialFixture[] = [
     time: "22:00",
     group: null,
     venueLine: "Lincoln Financial Field · Philadelphia, USA",
+    ...FALLBACK_LIVE,
   },
   {
     id: 4,
@@ -55,6 +92,7 @@ export const FALLBACK_FIXTURES: MundialFixture[] = [
     time: "01:00",
     group: null,
     venueLine: "SoFi Stadium · Los Angeles, USA",
+    ...FALLBACK_LIVE,
   },
   {
     id: 5,
@@ -66,5 +104,6 @@ export const FALLBACK_FIXTURES: MundialFixture[] = [
     time: "19:00",
     group: null,
     venueLine: "Levi's Stadium · Santa Clara, USA",
+    ...FALLBACK_LIVE,
   },
 ];

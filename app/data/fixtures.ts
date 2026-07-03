@@ -13,7 +13,11 @@ export type Fixture = {
   /** When true, match is void — no collection, scoring, or UI listing. */
   cancelled?: boolean;
   tweetId?: string;
-  /** api-football.com fixture id for live scores + auto-scoring. */
+  /**
+   * Legacy api-football.com fixture id. No longer used for lookups — live scores
+   * and auto-scoring resolve fixtures against TxLINE by team name + kickoff
+   * (see lib/txodds.ts). Kept only so existing fixture data stays valid.
+   */
   externalFixtureId?: number;
   /** Set when the final score is known — used by score-predictions / score cron. */
   result?: {
@@ -96,6 +100,9 @@ export const TEAM_COUNTRY_CODES: Record<string, CountryCode> = {
   Ghana: "GH",
   Uzbekistan: "UZ",
   Colombia: "CO",
+  "Cape Verde": "CV",
+  Vietnam: "VN",
+  Myanmar: "MM",
 };
 
 export function getTeamCountryCode(team: string): CountryCode | null {

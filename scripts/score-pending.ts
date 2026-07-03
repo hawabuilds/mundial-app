@@ -33,9 +33,8 @@ async function main() {
     console.log(`\n--- match ${id} ${f.home} vs ${f.away} ---`);
     console.log("collected_at", state?.predictions_collected_at ?? null);
     console.log("scored_at", state?.scored_at ?? null);
-    if (!f.externalFixtureId) continue;
 
-    const row = await fetchApiMatch(f.externalFixtureId);
+    const row = await fetchApiMatch(f);
     if (!row) {
       console.log("api: no row");
       continue;

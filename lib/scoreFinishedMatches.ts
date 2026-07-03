@@ -208,15 +208,7 @@ async function resolveFinalScoreFromApi(
 
 }> {
 
-  if (!fixture.externalFixtureId) {
-
-    return { finalScore: null, live: null };
-
-  }
-
-
-
-  const match = await fetchApiMatch(fixture.externalFixtureId, { fresh: true });
+  const match = await fetchApiMatch(fixture, { fresh: true });
 
   if (!match) return { finalScore: null, live: null };
 
@@ -268,7 +260,7 @@ export async function autoScoreFinishedMatches(
 
         reason:
 
-          "API_FOOTBALL_KEY not configured and no fixture.result set",
+          "TxLINE not configured (TXODDS_API_TOKEN) and no fixture.result set",
 
       },
 

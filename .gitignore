@@ -32,6 +32,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# txodds secrets (never commit wallet keypair or api token)
+/txodds/devnet-wallet.json
+/txodds/api-token.txt
+
 # vercel
 .vercel
 

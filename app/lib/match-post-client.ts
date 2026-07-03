@@ -12,8 +12,31 @@ export type MatchPostResponse = {
   error?: string;
 };
 
-export async function fetchMatchPost(matchId: number): Promise<MatchPostResponse> {
-  const response = await fetch(`/api/match-post?matchId=${matchId}`, {
+export type MatchPostLookup = {
+  home: string;
+  away: string;
+  date: string;
+  time: string;
+};
+
+/**
+ * Resolve the X match thread for a fixture. Pass `lookup` (teams + kickoff) for
+ * board fixtures whose id is not a static fixture id — the server then discovers
+ * the post by team names instead of requiring a static match id.
+ */
+export async function fetchMatchPost(
+  matchId: number,
+  lookup?: MatchPostLookup,
+): Promise<MatchPostResponse> {
+  const params = new URLSearchParams({ matchId: String(matchId) });
+  if (lookup) {
+    params.set("home", lookup.home);
+    params.set("away", lookup.away);
+    params.set("date", lookup.date);
+    params.set("time", lookup.time);
+  }
+
+  const response = await fetch(`/api/match-post?${params.toString()}`, {
     cache: "no-store",
   });
 

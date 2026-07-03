@@ -1,3 +1,4 @@
+import type { Fixture } from "@/app/data/fixtures";
 import { getFixtureById, getUpcomingFixtures } from "@/app/data/fixtures";
 import { resolveMatchPost, UI_MATCH_POST_OPTIONS } from "@/lib/resolveMatchTweet";
 import { matchReplyIntentUrl } from "@/lib/xApi";
@@ -6,14 +7,34 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const matchIdParam = request.nextUrl.searchParams.get("matchId");
+  const params = request.nextUrl.searchParams;
+  const matchIdParam = params.get("matchId");
   const matchId = matchIdParam ? Number.parseInt(matchIdParam, 10) : NaN;
 
-  if (!Number.isInteger(matchId)) {
-    return NextResponse.json({ error: "matchId must be an integer" }, { status: 400 });
+  // Board fixtures (TxLINE-sourced) pass teams + kickoff instead of a static id,
+  // so the post is discovered by team names. The matchId is used only as a cache key.
+  const home = params.get("home")?.trim();
+  const away = params.get("away")?.trim();
+  const date = params.get("date")?.trim();
+  const time = params.get("time")?.trim();
+
+  let fixture: Fixture | undefined;
+  if (home && away && date && time) {
+    fixture = {
+      id: Number.isInteger(matchId) ? matchId : 0,
+      home,
+      away,
+      date,
+      time,
+      group: "",
+    };
+  } else {
+    if (!Number.isInteger(matchId)) {
+      return NextResponse.json({ error: "matchId must be an integer" }, { status: 400 });
+    }
+    fixture = getFixtureById(matchId);
   }
 
-  const fixture = getFixtureById(matchId);
   if (!fixture) {
     return NextResponse.json({ error: `Unknown matchId: ${matchId}` }, { status: 404 });
   }

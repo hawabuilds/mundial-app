@@ -42,6 +42,7 @@
     "wagmi": "^2.19.5"
   },
   "devDependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "20.19.41",
     "@types/react": "^19",
@@ -50,6 +51,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tweetnacl": "^1.0.3",
     "typescript": "^5"
   }
 }

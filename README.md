@@ -4,6 +4,8 @@ A football score-prediction game built around X (Twitter). You reply to a match 
 
 Live at [copamundial.app](https://copamundial.app).
 
+![Copa Mundial — landing and leaderboard](docs/screenshots/cover.png)
+
 ## How it works
 
 - Reply to a match thread on X with a scoreline before kickoff — your first valid reply is the one that counts.

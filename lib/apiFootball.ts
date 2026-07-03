@@ -1,3 +1,10 @@
+// Live scores + auto-scoring adapter.
+//
+// Data source is TxLINE (TxODDS) — see lib/txodds.ts. This module keeps the
+// original "football data" surface (types, mapMatchRow, resolveFinalScoreFromApiMatch,
+// status vocabulary) so scoring, cron, and the live UI are unchanged; only the
+// underlying feed swapped from api-football.com to TxLINE.
+
 export type LiveMatchData = {
   externalFixtureId: number;
   status: string;
@@ -13,6 +20,24 @@ import {
   type MatchScores,
 } from "@/lib/matchScoreSettlement";
 
+import {
+  extractGoals,
+  fetchScoresSnapshot,
+  isTxoddsConfigured,
+  latestScoreEvent,
+  resolveTxFixture,
+  teamNamesMatch,
+  type TxFixture,
+  type TxScoreEvent,
+} from "./txodds";
+
+import {
+  FIXTURE_CACHE_LIVE_TTL_MS,
+  FIXTURE_CACHE_TTL_MS,
+  getCachedFixture,
+  setCachedFixture,
+} from "./apiFootballCache";
+
 /** Normalized fixture row used by scoring + live UI. */
 export type FootballDataMatch = {
   id: number;
@@ -23,191 +48,71 @@ export type FootballDataMatch = {
   score?: MatchScores;
 };
 
-import {
-  ApiFootballBudgetError,
-  API_FOOTBALL_MIN_RESERVE,
-  canUseApiFootball,
-  FIXTURE_CACHE_LIVE_TTL_MS,
-  FIXTURE_CACHE_TTL_MS,
-  getCachedFixture,
-  markQuotaExhausted,
-  setCachedFixture,
-  updateQuotaFromHeaders,
-} from "./apiFootballCache";
-
-const API_BASE = "https://v3.football.api-sports.io";
-
-/** API key from https://www.api-football.com/ */
-function getApiKey(): string | null {
-  return process.env.API_FOOTBALL_KEY?.trim() || null;
-}
+/** Enough of a fixture to resolve it against the TxLINE schedule. */
+export type MatchLookup = {
+  home: string;
+  away: string;
+  date: string;
+  time: string;
+};
 
 export function isApiFootballConfigured(): boolean {
-  return Boolean(getApiKey());
+  return isTxoddsConfigured();
 }
 
 export function isFootballDataConfigured(): boolean {
   return isApiFootballConfigured();
 }
 
-type ApiSportsFixtureRow = {
-  fixture: {
-    id: number;
-    status: { short: string; elapsed: number | null };
-  };
-  teams: { home: { name: string }; away: { name: string } };
-  goals: { home: number | null; away: number | null };
-  score: {
-    fulltime: { home: number | null; away: number | null };
-    halftime: { home: number | null; away: number | null };
-    extratime: { home: number | null; away: number | null } | null;
-    penalty: { home: number | null; away: number | null } | null;
-  };
-};
+// ---------------------------------------------------------------------------
+// TxLINE soccer game-phase encoding -> internal status codes
+// (internal codes match the old api-football short codes so downstream logic,
+//  mapStatus(), and isTerminalMatchStatus() keep working unchanged).
+// ---------------------------------------------------------------------------
 
-type ApiSportsFixturesResponse = {
-  response?: ApiSportsFixtureRow[];
-  errors?: Record<string, string>;
-};
-
-async function apiFetch(
-  path: string,
-  minReserve = API_FOOTBALL_MIN_RESERVE,
-): Promise<Response> {
-  const key = getApiKey();
-  if (!key) {
-    throw new Error("API_FOOTBALL_KEY is not configured");
+function mapStatusIdToShort(statusId: number): string {
+  switch (statusId) {
+    case 1:
+      return "NS"; // Not started
+    case 2:
+      return "1H"; // First half
+    case 3:
+      return "HT"; // Halftime
+    case 4:
+      return "2H"; // Second half
+    case 5:
+      return "FT"; // Ended
+    case 6:
+      return "HT"; // Waiting for extra time
+    case 7:
+    case 9:
+      return "ET"; // Extra time in play
+    case 8:
+      return "HT"; // Extra-time halftime
+    case 10:
+      return "AET"; // Ended after extra time
+    case 11:
+    case 12:
+      return "P"; // Penalty shootout (waiting / in progress)
+    case 13:
+      return "PEN"; // Ended after penalties
+    case 14:
+      return "LIVE"; // Interrupted
+    case 15:
+      return "ABD"; // Abandoned
+    case 16:
+    case 17:
+      return "CANC"; // Cancelled / coverage cancelled
+    case 18:
+      return "SUSP"; // Coverage suspended
+    case 19:
+      return "PST"; // Postponed
+    default:
+      return "NS";
   }
-
-  if (!canUseApiFootball(minReserve)) {
-    throw new ApiFootballBudgetError(
-      "API-Football daily quota reserve reached — set fixture.result or wait for reset",
-    );
-  }
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "x-apisports-key": key,
-    },
-    cache: "no-store",
-  });
-
-  updateQuotaFromHeaders(response.headers);
-
-  return response;
 }
 
-async function parseFixturesResponse(
-  response: Response,
-): Promise<ApiSportsFixtureRow[]> {
-  if (response.status === 404) return [];
-
-  const body = (await response.json()) as ApiSportsFixturesResponse;
-
-  if (body.errors && Object.keys(body.errors).length > 0) {
-    const message = Object.values(body.errors).join("; ");
-    if (/limit|quota|requests/i.test(message)) {
-      markQuotaExhausted();
-      throw new ApiFootballBudgetError(message);
-    }
-    throw new Error(`api-football.com error: ${message}`);
-  }
-
-  if (!response.ok) {
-    throw new Error(`api-football.com error: ${response.status}`);
-  }
-
-  return body.response ?? [];
-}
-
-function normalizeTeamName(name: string): string {
-  return name
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function teamNamesMatch(apiName: string, fixtureName: string): boolean {
-  const a = normalizeTeamName(apiName);
-  const b = normalizeTeamName(fixtureName);
-  if (a === b) return true;
-  if (a.includes(b) || b.includes(a)) return true;
-
-  const aliases: Record<string, string[]> = {
-    usa: ["united states", "u s a", "us"],
-    "bosnia herzegovina": ["bosnia", "bih", "bosnia & herzegovina"],
-    "cape verde": ["cabo verde"],
-    "saint etienne": ["st etienne", "st. etienne", "asse", "saint-etienne"],
-    nice: ["ogc nice"],
-    flamengo: ["cr flamengo", "clube de regatas do flamengo"],
-    cusco: ["cusco fc", "cienciano"],
-    "crystal palace": ["palace"],
-    "rayo vallecano": ["rayo"],
-    "buriram united": ["buriram"],
-    selangor: ["selangor fa"],
-    "fyr macedonia": ["north macedonia", "macedonia", "mk"],
-    scotland: ["scotland"],
-    curacao: ["curaçao", "curacao"],
-    arsenal: ["arsenal", "afc arsenal"],
-    "paris saint germain": ["psg", "paris sg", "paris saint-germain"],
-    "south africa": ["rsa", "bafana bafana"],
-    "republic of ireland": ["rep of ireland", "ireland"],
-    iran: ["ir iran", "team melli"],
-    gambia: ["gambia national"],
-    nicaragua: ["nicaragua national"],
-    iraq: ["iraq national"],
-    andorra: ["andorra national"],
-    lebanon: ["lebanon national"],
-    sudan: ["sudan national"],
-  };
-
-  for (const [key, values] of Object.entries(aliases)) {
-    const names = [key, ...values];
-    const aHit = names.some((n) => a.includes(n) || n.includes(a));
-    const bHit = names.some((n) => b.includes(n) || n.includes(b));
-    if (aHit && bHit) return true;
-  }
-
-  return false;
-}
-
-function normalizeFixtureRow(row: ApiSportsFixtureRow): FootballDataMatch {
-  const fulltime = row.score.fulltime;
-  const extratime = row.score.extratime;
-  const penalty = row.score.penalty;
-
-  const score: MatchScores = {
-    goals:
-      row.goals.home != null && row.goals.away != null
-        ? { home: row.goals.home, away: row.goals.away }
-        : undefined,
-    fullTime:
-      fulltime.home != null && fulltime.away != null
-        ? { home: fulltime.home, away: fulltime.away }
-        : undefined,
-    extraTime:
-      extratime?.home != null && extratime?.away != null
-        ? { home: extratime.home, away: extratime.away }
-        : undefined,
-    penalty:
-      penalty?.home != null && penalty?.away != null
-        ? { home: penalty.home, away: penalty.away }
-        : undefined,
-  };
-
-  return {
-    id: row.fixture.id,
-    status: row.fixture.status.short,
-    minute: row.fixture.status.elapsed,
-    homeTeam: { name: row.teams.home.name },
-    awayTeam: { name: row.teams.away.name },
-    score,
-  };
-}
-
-/** Map api-football.com status.short to UI labels. */
+/** Map internal short status to the label vocabulary the UI/live layer expects. */
 function mapStatus(status: string): string {
   switch (status) {
     case "FT":
@@ -230,6 +135,100 @@ function mapStatus(status: string): string {
     default:
       return status;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Decode a TxLINE score event into a normalized FootballDataMatch
+// ---------------------------------------------------------------------------
+
+function statVal(event: TxScoreEvent, key: number): number | null {
+  const v = event.Stats?.[String(key)];
+  return typeof v === "number" ? v : null;
+}
+
+/** Total + regulation (H1+H2) goals for a participant (1 or 2). */
+function goalsFor(
+  event: TxScoreEvent,
+  participant: 1 | 2,
+): { total: number | null; regulation: number | null } {
+  const total = statVal(event, participant);
+  const h1 = statVal(event, 1000 + participant);
+  const h2 = statVal(event, 2000 + participant);
+  let regulation: number | null = null;
+  if (h1 != null || h2 != null) regulation = (h1 ?? 0) + (h2 ?? 0);
+
+  if (total != null || regulation != null) return { total, regulation };
+
+  // Fallback to the structured Score object when Stats is absent.
+  const side = participant === 1 ? event.Score?.Participant1 : event.Score?.Participant2;
+  if (side) {
+    const t = side.Total?.Goals ?? null;
+    const r =
+      side.H1?.Goals != null || side.H2?.Goals != null
+        ? (side.H1?.Goals ?? 0) + (side.H2?.Goals ?? 0)
+        : null;
+    return { total: t, regulation: r };
+  }
+  return { total: null, regulation: null };
+}
+
+const TERMINAL_STATUS_IDS = new Set([5, 10, 13]);
+
+function buildMatch(
+  txFixture: TxFixture,
+  lookup: MatchLookup,
+  event: TxScoreEvent | null,
+): FootballDataMatch {
+  const statusId = event?.StatusId ?? txFixture.GameState ?? 1;
+  const status = mapStatusIdToShort(statusId);
+
+  // Orient TxLINE participants onto Mundial's home/away by name.
+  const homeIsP1 = txFixtureHomeIsP1(txFixture, lookup);
+
+  let score: MatchScores | undefined;
+  if (event) {
+    const p1 = goalsFor(event, 1);
+    const p2 = goalsFor(event, 2);
+    const home = homeIsP1 ? p1 : p2;
+    const away = homeIsP1 ? p2 : p1;
+
+    const goalsLine =
+      home.total != null && away.total != null
+        ? { home: home.total, away: away.total }
+        : undefined;
+
+    let fullTimeLine: { home: number; away: number } | undefined;
+    if (TERMINAL_STATUS_IDS.has(statusId)) {
+      if (home.regulation != null && away.regulation != null) {
+        // Regulation (H1+H2) only — extra time and penalties never settle.
+        fullTimeLine = { home: home.regulation, away: away.regulation };
+      } else if (statusId === 5 && home.total != null && away.total != null) {
+        // Plain full time with no extra time: total equals regulation.
+        fullTimeLine = { home: home.total, away: away.total };
+      }
+    }
+
+    score = { goals: goalsLine, fullTime: fullTimeLine };
+  }
+
+  const seconds = event?.Clock?.Seconds;
+  const minute = typeof seconds === "number" ? Math.floor(seconds / 60) : null;
+
+  return {
+    id: txFixture.FixtureId,
+    status,
+    minute,
+    homeTeam: { name: lookup.home },
+    awayTeam: { name: lookup.away },
+    score,
+  };
+}
+
+function txFixtureHomeIsP1(txFixture: TxFixture, lookup: MatchLookup): boolean {
+  // Orient using the same matcher that resolved the fixture.
+  if (teamNamesMatch(txFixture.Participant1, lookup.home)) return true;
+  if (teamNamesMatch(txFixture.Participant2, lookup.home)) return false;
+  return txFixture.Participant1IsHome;
 }
 
 export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
@@ -257,51 +256,94 @@ export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Fetch: resolve the TxLINE fixture by name/date, then read its latest score.
+// ---------------------------------------------------------------------------
+
+function kickoffMsOf(lookup: MatchLookup): number {
+  return new Date(`${lookup.date}T${lookup.time}:00Z`).getTime();
+}
+
 export async function fetchApiMatch(
-  externalFixtureId: number,
+  lookup: MatchLookup,
   options?: { fresh?: boolean },
 ): Promise<FootballDataMatch | null> {
+  const txFixture = await resolveTxFixture(
+    lookup.home,
+    lookup.away,
+    kickoffMsOf(lookup),
+  );
+  if (!txFixture) return null;
+
+  const id = txFixture.FixtureId;
   if (!options?.fresh) {
-    const cached = getCachedFixture(externalFixtureId);
+    const cached = getCachedFixture(id);
     if (cached !== undefined) return cached;
   }
 
-  try {
-    const rows = await parseFixturesResponse(
-      await apiFetch(
-        `/fixtures?id=${externalFixtureId}`,
-        options?.fresh ? 0 : API_FOOTBALL_MIN_RESERVE,
-      ),
-    );
-    const row = rows[0];
-    const match = row ? normalizeFixtureRow(row) : null;
-    if (match) {
-      const ttlMs = isTerminalMatchStatus(match.status)
-        ? FIXTURE_CACHE_TTL_MS
-        : FIXTURE_CACHE_LIVE_TTL_MS;
-      setCachedFixture(externalFixtureId, match, ttlMs);
-    }
-    return match;
-  } catch (error) {
-    if (error instanceof ApiFootballBudgetError) {
-      const stale = getCachedFixture(externalFixtureId, 0);
-      if (stale !== undefined) return stale;
-    }
-    throw error;
-  }
+  const events = await fetchScoresSnapshot(id);
+  const match = buildMatch(txFixture, lookup, latestScoreEvent(events));
+
+  const ttlMs = isTerminalMatchStatus(match.status)
+    ? FIXTURE_CACHE_TTL_MS
+    : FIXTURE_CACHE_LIVE_TTL_MS;
+  setCachedFixture(id, match, ttlMs);
+
+  return match;
 }
 
 export async function fetchLiveMatch(
-  externalFixtureId: number,
+  lookup: MatchLookup,
 ): Promise<LiveMatchData | null> {
-  const match = await fetchApiMatch(externalFixtureId);
+  const match = await fetchApiMatch(lookup);
   if (!match) return null;
   return mapMatchRow(match);
 }
 
+/** A goal for the live UI, mapped onto the fixture's home/away sides. */
+export type MatchGoal = {
+  minute: number | null;
+  side: "home" | "away";
+  player: string | null;
+  ownGoal: boolean;
+};
+
+/**
+ * Fetch the live match plus its goals (scorer + minute) in a single scores
+ * lookup. Always reads fresh — intended for the live board.
+ */
+export async function fetchMatchWithGoals(
+  lookup: MatchLookup,
+): Promise<{ match: FootballDataMatch | null; goals: MatchGoal[] }> {
+  const txFixture = await resolveTxFixture(
+    lookup.home,
+    lookup.away,
+    kickoffMsOf(lookup),
+  );
+  if (!txFixture) return { match: null, goals: [] };
+
+  const events = await fetchScoresSnapshot(txFixture.FixtureId);
+  const match = buildMatch(txFixture, lookup, latestScoreEvent(events));
+
+  const homeIsP1 = txFixtureHomeIsP1(txFixture, lookup);
+  const goals: MatchGoal[] = extractGoals(events).map((g) => ({
+    minute: g.minute,
+    side: (g.participant === 1 ? homeIsP1 : !homeIsP1) ? "home" : "away",
+    player: g.player,
+    ownGoal: g.ownGoal,
+  }));
+
+  const ttlMs = isTerminalMatchStatus(match.status)
+    ? FIXTURE_CACHE_TTL_MS
+    : FIXTURE_CACHE_LIVE_TTL_MS;
+  setCachedFixture(txFixture.FixtureId, match, ttlMs);
+
+  return { match, goals };
+}
+
 export { ApiFootballBudgetError, getApiFootballQuota } from "./apiFootballCache";
 
-/** Resolve final score when api-football.com reports the match finished (FT/AET/PEN). */
+/** Resolve final score once the feed reports the match finished (FT/AET/PEN). */
 export function resolveFinalScoreFromApiMatch(
   match: FootballDataMatch,
   kickoffMs: number,
@@ -319,36 +361,11 @@ export function resolveFinalScoreFromApiMatch(
   return settled;
 }
 
-export async function findExternalFixtureId(
-  home: string,
-  away: string,
-  date: string,
-): Promise<number | null> {
-  if (!canUseApiFootball(5)) {
-    return null;
-  }
-
-  const rows = await parseFixturesResponse(
-    await apiFetch(`/fixtures?date=${date}`),
-  );
-
-  for (const row of rows) {
-    if (
-      teamNamesMatch(row.teams.home.name, home) &&
-      teamNamesMatch(row.teams.away.name, away)
-    ) {
-      return row.fixture.id;
-    }
-  }
-
-  return null;
-}
-
 export function isFinishedStatus(status: string): boolean {
   return isTerminalMatchStatus(status) || status === "FINISHED";
 }
 
-/** True when api-football.com reports the match has kicked off or ended. */
+/** True when the feed reports the match has kicked off or ended. */
 export function isStartedOrFinishedStatus(status: string): boolean {
   return (
     isFinishedStatus(status) ||

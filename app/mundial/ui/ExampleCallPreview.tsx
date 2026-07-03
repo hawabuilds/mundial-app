@@ -22,7 +22,12 @@ export default function ExampleCallPreview({ fixture }: ExampleCallPreviewProps)
     setNotPostedYet(false);
     setErrorHint(null);
     try {
-      const post = await fetchMatchPost(fixture.id);
+      const post = await fetchMatchPost(fixture.id, {
+        home: fixture.home,
+        away: fixture.away,
+        date: fixture.date,
+        time: fixture.time,
+      });
       const example = formatExampleReply(fixture.home, fixture.away);
       if (post.found && post.tweetId) {
         const url = buildReplyIntentUrl(post.tweetId, example);
@@ -35,7 +40,7 @@ export default function ExampleCallPreview({ fixture }: ExampleCallPreviewProps)
     } finally {
       setBusy(false);
     }
-  }, [fixture.home, fixture.away, fixture.id]);
+  }, [fixture.home, fixture.away, fixture.id, fixture.date, fixture.time]);
 
   return (
     <div className={styles.wrap}>

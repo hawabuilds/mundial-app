@@ -108,7 +108,31 @@ export type ApiNextMatchResponse = {
   statusLabel: string | null;
 };
 
-export type UpcomingMatch = Fixture & { statusLabel?: string | null };
+export type MatchLiveInfo = {
+  status: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  elapsed: number | null;
+} | null;
+
+export type FixturePhase = "live" | "recent" | "upcoming";
+
+export type MatchGoalInfo = {
+  minute: number | null;
+  side: "home" | "away";
+  player: string | null;
+  ownGoal: boolean;
+};
+
+export type UpcomingMatch = Fixture & {
+  statusLabel?: string | null;
+  live?: MatchLiveInfo;
+  phase?: FixturePhase;
+  /** Present for TxLINE-sourced board fixtures (may be empty to hide). */
+  venueLine?: string;
+  /** Goal timeline (scorer + minute) for live/finished board fixtures. */
+  goals?: MatchGoalInfo[];
+};
 
 export type ApiUpcomingMatchesResponse = {
   fixtures: UpcomingMatch[];
@@ -121,6 +145,19 @@ export async function fetchUpcomingMatches(
   const response = await fetch(`/api/matches${query}`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Could not load upcoming matches");
+  }
+  const data = (await response.json()) as ApiUpcomingMatchesResponse;
+  return data.fixtures ?? [];
+}
+
+/**
+ * Live board: in-progress + just-finished matches stay on screen (with live
+ * score/time) alongside upcoming ones.
+ */
+export async function fetchBoardMatches(): Promise<UpcomingMatch[]> {
+  const response = await fetch(`/api/matches?board=1`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Could not load matches");
   }
   const data = (await response.json()) as ApiUpcomingMatchesResponse;
   return data.fixtures ?? [];

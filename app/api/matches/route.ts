@@ -4,12 +4,14 @@ import {
   enrichUpcomingFixtures,
   formatMatchStatus,
 } from "@/lib/enrichFixtures";
+import { getTxScheduleBoard } from "@/lib/txScheduleBoard";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const nextOnly = request.nextUrl.searchParams.get("next") === "1";
+  const board = request.nextUrl.searchParams.get("board") === "1";
 
   try {
     if (nextOnly) {
@@ -29,7 +31,12 @@ export async function GET(request: NextRequest) {
     const limit =
       Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : undefined;
 
-    const enriched = await enrichUpcomingFixtures(getActiveFixtures(FIXTURES));
+    // Live board is sourced from the TxLINE schedule (in-progress + just-finished
+    // stay on screen). The default (upcoming-only) mode uses the static fixtures
+    // list and is left untouched for the Reply tab.
+    const enriched = board
+      ? await getTxScheduleBoard()
+      : await enrichUpcomingFixtures(getActiveFixtures(FIXTURES));
     const fixtures = limit ? enriched.slice(0, limit) : enriched;
     return NextResponse.json({
       fixtures: fixtures.map((fixture) => ({
