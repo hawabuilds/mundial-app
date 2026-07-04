@@ -141,13 +141,11 @@ export default function FixtureCard({
   const pillText =
     fixture.status === "HT"
       ? "HT"
-      : finished && hasScore
-        ? `FT ${fixture.homeScore}–${fixture.awayScore}`
-        : finished
-          ? "FT"
-          : fixture.elapsed != null
-            ? `LIVE ${fixture.elapsed}'`
-            : "LIVE";
+      : finished
+        ? "FT · Settled via TxLINE"
+        : fixture.elapsed != null
+          ? `LIVE ${fixture.elapsed}'`
+          : "LIVE";
 
   const homeGoals = fixture.goals.filter((g) => g.side === "home");
   const awayGoals = fixture.goals.filter((g) => g.side === "away");
@@ -204,7 +202,7 @@ export default function FixtureCard({
           <span
             className={`${styles.statusPill} ${
               inPlay ? styles.statusLive : styles.statusDone
-            } ${finished && hasScore ? styles.statusSettled : ""} ${
+            } ${finished ? styles.statusSettled : ""} ${
               fixture.stage ? "" : styles.pillSolo
             }`}
           >

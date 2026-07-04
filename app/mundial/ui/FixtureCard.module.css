@@ -247,8 +247,10 @@
 }
 
 .statusSettled {
-  font-size: 0.6875rem;
+  font-size: 0.5625rem;
   letter-spacing: 0.06em;
+  text-wrap: balance;
+  text-align: center;
 }
 
 .pulse {

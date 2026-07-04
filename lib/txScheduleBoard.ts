@@ -226,23 +226,31 @@ export async function getTxScheduleBoard(
     .filter((row) => !rowHasStarted(row, nowMs))
     .sort((a, b) => a.kickoffMs - b.kickoffMs);
 
-  const inPlayRows = rows
-    .filter((row) => {
-      if (!rowHasStarted(row, nowMs)) return false;
-      const fetched = liveData.get(row.fx.FixtureId);
-      const live = resolveLive(row, fetched);
-      return !isBoardMatchFinished(row, live, nowMs);
-    })
-    .sort(lookupPriority);
+  // Lock/load pre-kickoff 1X2 for every match visible on the board (live, recent FT,
+  // and next upcoming) so the market line persists on FT cards until the next whistle.
+  const oddsTargetIds = new Set<number>();
+  for (const row of rows) {
+    if (!rowHasStarted(row, nowMs)) continue;
+    const fetched = liveData.get(row.fx.FixtureId);
+    const live = resolveLive(row, fetched);
+    const finished = isBoardMatchFinished(row, live, nowMs);
+    if (!finished || nowMs < nextKickoffAfter(row.kickoffMs)) {
+      oddsTargetIds.add(row.fx.FixtureId);
+    }
+  }
+  if (upcomingByKickoff[0]) {
+    oddsTargetIds.add(upcomingByKickoff[0].fx.FixtureId);
+  }
 
-  const currentRow = inPlayRows[0] ?? upcomingByKickoff[0] ?? null;
-  if (currentRow) {
+  for (const fixtureId of oddsTargetIds) {
+    const row = rows.find((r) => r.fx.FixtureId === fixtureId);
+    if (!row) continue;
     oddsByFixtureId.set(
-      currentRow.fx.FixtureId,
-      await ensureMatchOddsLocked(currentRow.fx.FixtureId, {
-        home: currentRow.fixture.home,
-        away: currentRow.fixture.away,
-        kickoffMs: currentRow.kickoffMs,
+      fixtureId,
+      await ensureMatchOddsLocked(fixtureId, {
+        home: row.fixture.home,
+        away: row.fixture.away,
+        kickoffMs: row.kickoffMs,
       }).catch(() => null),
     );
   }

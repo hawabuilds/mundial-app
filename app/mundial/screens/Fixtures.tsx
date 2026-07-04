@@ -156,7 +156,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
               <FixtureCard
                 fixture={featuredLive}
                 featured
-                showMarketOdds={featuredLive.id === currentMatchId}
+                showMarketOdds={Boolean(featuredLive.marketOdds)}
               />
               {liveRest.length > 0 ? (
                 <ul className={styles.list}>
