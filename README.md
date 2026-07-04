@@ -82,6 +82,17 @@ TxLINE publishes Solana-backed validation proofs for scout-verified events. Copa
 
 The Solana payout program lives in [`solana-program/`](solana-program/) (Anchor/Rust). It custodies the USDC vault and pays winners against off-chain **signed vouchers**: an operator opens each daily epoch with a fixed pot, the server signs a per-winner voucher, and `claim` verifies the ed25519 signature on-chain before transferring USDC.
 
+**Devnet program ID:** `2GvW9gBcFmmUcoQDoBVQe9rpR1dGzD4uTdaLzzwRzRz9` (see `declare_id!` in `solana-program/programs/state/src/lib.rs`).
+
+### On-chain evidence (devnet)
+
+| Action | Explorer |
+|--------|----------|
+| **Open epoch** (`OpenEpoch`) | [321wRsoCqZno98QZzUiagHjigVfXHKwmBnpe57c6nfEQt5cW6D8dNzQDyjiQ1EYuMc4uRapABtzEonhd7AzbyiLo](https://explorer.solana.com/tx/321wRsoCqZno98QZzUiagHjigVfXHKwmBnpe57c6nfEQt5cW6D8dNzQDyjiQ1EYuMc4uRapABtzEonhd7AzbyiLo?cluster=devnet) |
+| **USDC claim** (`Claim`) | [3KzPYxmnCebQ2Andavj828RyTwEPEv6dcT5hkxB8cLoTVshmySEyAmhxpNaa3CCnUqqyJyVqmw9u73JeCbBgQd4A](https://explorer.solana.com/tx/3KzPYxmnCebQ2Andavj828RyTwEPEv6dcT5hkxB8cLoTVshmySEyAmhxpNaa3CCnUqqyJyVqmw9u73JeCbBgQd4A?cluster=devnet) |
+
+Also run `supabase/migrations/20260704160000_match_proofs.sql` and `20260704163000_match_proofs_semantics.sql` on production (or `npx tsx scripts/apply-match-proofs-migrations.ts` when `DATABASE_URL` is set).
+
 ## Supabase migrations (TxLINE tables)
 
 Run once on production (Supabase Dashboard → SQL Editor):
@@ -92,6 +103,20 @@ node scripts/migrate-txline-tables.mjs
 ```
 
 Requires `SUPABASE_SERVICE_ROLE_KEY` (and optionally `DATABASE_URL` for direct Postgres).
+
+Also run `supabase/migrations/20260704153000_lock_rls.sql` on production if the database was created before RLS was locked down (removes anon write policies on `predictions` and `match_state`).
+
+## Supabase access model
+
+The browser never writes to Postgres directly. The anon key is not used for predictions, match state, odds, goals, snapshots, or payout epochs.
+
+```
+Browser  →  fetch("/api/…")  →  Next.js route / cron  →  getSupabaseAdminClient()  →  Postgres
+```
+
+- **Client:** reads fixtures, leaderboard, and personal stats via `/api/matches`, `/api/leaderboard`, `/api/me/leaderboard-stats`.
+- **Server:** collection, scoring, snapshots, and claims use `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS).
+- **RLS:** enabled on reward tables with no anon/authenticated policies; apply `20260704153000_lock_rls.sql` on existing databases.
 
 ## Running locally
 

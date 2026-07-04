@@ -8,7 +8,8 @@ use anchor_spl::token::{self, Transfer};
 pub mod state;
 use state::*;
 
-declare_id!("11111111111111111111111111111111");
+// Set to the deployed devnet program ID before committing
+declare_id!("2GvW9gBcFmmUcoQDoBVQe9rpR1dGzD4uTdaLzzwRzRz9");
 
 #[program]
 pub mod mundial_rewards {
@@ -127,24 +128,6 @@ pub mod mundial_rewards {
         Ok(())
     }
 
-    /// One-time devnet migration: rewind latest_epoch so calendar ids (YYYYMMDD) work again.
-    pub fn set_latest_epoch(ctx: Context<AdminOnly>, latest_epoch: u64) -> Result<()> {
-        let cfg = &mut ctx.accounts.config;
-        require_keys_eq!(ctx.accounts.admin.key(), cfg.admin, Err::NotAdmin);
-        require!(latest_epoch < cfg.latest_epoch, Err::EpochCursorRewind);
-        cfg.latest_epoch = latest_epoch;
-        Ok(())
-    }
-
-    /// One-time devnet migration: lower reserved tally after test epochs (admin only).
-    pub fn set_total_reserved(ctx: Context<AdminOnly>, total_reserved: u64) -> Result<()> {
-        let cfg = &mut ctx.accounts.config;
-        require_keys_eq!(ctx.accounts.admin.key(), cfg.admin, Err::NotAdmin);
-        require!(total_reserved <= cfg.total_reserved, Err::Math);
-        cfg.total_reserved = total_reserved;
-        Ok(())
-    }
-
     pub fn rescue_unreserved(ctx: Context<Rescue>, amount: u64) -> Result<()> {
         let cfg = &ctx.accounts.config;
         require_keys_eq!(ctx.accounts.admin.key(), cfg.admin, Err::NotAdmin);
@@ -182,10 +165,10 @@ fn verify_ed25519(ix_sysvar: &AccountInfo, signer: &[u8; 32], msg: &[u8]) -> Res
 
     let mut ed_found = false;
     let mut target_index = current_index - 1;
+    let mut loops = 0;
     let mut ix =
         load_instruction_at_checked(target_index as usize, ix_sysvar).map_err(|_| Err::BadSig)?;
 
-    let mut loops = 0;
     while target_index >= 0 && loops < 10 {
         ix = load_instruction_at_checked(target_index as usize, ix_sysvar)
             .map_err(|_| Err::BadSig)?;
@@ -202,7 +185,6 @@ fn verify_ed25519(ix_sysvar: &AccountInfo, signer: &[u8; 32], msg: &[u8]) -> Res
     require!(data.len() == (16 + 32 + 64 + msg.len()), Err::BadSig);
     require!(data[0] == 1, Err::BadSig);
 
-    // Matches Solana Ed25519Program layout (see @solana/web3.js ed25519.ts).
     let _signature_offset = u16::from_le_bytes(data[2..4].try_into().unwrap()) as usize;
     let signature_ix_index = u16::from_le_bytes(data[4..6].try_into().unwrap());
     let public_key_offset = u16::from_le_bytes(data[6..8].try_into().unwrap()) as usize;
