@@ -88,7 +88,7 @@ export default function DocsPage() {
       <main className={styles.main}>
         <section id="top" className={styles.hero}>
           <div className={styles.heroCopy}>
-            <p className={styles.kicker}>World Cup 2026 on Solana via pump.fun</p>
+            <p className={styles.kicker}>World Cup 2026 · Solana · TxLINE</p>
             <h1 className={styles.heroTitle}>
               Predict.
               <br />
@@ -98,8 +98,7 @@ export default function DocsPage() {
             </h1>
             <p className={styles.heroLede}>
               Copa Mundial is a score prediction game on X. Reply before kickoff,
-              climb the board, and share a USDC pool funded by pump.fun
-              creator fees.
+              climb the leaderboard, and share a daily USDC prize pool on Solana.
             </p>
             <div className={styles.heroBadges}>
               <span className={styles.badge}>Daily USDC</span>
@@ -169,17 +168,17 @@ export default function DocsPage() {
               <h3>Earn points</h3>
               <p>
                 Exact scorelines score the most. Correct winner or draw still
-                earns points. Every match adds to your total for the current
-                leaderboard period.
+                earns points. Every match adds to your season total on the
+                leaderboard.
               </p>
             </article>
             <article className={`${styles.bentoCard} ${styles.bentoAccent}`}>
               <span className={styles.step}>Step 4</span>
               <h3>Make top 20</h3>
               <p>
-                Each day at 10:00 UTC we snapshot the top 20 and open USDC claims
-                for winners. The leaderboard resets every 3 days so everyone gets
-                a fair chance to climb — you are not chasing points from weeks ago.
+                Each day at 10:00 UTC we snapshot the cumulative top 20 and open
+                USDC claims in the Wallet tab. Points from every match count
+                toward your total rank.
               </p>
             </article>
           </div>
@@ -199,8 +198,8 @@ export default function DocsPage() {
             </div>
           </div>
           <p className={styles.scoringBonus}>
-            Get the result right and your base is multiplied by the locked TxLINE
-            pre-kickoff market — up to ×3 when you back the underdog.
+            Get the result right and your base is multiplied by the market odds
+            locked before kickoff — up to ×3 when you back the underdog.
           </p>
         </section>
 
@@ -209,19 +208,17 @@ export default function DocsPage() {
             <span className={styles.sectionNum}>02</span>
             <h2 className={styles.sectionTitle}>Prize pool</h2>
             <p className={styles.sectionSub}>
-              Funded by creator fees from pump.fun trading.
+              Daily USDC on Solana for the top 20 at snapshot.
             </p>
           </div>
 
           <div className={styles.split}>
             <div className={styles.splitMain}>
               <p className={styles.prose}>
-                When Copa Mundial launches on{" "}
-                <strong className={styles.strong}>pump.fun</strong>, creator fees
-                from trading go into the daily USDC prize pool. We start at{" "}
-                <strong className={styles.strong}>$1,000</strong> per day and can
-                scale up to <strong className={styles.strong}>$2,000</strong> as
-                volume grows.
+                Each day at <strong className={styles.strong}>10:00 UTC</strong>{" "}
+                we snapshot the cumulative top 20 and open a USDC payout epoch on
+                Solana. Pool size depends on what is funded in the rewards vault
+                (target range shown below for planning).
               </p>
               <p className={styles.prose}>
                 Prizes are paid in{" "}
@@ -229,10 +226,9 @@ export default function DocsPage() {
                 pool means bigger payouts for the same top 20 finish.
               </p>
               <ul className={styles.bulletList}>
-                <li>Minimum daily pool: $1,000 USDC</li>
-                <li>Target at full volume: $2,000 USDC</li>
+                <li>Target daily pool: $1,000–$2,000 USDC</li>
                 <li>Snapshot &amp; claims: 10:00 UTC daily</li>
-                <li>Leaderboard resets every 3 days for a fair shot at the top</li>
+                <li>Cumulative leaderboard — all scored matches count</li>
                 <li>20 winners per day</li>
               </ul>
             </div>
@@ -364,7 +360,9 @@ export default function DocsPage() {
           <div className={styles.sectionHead}>
             <span className={styles.sectionNum}>05</span>
             <h2 className={styles.sectionTitle}>Token &amp; creator fees</h2>
-            <p className={styles.sectionSub}>Launched on pump.fun on Solana</p>
+            <p className={styles.sectionSub}>
+              Optional community token — funding story at launch
+            </p>
           </div>
 
           <div className={styles.tokenCard}>
@@ -374,9 +372,10 @@ export default function DocsPage() {
             </div>
             <div className={styles.tokenCopy}>
               <p className={styles.prose}>
-                Copa Mundial launches on{" "}
+                Copa Mundial may launch a community token on{" "}
                 <strong className={styles.strong}>pump.fun</strong> on Solana.
-                Creator fees from token trading fund the daily USDC prize pool.
+                Creator fees could help fund the daily USDC prize pool. You do
+                not need to buy or hold any token to play.
               </p>
               <p className={styles.prose}>
                 We will post the contract address on{" "}
@@ -417,9 +416,24 @@ export default function DocsPage() {
             <div className={styles.faqItem}>
               <dt>Does the leaderboard reset?</dt>
               <dd>
-                Yes — every 3 days. Points and ranks clear so new players are not
-                stuck behind an early lead. Snapshots and claims still run at
-                10:00 UTC during each period.
+                No. Points from every scored match add to your season total. Each
+                day at 10:00 UTC we snapshot whoever is in the top 20 at that
+                moment for that day&apos;s USDC payout.
+              </dd>
+            </div>
+            <div className={styles.faqItem}>
+              <dt>Do extra time or penalties count?</dt>
+              <dd>
+                No. We settle on the score after 90 minutes plus injury time only.
+                Extra time and penalty shootouts do not change your points.
+              </dd>
+            </div>
+            <div className={styles.faqItem}>
+              <dt>How does scoring work?</dt>
+              <dd>
+                Exact score = 5 pts. Correct result = 3 pts. Wrong result = 1 pt.
+                When you get the result right, points are multiplied by the market
+                odds locked before kickoff — up to ×3 when you back the underdog.
               </dd>
             </div>
             <div className={styles.faqItem}>

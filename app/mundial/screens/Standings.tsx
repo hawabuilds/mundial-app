@@ -79,7 +79,7 @@ export default function Standings({ onTabChange, vaultDot }: Props) {
         <p className="m-body">
           {loading
             ? "Loading rankings…"
-            : `${totalPlayers.toLocaleString()} players · snapshot 10:00 UTC`}
+            : `${totalPlayers.toLocaleString()} players · cumulative season total · snapshot 10:00 UTC`}
         </p>
         {!loading && !error ? (
           <p className={styles.tierHint}>

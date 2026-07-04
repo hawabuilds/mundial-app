@@ -10,8 +10,8 @@ Live at [copamundial.app](https://copamundial.app).
 
 - Reply to a match thread on X with a scoreline before kickoff — your first valid reply is the one that counts.
 - **Scoring** combines accuracy with market odds (see below).
-- The leaderboard resets every 3 days so newer players still have a realistic shot at the top.
-- A daily snapshot at 10:00 UTC locks in the top 20 and opens on-chain USDC claims.
+- Points from every match add to your **season total** on the leaderboard.
+- A daily snapshot at **10:00 UTC** locks in the top 20 and opens on-chain USDC claims.
 
 ## Built on TxLINE
 

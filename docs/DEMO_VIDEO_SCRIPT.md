@@ -1,14 +1,14 @@
 # Demo video script (~60–90 seconds)
 
-Record on a phone or desktop at [copamundial.app/mundial](https://copamundial.app/mundial) while signed in.
+Record on a phone or desktop at [copamundial.app](https://copamundial.app) while signed in.
 
 ## 1. Fixtures + market line (0:00–0:20)
 
 1. Open **Fixtures**.
-2. Scroll to **Live now** or **Next whistle** — point out the **TxLINE 1X2** line with **%** and **×N** upset multipliers on that one match only.
-3. Tap **Reply** tab briefly to show the same match when it is the current game, then back to Fixtures.
+2. Scroll to **Live now** or **Next whistle** — point out the **market odds** bar with **%** and **×N** multipliers.
+3. Briefly show the **Points** block (5 / 3 / 1 + market boost).
 
-**Voiceover:** “Before kickoff, Copa Mundial shows locked TxLINE market odds on the current match — with upset multipliers up to three times when you beat the market.”
+**Voiceover:** “Before kickoff, Copa Mundial shows locked market odds from TxLINE — with multipliers up to three times when you beat the market.”
 
 ## 2. Tap to reply (0:20–0:35)
 
@@ -19,19 +19,19 @@ Record on a phone or desktop at [copamundial.app/mundial](https://copamundial.ap
 
 ## 3. Live match + goal (0:35–1:05)
 
-1. Cut to a **live** or **just finished** match on Fixtures (or wait for one during recording).
-2. Highlight **LIVE** clock, score, and **goal scorers** under each flag as they appear.
+1. Cut to a **live** or **just finished** match on Fixtures.
+2. Highlight **LIVE** clock, score, and **goal scorers** under each flag.
 3. If a new goal lands while recording, pause on the scorer line (good B-roll).
 
 **Voiceover:** “Live scores and scorers come from TxLINE’s scout-verified feed — no manual refresh.”
 
-## 4. Settlement + points formula (1:05–1:25)
+## 4. Settlement + your last match (1:05–1:25)
 
 1. Show an **FT · Settled via TxLINE** card with final score.
-2. Point at **Last call** under your rank/points (e.g. `Base 5 × Upset 3× = 15 pts`) if you have a scored prediction.
-3. Open **Leaderboard** — show rank and total points.
+2. Point at **Last match scored** (team names, your pick vs final, points earned) if signed in.
+3. Open **Leaderboard** — show rank and cumulative total.
 
-**Voiceover:** “After full time we settle against TxLINE. Correct calls earn a base score, with an upset multiplier when you beat the market — up to three times.”
+**Voiceover:** “After full time we settle against TxLINE. You see exactly which match you scored on and how many points you earned.”
 
 ## 5. Close (1:25–1:30)
 
@@ -43,5 +43,5 @@ Record on a phone or desktop at [copamundial.app/mundial](https://copamundial.ap
 ## Tips
 
 - Record in portrait; keep UI zoom at 100%.
-- Use a match with skewed odds (heavy favorite) so the upset multiplier is obvious on screen.
-- If live action is quiet, use a recently finished match for the settlement + points beat.
+- Use a match with skewed odds (heavy favorite) so the ×3 multiplier is obvious on screen.
+- If live action is quiet, use a recently finished match for the settlement beat.

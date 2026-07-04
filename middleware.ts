@@ -91,6 +91,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  if (pathname === "/faq" || pathname.startsWith("/faq/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/mundial/docs";
+    url.hash = "faq";
+    return NextResponse.redirect(url, 308);
+  }
+
   if (pathname === "/links" || pathname.startsWith("/links/")) {
     const url = request.nextUrl.clone();
     const sub = pathname === "/links" ? "" : pathname.slice("/links".length);

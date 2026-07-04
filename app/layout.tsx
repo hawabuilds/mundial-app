@@ -15,10 +15,20 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Mundial",
-  description: "Predict match scores. Climb the leaderboard. Win BNB.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const host = (await headers()).get("host") ?? "";
+  if (isCopaMundialHost(host)) {
+    return {
+      title: "Copa Mundial",
+      description:
+        "Predict match scores on X. Climb the leaderboard. Win USDC on Solana.",
+    };
+  }
+  return {
+    title: "Mundial",
+    description: "Predict match scores. Climb the leaderboard. Win BNB.",
+  };
+}
 
 export default async function RootLayout({
   children,

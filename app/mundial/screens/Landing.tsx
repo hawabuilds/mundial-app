@@ -42,12 +42,13 @@ export default function Landing() {
           <span className={styles.accent}>Win your tier.</span>
         </h1>
         <p className={styles.lede}>
-          Reply on X before kickoff with your scoreline. The top 20 each day win
-          USDC rewards across three tiers — connect a Solana wallet in Wallet to collect.
+          Reply on X before kickoff with your scoreline. Points add up across every
+          match. The top 20 at the daily 10:00 UTC snapshot win USDC on Solana —
+          connect a wallet in the Wallet tab to collect.
         </p>
         <p className={styles.hackathon}>
           Built for the TxOdds World Cup hackathon — live fixtures, scores, and
-          pre-kickoff odds via{" "}
+          market odds via{" "}
           <a
             href="https://txline.txodds.com/documentation/worldcup"
             target="_blank"

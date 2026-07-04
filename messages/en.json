@@ -171,9 +171,9 @@
       "step1": "<xHandle>@copamundialapp</xHandle> posts a match thread, something like <em>Mexico vs South Africa, drop your score below</em>, and that is your cue to join in.",
       "step2": "Reply with the score you are predicting <strong>before kickoff</strong> and make sure both teams are named, for example <mono>Mexico 2-1 South Africa</mono>.",
       "step3": "Once the match has finished we score your prediction against the real result and add the points to your total.",
-      "step4": "Your points show up on the daily leaderboard, usually within a short while after full time.",
-      "step5": "At 23:00 UTC each day we lock the leaderboard for that period and assign rewards to whoever finished in the top 20.",
-      "step6": "If you are one of those winners you sign in with X at mundial.xyz, connect a wallet, and claim your BNB whenever you are ready. There is no expiry on a valid win.",
+      "step4": "Your points show up on the season leaderboard, usually within a short while after full time.",
+      "step5": "At 10:00 UTC each day we snapshot the cumulative top 20 and open that day's USDC payout.",
+      "step6": "If you are one of those winners you sign in with X at copamundial.app, connect a Solana wallet in the Wallet tab, and collect USDC whenever you are ready. There is no expiry on a valid win.",
       "scoringTitle": "How points work",
       "scoring": {
         "exact": { "label": "Exact scoreline", "note": "You called the score perfectly" },
@@ -181,7 +181,7 @@
         "wrong": { "label": "Wrong outcome", "note": "You still get a point for playing" }
       },
       "scoringNote": "You only receive one score per match and we count the best tier you qualify for. Your first valid reply is the one that counts, and it has to land before the scheduled kickoff.",
-      "scoringMarket": "Get the result right and your base is multiplied by the locked TxLINE pre-kickoff market — up to ×3 when you back the underdog.",
+      "scoringMarket": "Get the result right and your base is multiplied by the market odds locked before kickoff — up to ×3 when you back the underdog.",
       "formatTitle": "How to write your prediction",
       "format1": "Include both team names and a score. The order does not change what we record, so <mono>Mexico 2-1 South Africa</mono> and <mono>South Africa 1-2 Mexico</mono> are treated as the same prediction.",
       "format2": "We recognise common nicknames for teams, but small misspellings do not count.",
@@ -305,7 +305,7 @@
     "items": {
       "whatIs": {
         "question": "What is Mundial?",
-        "answer": "A free skill-based football prediction game. Reply on X with your score before kickoff, earn points, climb the leaderboard. Top 20 each day can win BNB. No wallet needed to play — only to claim prizes."
+        "answer": "A free skill-based football prediction game. Reply on X with your score before kickoff, earn points, climb the cumulative leaderboard. Top 20 at the daily 10:00 UTC snapshot can win USDC on Solana. No wallet needed to play — only to collect prizes."
       },
       "isGambling": {
         "question": "Is this gambling?",
@@ -317,11 +317,11 @@
       },
       "needWalletToPlay": {
         "question": "Do I need crypto or a wallet to play?",
-        "answer": "No. You only need X to predict and earn points. You need MetaMask on BSC only when claiming BNB after finishing in the top 20."
+        "answer": "No. You only need X to predict and earn points. Connect Phantom, Solflare, or Backpack on Solana only when collecting USDC after finishing in the top 20."
       },
       "howToPlay": {
         "question": "How do I play?",
-        "answer": "1) Sign in at mundial.xyz with X. 2) Check today’s matches on the site (UTC times). 3) Reply on the @copamundialapp match post with your score BEFORE kickoff — not in the app. Example: Netherlands 2-1 Uzbekistan. 4) Points update after full time. 5) If you’re top 20 at the daily snapshot, claim BNB in the Wallet + Claim tabs."
+        "answer": "1) Sign in at copamundial.app with X. 2) Check matches on the Fixtures tab. 3) Reply on the @copamundialapp match post with your score BEFORE kickoff — not in the app. Example: Netherlands 2-1 Uzbekistan. 4) Points update after full time. 5) If you are in the cumulative top 20 at the 10:00 UTC snapshot, collect USDC in the Wallet tab."
       },
       "whereToPost": {
         "question": "Where do I post my prediction?",
@@ -345,7 +345,7 @@
       },
       "pointsScoring": {
         "question": "How does scoring work?",
-        "answer": "Exact score = 5 pts. Correct result (winner/draw, wrong score) = 3 pts. Wrong result = 1 pt. When you get the result right, base points are multiplied by the locked TxLINE pre-kickoff market — up to ×3 when you back the underdog. Valid pre-kickoff predictions always get at least 1 pt when the match is scored."
+        "answer": "Exact score = 5 pts. Correct result (winner/draw, wrong score) = 3 pts. Wrong result = 1 pt. When you get the result right, base points are multiplied by the market odds locked before kickoff — up to ×3 when you back the underdog. Valid predictions before kickoff always get at least 1 pt when the match is scored."
       },
       "pointsUpdated": {
         "question": "When are points updated?",
@@ -353,15 +353,15 @@
       },
       "leaderboard": {
         "question": "How does the leaderboard work?",
-        "answer": "One rank per X account. Total points = sum of all scored matches. Higher points = higher rank. It does not reset every day."
+        "answer": "One rank per X account. Total points = sum of all scored matches across the season. Higher points = higher rank. The board does not reset daily or every 3 days."
       },
       "whoGetsPaid": {
         "question": "Who wins prizes?",
-        "answer": "Only the Top 20 players at the daily 23:00 UTC snapshot qualify for prizes."
+        "answer": "Only the top 20 on the cumulative leaderboard at the daily 10:00 UTC snapshot qualify for that day's USDC payout."
       },
       "snapshotWhen": {
         "question": "When is the snapshot?",
-        "answer": "Every day at 23:00 UTC. That locks the top 20 for that calendar day’s prizes."
+        "answer": "Every day at 10:00 UTC. That locks the top 20 for that calendar day's USDC payout on Solana."
       },
       "prizeSplit": {
         "question": "How is the prize pool split?",
@@ -369,15 +369,15 @@
       },
       "poolSize": {
         "question": "How big is the daily pool?",
-        "answer": "Prize pools vary based on daily trading volume. Higher volume can generate more $SCORE tax revenue, which may increase the prize pool. However, prize amounts are not guaranteed and can change from day to day."
+        "answer": "The daily USDC pool depends on what is funded in the Solana rewards vault at snapshot time. Amounts vary and are not guaranteed."
       },
       "howToClaim": {
         "question": "How do I claim?",
-        "answer": "Sign in with the same X account → Wallet tab (connect MetaMask on BSC) → Claim tab → confirm transaction. Keep a small amount of BNB for gas."
+        "answer": "Sign in with the same X account → Wallet tab (connect Phantom, Solflare, or Backpack on Solana) → Collect your USDC reward. Keep a small amount of SOL for transaction fees."
       },
       "claimEmpty": {
         "question": "I’m Top 20 but Claim is empty — why?",
-        "answer": "Check that:\n\n• The daily snapshot has already occurred\n• You’re signed in with the correct X account\n• The claim period is open\n• The payout contract has been funded\n\nIf you’re still having issues, contact support with screenshots."
+        "answer": "Check that the 10:00 UTC snapshot has run, you are signed in with the correct X account, and the payout epoch is open on Solana. Contact support with screenshots if it persists."
       },
       "whatIsScoreToken": {
         "question": "What is $SCORE?",
@@ -401,7 +401,7 @@
       },
       "fullRules": {
         "question": "Where are the full rules?",
-        "answer": "mundial.xyz/disclaimer and mundial.xyz/faq"
+        "answer": "copamundial.app/docs and copamundial.app/disclaimer"
       }
     }
   },
