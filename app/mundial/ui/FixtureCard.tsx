@@ -251,6 +251,7 @@ export default function FixtureCard({
           odds={fixture.marketOdds}
           locked={showLive}
           compact={!featured && showLive}
+          hideHint
         />
       ) : null}
 

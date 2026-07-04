@@ -98,13 +98,13 @@ console.log("PASS  market multiplier caps at ×3 for 5% away win");
 
 assert.equal(
   formatPointsBreakdown({ base: 3, multiplier: 1, points: 3 }),
-  "Base 3 × Market ×1 = 3 pts",
+  "3 points",
 );
 console.log("PASS  formatPointsBreakdown (×1)");
 
 assert.equal(
   formatPointsBreakdown({ base: 3, multiplier: 3, points: 9 }),
-  "Base 3 × Market ×3 = 9 pts",
+  "9 points (×3 boost)",
 );
 console.log("PASS  formatPointsBreakdown");
 

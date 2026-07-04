@@ -15,6 +15,8 @@ type Props = {
   /** Pre-kickoff line on live/FT cards. */
   locked?: boolean;
   compact?: boolean;
+  /** Hide the multiplier hint (shown once elsewhere on the page). */
+  hideHint?: boolean;
 };
 
 function multForOutcome(
@@ -30,6 +32,7 @@ export default function MarketOddsLine({
   odds,
   locked = false,
   compact = false,
+  hideHint = false,
 }: Props) {
   const homePct = Math.round(odds.homePct);
   const drawPct = Math.round(odds.drawPct);
@@ -45,7 +48,7 @@ export default function MarketOddsLine({
       }`}
     >
       <p className={styles.label}>
-        {locked ? "Locked pre-kickoff · TxLINE 1X2" : "TxLINE market · 1X2"}
+        {locked ? "Odds locked at kickoff" : "Market odds"}
       </p>
       <div className={styles.bar} aria-hidden>
         <span className={styles.segHome} style={{ flex: homePct || 1 }} />
@@ -69,10 +72,12 @@ export default function MarketOddsLine({
           <span className={styles.mult}>{awayMult}</span>
         </span>
       </div>
-      <p className={styles.hint}>
-        If your result is right, base points are multiplied by the number shown
-        — up to ×3 when you beat the locked TxLINE market.
-      </p>
+      {!hideHint ? (
+        <p className={styles.hint}>
+          The number next to each outcome is how much your points can multiply
+          if that result happens.
+        </p>
+      ) : null}
     </div>
   );
 }

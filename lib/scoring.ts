@@ -92,14 +92,17 @@ export function formatUpsetMultiplier(multiplier: number): string {
   return `×${text.endsWith(".0") ? text.slice(0, -2) : text}`;
 }
 
-/** Human-readable post-match formula for the Fixtures breakdown line. */
+/** Short label for the Fixtures “last pick” line. */
 export function formatPointsBreakdown(breakdown: {
   base: number;
   multiplier: number;
   points: number;
 }): string {
-  const mult = formatUpsetMultiplier(breakdown.multiplier);
-  return `Base ${breakdown.base} × Market ${mult} = ${breakdown.points} pts`;
+  if (breakdown.multiplier > 1.05) {
+    const mult = formatUpsetMultiplier(breakdown.multiplier);
+    return `${breakdown.points} points (${mult} boost)`;
+  }
+  return `${breakdown.points} points`;
 }
 
 export function scorePredictionDetailed(

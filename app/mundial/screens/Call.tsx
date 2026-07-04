@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { fetchBoardMatches } from "@/app/lib/leaderboard-client";
-import { sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { resolveCurrentMatch, sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
 import ExampleCallPreview from "../ui/ExampleCallPreview";
 import Flag from "../ui/Flag";
 import MarketOddsLine from "../ui/MarketOddsLine";
-import ScoringRules from "../ui/ScoringRules";
 import { AppShell } from "../ui/TabBar";
 import type { TabId } from "../ui/TabBar";
 import { useLocalKickoff } from "../lib/kickoff";
@@ -55,12 +54,7 @@ function MatchSummary({
       </div>
 
       {showMarketOdds && fixture.marketOdds ? (
-        <MarketOddsLine
-          home={fixture.home}
-          away={fixture.away}
-          odds={fixture.marketOdds}
-          locked
-        />
+        <MarketOddsLine home={fixture.home} away={fixture.away} odds={fixture.marketOdds} />
       ) : null}
 
       {fixture.venueLine ? (
@@ -72,6 +66,7 @@ function MatchSummary({
 
 export default function Call({ onTabChange, vaultDot }: Props) {
   const [fixture, setFixture] = useState<MundialFixture | null>(null);
+  const [showMarketOdds, setShowMarketOdds] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -82,10 +77,12 @@ export default function Call({ onTabChange, vaultDot }: Props) {
         .then((rows) => {
           if (cancelled) return;
           const mundial = rows.map(toMundialFixture);
+          const current = resolveCurrentMatch(mundial);
           const next =
             sortFixturesByKickoffAsc(mundial.filter((r) => r.phase === "upcoming"))[0] ??
             mundial[0];
           setFixture(next ?? null);
+          setShowMarketOdds(Boolean(next && current && next.id === current.id));
         })
         .catch(() => {})
         .finally(() => {
@@ -114,11 +111,7 @@ export default function Call({ onTabChange, vaultDot }: Props) {
         <p className="m-body">Loading the next match…</p>
       ) : fixture ? (
         <>
-          <MatchSummary
-            fixture={fixture}
-            showMarketOdds={Boolean(fixture.marketOdds)}
-          />
-          <ScoringRules />
+          <MatchSummary fixture={fixture} showMarketOdds={showMarketOdds} />
           <ExampleCallPreview fixture={fixture} />
         </>
       ) : (

@@ -107,9 +107,9 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     statsLoading ? "—" : points != null ? points.toLocaleString() : "0";
   const lastScoreLine =
     lastBreakdown?.final != null
-      ? `${lastBreakdown.prediction.home}–${lastBreakdown.prediction.away} → ${lastBreakdown.final.home}–${lastBreakdown.final.away}`
+      ? `You said ${lastBreakdown.prediction.home}, ${lastBreakdown.prediction.away}. Final ${lastBreakdown.final.home}, ${lastBreakdown.final.away}.`
       : lastBreakdown
-        ? `${lastBreakdown.prediction.home}–${lastBreakdown.prediction.away}`
+        ? `You said ${lastBreakdown.prediction.home}, ${lastBreakdown.prediction.away}.`
         : null;
   const lastPointsLine = lastBreakdown
     ? formatPointsBreakdown(lastBreakdown)
@@ -138,15 +138,14 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
 
       {lastScoreLine && lastPointsLine ? (
         <p className={styles.lastScore}>
-          Last call · {lastScoreLine}
-          <span className={styles.lastScorePts}>{lastPointsLine}</span>
+          {lastScoreLine} {lastPointsLine}
         </p>
       ) : null}
 
       {!loaded ? (
         <p className={styles.emptyFixtures}>Loading matches…</p>
       ) : fixtures.length === 0 ? (
-        <p className={styles.emptyFixtures}>No matches right now — check back soon.</p>
+        <p className={styles.emptyFixtures}>No matches right now. Check back soon.</p>
       ) : (
         <>
           {featuredLive ? (
