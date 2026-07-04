@@ -107,9 +107,9 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     statsLoading ? "—" : points != null ? points.toLocaleString() : "0";
   const lastScoreLine =
     lastBreakdown?.final != null
-      ? `You said ${lastBreakdown.prediction.home}, ${lastBreakdown.prediction.away}. Final ${lastBreakdown.final.home}, ${lastBreakdown.final.away}.`
+      ? `You said ${lastBreakdown.prediction.home}-${lastBreakdown.prediction.away}. Final ${lastBreakdown.final.home}-${lastBreakdown.final.away}.`
       : lastBreakdown
-        ? `You said ${lastBreakdown.prediction.home}, ${lastBreakdown.prediction.away}.`
+        ? `You said ${lastBreakdown.prediction.home}-${lastBreakdown.prediction.away}.`
         : null;
   const lastPointsLine = lastBreakdown
     ? formatPointsBreakdown(lastBreakdown)
