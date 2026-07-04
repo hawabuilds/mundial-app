@@ -47,6 +47,8 @@ export async function GET() {
       last_breakdown: extras.lastBreakdown
         ? {
             match_id: extras.lastBreakdown.match_id,
+            home: extras.lastBreakdown.home,
+            away: extras.lastBreakdown.away,
             prediction: extras.lastBreakdown.prediction,
             final: extras.lastBreakdown.final,
             base: extras.lastBreakdown.base,

@@ -953,6 +953,8 @@ function rankLeaderboardRows(
 
 export type UserScoreBreakdown = {
   match_id: number;
+  home: string;
+  away: string;
   prediction: { home: number; away: number };
   final: { home: number; away: number } | null;
   base: number;
@@ -1019,13 +1021,20 @@ export async function getUserScoringExtras(userId: string): Promise<{
   }
 
   const state = await getMatchState(latest.match_id);
+  const fixture = getFixtureById(latest.match_id);
   const base = latest.score_base ?? latest.points;
   const multiplier = latest.score_multiplier ?? 1;
+  const home =
+    state?.home_team?.trim() || fixture?.home || "Home team";
+  const away =
+    state?.away_team?.trim() || fixture?.away || "Away team";
 
   return {
     upsetBonusTotal,
     lastBreakdown: {
       match_id: latest.match_id,
+      home,
+      away,
       prediction: { home: latest.home_score, away: latest.away_score },
       final:
         state?.final_home_score != null && state?.final_away_score != null

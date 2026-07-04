@@ -78,6 +78,8 @@ export function handleToInitials(handle: string): string {
 
 export type UserScoreBreakdown = {
   match_id: number;
+  home: string;
+  away: string;
   prediction: { home: number; away: number };
   final: { home: number; away: number } | null;
   base: number;

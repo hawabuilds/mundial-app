@@ -15,7 +15,10 @@ import ScoringRules from "../ui/ScoringRules";
 import { AppShell } from "../ui/TabBar";
 import type { TabId } from "../ui/TabBar";
 import styles from "./Fixtures.module.css";
-import { formatPointsBreakdown } from "@/lib/scoring";
+
+function scoreLine(home: number, away: number): string {
+  return `${home}-${away}`;
+}
 
 type Props = {
   onTabChange: (t: TabId) => void;
@@ -105,14 +108,16 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const rankLabel = statsLoading ? "—" : rank != null ? `#${rank}` : "—";
   const ptsLabel =
     statsLoading ? "—" : points != null ? points.toLocaleString() : "0";
-  const lastScoreLine =
-    lastBreakdown?.final != null
-      ? `You said ${lastBreakdown.prediction.home}-${lastBreakdown.prediction.away}. Final ${lastBreakdown.final.home}-${lastBreakdown.final.away}.`
-      : lastBreakdown
-        ? `You said ${lastBreakdown.prediction.home}-${lastBreakdown.prediction.away}.`
-        : null;
-  const lastPointsLine = lastBreakdown
-    ? formatPointsBreakdown(lastBreakdown)
+
+  const lastPick = lastBreakdown
+    ? (() => {
+        const onBoard = fixtures.find((f) => f.id === lastBreakdown.match_id);
+        return {
+          ...lastBreakdown,
+          home: onBoard?.home ?? lastBreakdown.home,
+          away: onBoard?.away ?? lastBreakdown.away,
+        };
+      })()
     : null;
 
   return (
@@ -136,10 +141,29 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
 
       <ScoringRules />
 
-      {lastScoreLine && lastPointsLine ? (
-        <p className={styles.lastScore}>
-          {lastScoreLine} {lastPointsLine}
-        </p>
+      {lastPick ? (
+        <div className={styles.lastPick}>
+          <p className={styles.lastPickLabel}>Last match scored</p>
+          <p className={styles.lastPickMatch}>
+            {lastPick.home} vs {lastPick.away}
+          </p>
+          <p className={styles.lastPickDetail}>
+            Your pick{" "}
+            <strong>
+              {scoreLine(lastPick.prediction.home, lastPick.prediction.away)}
+            </strong>
+            {lastPick.final ? (
+              <>
+                {" "}
+                · Final{" "}
+                <strong>
+                  {scoreLine(lastPick.final.home, lastPick.final.away)}
+                </strong>
+              </>
+            ) : null}
+          </p>
+          <p className={styles.lastPickPts}>+{lastPick.points} points</p>
+        </div>
       ) : null}
 
       {!loaded ? (

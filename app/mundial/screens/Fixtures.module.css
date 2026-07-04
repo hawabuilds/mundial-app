@@ -36,20 +36,51 @@
   margin: 0 var(--m-space-5);
 }
 
-.lastScore {
+.lastPick {
   margin: calc(-1 * var(--m-space-2)) 0 var(--m-space-6);
-  padding: 0 var(--m-space-2);
+  padding: var(--m-space-4) var(--m-space-5);
+  border-radius: var(--m-radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--m-border);
+  text-align: center;
+}
+
+.lastPickLabel {
+  margin: 0;
+  font-family: var(--m-font-body);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--m-faint);
+}
+
+.lastPickMatch {
+  margin: var(--m-space-2) 0 0;
+  font-family: var(--m-font-display);
+  font-size: var(--m-text-base);
+  font-weight: 700;
+  color: var(--m-white);
+}
+
+.lastPickDetail {
+  margin: var(--m-space-2) 0 0;
   font-family: var(--m-font-body);
   font-size: var(--m-text-xs);
   line-height: 1.45;
   color: var(--m-muted);
-  text-align: center;
 }
 
-.lastScorePts {
-  display: block;
-  margin-top: 2px;
+.lastPickDetail strong {
   font-weight: 600;
+  color: var(--m-body);
+}
+
+.lastPickPts {
+  margin: var(--m-space-2) 0 0;
+  font-family: var(--m-font-display);
+  font-size: var(--m-text-lg);
+  font-weight: 700;
   color: var(--m-accent);
 }
 
