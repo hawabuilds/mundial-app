@@ -69,7 +69,10 @@ export default function MarketOddsLine({
           <span className={styles.mult}>{awayMult}</span>
         </span>
       </div>
-      <p className={styles.hint}>Correct upset calls earn up to ×3 vs the market</p>
+      <p className={styles.hint}>
+        If your result is right, base points are multiplied by the number shown
+        — up to ×3 when you beat the locked TxLINE market.
+      </p>
     </div>
   );
 }

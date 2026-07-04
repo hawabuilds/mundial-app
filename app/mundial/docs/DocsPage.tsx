@@ -191,13 +191,17 @@ export default function DocsPage() {
             </div>
             <div className={styles.scoreCard}>
               <span className={styles.scorePts}>3</span>
-              <span className={styles.scoreLbl}>Right outcome</span>
+              <span className={styles.scoreLbl}>Right result</span>
             </div>
             <div className={styles.scoreCard}>
               <span className={styles.scorePts}>1</span>
               <span className={styles.scoreLbl}>Played</span>
             </div>
           </div>
+          <p className={styles.scoringBonus}>
+            Get the result right and your base is multiplied by the locked TxLINE
+            pre-kickoff market — up to ×3 when you back the underdog.
+          </p>
         </section>
 
         <section id="pool" className={styles.section}>

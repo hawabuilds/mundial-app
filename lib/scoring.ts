@@ -5,18 +5,18 @@ export type MatchScore = {
 
 export type PredictionScore = MatchScore;
 
-/** @deprecated Legacy constants — use {@link scorePredictionDetailed} tiers. */
-export const POINTS_EXACT = 5;
-/** @deprecated */
-export const POINTS_OUTCOME = 3;
-/** @deprecated */
-export const POINTS_PARTICIPATION = 1;
-
-export const BASE_EXACT = 10;
-export const BASE_OUTCOME_GOAL_DIFF = 7;
-export const BASE_OUTCOME = 5;
-export const BASE_NEAR_MISS = 2;
+/** Base points before the TxLINE market multiplier. */
+export const BASE_EXACT = 5;
+export const BASE_OUTCOME = 3;
 export const BASE_PARTICIPATION = 1;
+
+/** @deprecated Use BASE_* constants */
+export const POINTS_EXACT = BASE_EXACT;
+/** @deprecated Use BASE_* constants */
+export const POINTS_OUTCOME = BASE_OUTCOME;
+/** @deprecated Use BASE_* constants */
+export const POINTS_PARTICIPATION = BASE_PARTICIPATION;
+
 export const MAX_UPSET_MULTIPLIER = 3;
 
 export type MatchOutcome = "home" | "away" | "draw";
@@ -27,7 +27,7 @@ export type Match1x2Odds = {
   awayPct: number;
 };
 
-export type ScoreTier = "exact" | "outcome" | "near" | "participation";
+export type ScoreTier = "exact" | "outcome" | "participation";
 
 export type ScoreBreakdown = {
   points: number;
@@ -42,20 +42,7 @@ export function getMatchOutcome(score: MatchScore): MatchOutcome {
   return "draw";
 }
 
-function goalDiff(score: MatchScore): number {
-  return score.homeScore - score.awayScore;
-}
-
-function isNearMiss(prediction: PredictionScore, actual: MatchScore): boolean {
-  const homeOff = Math.abs(prediction.homeScore - actual.homeScore);
-  const awayOff = Math.abs(prediction.awayScore - actual.awayScore);
-  const oneTeamExact =
-    prediction.homeScore === actual.homeScore ||
-    prediction.awayScore === actual.awayScore;
-  return oneTeamExact || (homeOff <= 1 && awayOff <= 1);
-}
-
-/** Accuracy base before the TxLINE upset multiplier is applied. */
+/** Accuracy base before the TxLINE market multiplier is applied. */
 export function accuracyBase(
   prediction: PredictionScore,
   actual: MatchScore,
@@ -67,18 +54,8 @@ export function accuracyBase(
     return { base: BASE_EXACT, tier: "exact" };
   }
 
-  const predOutcome = getMatchOutcome(prediction);
-  const actualOutcome = getMatchOutcome(actual);
-
-  if (predOutcome === actualOutcome) {
-    if (goalDiff(prediction) === goalDiff(actual)) {
-      return { base: BASE_OUTCOME_GOAL_DIFF, tier: "outcome" };
-    }
+  if (getMatchOutcome(prediction) === getMatchOutcome(actual)) {
     return { base: BASE_OUTCOME, tier: "outcome" };
-  }
-
-  if (isNearMiss(prediction, actual)) {
-    return { base: BASE_NEAR_MISS, tier: "near" };
   }
 
   return { base: BASE_PARTICIPATION, tier: "participation" };
@@ -94,8 +71,8 @@ function impliedPctForOutcome(
 }
 
 /**
- * Upset bonus when the predicted outcome was unlikely per TxLINE pre-kickoff odds.
- * Only applies when the outcome (or exact) was correct — capped at ×3.
+ * Market multiplier when the predicted result matched TxLINE pre-kickoff odds.
+ * Only applied on exact or correct outcome — capped at ×3.
  */
 export function upsetMultiplier(
   predictedOutcome: MatchOutcome,
@@ -115,6 +92,16 @@ export function formatUpsetMultiplier(multiplier: number): string {
   return `×${text.endsWith(".0") ? text.slice(0, -2) : text}`;
 }
 
+/** Human-readable post-match formula for the Fixtures breakdown line. */
+export function formatPointsBreakdown(breakdown: {
+  base: number;
+  multiplier: number;
+  points: number;
+}): string {
+  const mult = formatUpsetMultiplier(breakdown.multiplier);
+  return `Base ${breakdown.base} × Market ${mult} = ${breakdown.points} pts`;
+}
+
 export function scorePredictionDetailed(
   prediction: PredictionScore,
   actual: MatchScore,
@@ -122,7 +109,7 @@ export function scorePredictionDetailed(
 ): ScoreBreakdown {
   const { base, tier } = accuracyBase(prediction, actual);
 
-  if (tier === "participation" || tier === "near") {
+  if (tier === "participation") {
     return { points: base, base, multiplier: 1, tier };
   }
 

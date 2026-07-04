@@ -345,6 +345,9 @@ export default function DocsContent() {
             <p className="mt-4 text-sm text-neutral-500 max-w-2xl">
               {t("howToPlay.scoringNote")}
             </p>
+            <p className="mt-2 text-sm text-neutral-400 max-w-2xl">
+              {t("howToPlay.scoringMarket")}
+            </p>
 
             <h3 className="mt-12 mb-4 text-xl font-bold text-white">
               {t("howToPlay.formatTitle")}

@@ -45,24 +45,22 @@ Pre-kickoff odds are **locked** to Supabase (`match_goals`, `match_odds`) at fir
 
 ### Scoring formula
 
-**Accuracy base** (when the predicted outcome is correct, or exact):
+**Accuracy base** (best tier only — one score per match):
 
 | Tier | Base points |
 |------|-------------|
-| Exact scoreline | 10 |
-| Correct outcome + goal difference | 7 |
-| Correct outcome (win/draw/loss) | 5 |
+| Exact scoreline | 5 |
+| Correct result (win/draw/loss) | 3 |
+| Played (wrong result) | 1 |
 
-Near-miss (one team exact or both within one goal) earns **2**; any other reply earns **1**.
-
-**Upset multiplier** (TxLINE pre-kickoff odds, only when outcome or exact is correct):
+**Market multiplier** (TxLINE pre-kickoff 1X2, only when exact or result is correct):
 
 ```
 multiplier = min(3, 100 / impliedPct)
 points     = round(base × multiplier)
 ```
 
-Example: correct underdog call at 33% implied → base 5 × 3× = **15 pts**.
+Example: correct underdog call at 5% implied → base 3 × ×3 = **9 pts** (or exact at 5% → **15 pts**).
 
 Implementation: `lib/scoring.ts`. Locked odds: `lib/ensureMatchOdds.ts` → `match_odds` table.
 

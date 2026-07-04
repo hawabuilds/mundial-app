@@ -7,13 +7,15 @@ import {
   fetchMyLeaderboardStats,
   type UserScoreBreakdown,
 } from "@/app/lib/leaderboard-client";
-import { resolveCurrentMatch, sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
 import Card from "../ui/Card";
 import FixtureCard from "../ui/FixtureCard";
 import ProfileMenu from "../ui/ProfileMenu";
+import ScoringRules from "../ui/ScoringRules";
 import { AppShell } from "../ui/TabBar";
 import type { TabId } from "../ui/TabBar";
 import styles from "./Fixtures.module.css";
+import { formatPointsBreakdown } from "@/lib/scoring";
 
 type Props = {
   onTabChange: (t: TabId) => void;
@@ -94,8 +96,6 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   // Only the next game (soonest upcoming) gets a tap-to-reply prompt.
   const nextGame = upcomingList[0] ?? null;
   const comingUp = upcomingList.slice(1);
-  const currentMatch = resolveCurrentMatch(fixtures);
-  const currentMatchId = currentMatch?.id ?? null;
 
   const featuredLiveLabel = !featuredLive
     ? null
@@ -111,12 +111,9 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       : lastBreakdown
         ? `${lastBreakdown.prediction.home}–${lastBreakdown.prediction.away}`
         : null;
-  const lastPointsLine =
-    lastBreakdown && lastBreakdown.multiplier > 1
-      ? `Base ${lastBreakdown.base} × Upset ${lastBreakdown.multiplier}× = ${lastBreakdown.points} pts`
-      : lastBreakdown
-        ? `${lastBreakdown.points} pts`
-        : null;
+  const lastPointsLine = lastBreakdown
+    ? formatPointsBreakdown(lastBreakdown)
+    : null;
 
   return (
     <AppShell
@@ -136,6 +133,8 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
           <p className={styles.statPts}>{ptsLabel}</p>
         </div>
       </Card>
+
+      <ScoringRules />
 
       {lastScoreLine && lastPointsLine ? (
         <p className={styles.lastScore}>
@@ -177,7 +176,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
                 fixture={nextGame}
                 featured
                 withReply
-                showMarketOdds={nextGame.id === currentMatchId}
+                showMarketOdds={Boolean(nextGame.marketOdds)}
               />
             </section>
           ) : null}

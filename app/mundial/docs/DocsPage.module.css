@@ -406,6 +406,14 @@
   text-align: center;
 }
 
+.scoringBonus {
+  margin: var(--m-space-4) 0 0;
+  max-width: 36rem;
+  font-size: var(--m-text-sm);
+  line-height: var(--m-leading-relaxed);
+  color: var(--m-muted);
+}
+
 .split {
   display: grid;
   gap: var(--m-space-8);

@@ -70,7 +70,7 @@
     "greetingFirstPrediction": "no position yet — reply to a match thread",
     "yourRank": "Position",
     "scoreToRank": "Reply to appear",
-    "pointsScoring": "Exact 5 · Result 3 · Entry 1",
+    "pointsScoring": "Exact 5 · Result 3 · Played 1 · Market up to ×3",
     "claimRewardsAria": "Open rewards",
     "rewardsToClaim": "BNB ready",
     "rewardsReady": "{amount} BNB · ≈ {usd}",
@@ -181,6 +181,7 @@
         "wrong": { "label": "Wrong outcome", "note": "You still get a point for playing" }
       },
       "scoringNote": "You only receive one score per match and we count the best tier you qualify for. Your first valid reply is the one that counts, and it has to land before the scheduled kickoff.",
+      "scoringMarket": "Get the result right and your base is multiplied by the locked TxLINE pre-kickoff market — up to ×3 when you back the underdog.",
       "formatTitle": "How to write your prediction",
       "format1": "Include both team names and a score. The order does not change what we record, so <mono>Mexico 2-1 South Africa</mono> and <mono>South Africa 1-2 Mexico</mono> are treated as the same prediction.",
       "format2": "We recognise common nicknames for teams, but small misspellings do not count.",
@@ -344,7 +345,7 @@
       },
       "pointsScoring": {
         "question": "How does scoring work?",
-        "answer": "Exact score = 5 pts. Correct outcome (winner/draw, wrong score) = 3 pts. Wrong outcome = 1 pt. Valid pre-kickoff predictions always get at least 1 pt when the match is scored."
+        "answer": "Exact score = 5 pts. Correct result (winner/draw, wrong score) = 3 pts. Wrong result = 1 pt. When you get the result right, base points are multiplied by the locked TxLINE pre-kickoff market — up to ×3 when you back the underdog. Valid pre-kickoff predictions always get at least 1 pt when the match is scored."
       },
       "pointsUpdated": {
         "question": "When are points updated?",

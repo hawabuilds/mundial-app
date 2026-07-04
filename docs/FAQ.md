@@ -155,6 +155,8 @@ If you think we missed a valid reply, contact the team with your **X handle**, *
 
 You always get at least **1 point** if you had a valid pre-kickoff prediction and the match was scored.
 
+When you get the **result right** (exact or correct winner/draw), your base is multiplied by the **locked TxLINE pre-kickoff market** — up to **×3** when you back the underdog (`min(3, 100 / implied %)`).
+
 ### When do points update?
 
 After the match **finishes** and we have the **final 90+ injury time score**. This usually happens automatically within about **15 minutes of full time**. The leaderboard updates once points are saved — refresh the app if you don’t see them yet.

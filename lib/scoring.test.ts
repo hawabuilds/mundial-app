@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import {
-  accuracyBase,
   BASE_EXACT,
-  BASE_NEAR_MISS,
   BASE_OUTCOME,
-  BASE_OUTCOME_GOAL_DIFF,
   BASE_PARTICIPATION,
+  formatPointsBreakdown,
   getMatchOutcome,
   scorePrediction,
   scorePredictionDetailed,
@@ -18,7 +16,7 @@ type Case = {
   prediction: { homeScore: number; awayScore: number };
   actual: { homeScore: number; awayScore: number };
   expectedPoints: number;
-  expectedTier: "exact" | "outcome" | "near" | "participation";
+  expectedTier: "exact" | "outcome" | "participation";
 };
 
 const cases: Case[] = [
@@ -40,14 +38,7 @@ const cases: Case[] = [
     name: "correct draw, wrong scoreline",
     prediction: { homeScore: 1, awayScore: 1 },
     actual: { homeScore: 0, awayScore: 0 },
-    expectedPoints: BASE_OUTCOME_GOAL_DIFF,
-    expectedTier: "outcome",
-  },
-  {
-    name: "correct outcome + goal difference",
-    prediction: { homeScore: 3, awayScore: 1 },
-    actual: { homeScore: 2, awayScore: 0 },
-    expectedPoints: BASE_OUTCOME_GOAL_DIFF,
+    expectedPoints: BASE_OUTCOME,
     expectedTier: "outcome",
   },
   {
@@ -58,11 +49,11 @@ const cases: Case[] = [
     expectedTier: "participation",
   },
   {
-    name: "near miss — one team score exact",
+    name: "near miss — one team score exact, wrong result",
     prediction: { homeScore: 2, awayScore: 0 },
     actual: { homeScore: 2, awayScore: 2 },
-    expectedPoints: BASE_NEAR_MISS,
-    expectedTier: "near",
+    expectedPoints: BASE_PARTICIPATION,
+    expectedTier: "participation",
   },
   {
     name: "participation only",
@@ -102,13 +93,25 @@ const upset = scorePredictionDetailed(
 );
 assert.equal(upset.tier, "exact");
 assert.equal(upset.multiplier, 3);
-assert.equal(upset.points, 30);
-console.log("PASS  upset multiplier caps at 3x for 5% away win");
+assert.equal(upset.points, 15);
+console.log("PASS  market multiplier caps at ×3 for 5% away win");
+
+assert.equal(
+  formatPointsBreakdown({ base: 3, multiplier: 1, points: 3 }),
+  "Base 3 × Market ×1 = 3 pts",
+);
+console.log("PASS  formatPointsBreakdown (×1)");
+
+assert.equal(
+  formatPointsBreakdown({ base: 3, multiplier: 3, points: 9 }),
+  "Base 3 × Market ×3 = 9 pts",
+);
+console.log("PASS  formatPointsBreakdown");
 
 assert.equal(upsetMultiplier("away", odds), 3);
 assert.equal(getMatchOutcome({ homeScore: 1, awayScore: 1 }), "draw");
 assert.equal(getMatchOutcome({ homeScore: 2, awayScore: 0 }), "home");
 assert.equal(getMatchOutcome({ homeScore: 0, awayScore: 1 }), "away");
 
-console.log(`\n${passed + 1} passed, ${failed} failed`);
+console.log(`\n${passed + 3} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
