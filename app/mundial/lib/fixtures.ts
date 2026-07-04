@@ -5,13 +5,47 @@ import type {
   MatchGoalInfo,
   MatchMarketOdds,
 } from "@/app/lib/leaderboard-client";
-import {
-  formatVenueLine,
-  fixtureMetaLabel,
-  getVenueForMatch,
-} from "./venues";
+import { matchStageLabel } from "@/lib/matchStage";
+import { formatVenueLine, getVenueForMatch } from "./venues";
 
 export type MundialGoal = MatchGoalInfo;
+
+type CurrentMatchLike = {
+  id: number;
+  phase?: FixturePhase;
+  status?: string | null;
+  kickoffUtcMs?: number;
+  date?: string;
+  time?: string;
+};
+
+function kickoffSortKey(fixture: Pick<CurrentMatchLike, "kickoffUtcMs" | "date" | "time">): number {
+  if (fixture.kickoffUtcMs != null && Number.isFinite(fixture.kickoffUtcMs)) {
+    return fixture.kickoffUtcMs;
+  }
+  if (fixture.date && fixture.time) {
+    return Date.parse(`${fixture.date}T${fixture.time}:00Z`);
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+export function sortFixturesByKickoffAsc<T extends CurrentMatchLike>(fixtures: T[]): T[] {
+  return [...fixtures].sort((a, b) => kickoffSortKey(a) - kickoffSortKey(b));
+}
+
+/** Live match in play, otherwise the most recent FT card, otherwise next upcoming. */
+export function resolveCurrentMatch<T extends CurrentMatchLike>(
+  fixtures: T[],
+): T | null {
+  const liveNow = fixtures.find(
+    (f) =>
+      f.phase === "live" || f.status === "LIVE" || f.status === "HT",
+  );
+  if (liveNow) return liveNow;
+  const recent = fixtures.find((f) => f.phase === "recent");
+  if (recent) return recent;
+  return sortFixturesByKickoffAsc(fixtures.filter((f) => f.phase === "upcoming"))[0] ?? null;
+}
 
 export type MundialFixture = {
   id: number;
@@ -21,7 +55,7 @@ export type MundialFixture = {
   awayCode: string;
   date: string;
   time: string;
-  group: string | null;
+  stage: string | null;
   venueLine: string;
   /** Live match state (null when not started / no feed data). */
   status: string | null;
@@ -33,11 +67,38 @@ export type MundialFixture = {
   goals: MundialGoal[];
   /** Locked pre-kickoff 1X2 market (TxLINE). */
   marketOdds: MatchMarketOdds | null;
+  /** Epoch ms (UTC) from TxLINE StartTime when available. */
+  kickoffUtcMs?: number;
 };
 
 export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
   const venue = getVenueForMatch(fixture.id);
   const live = fixture.live ?? null;
+  const phase = fixture.phase ?? "upcoming";
+  const goals = fixture.goals ?? [];
+
+  let homeScore = live?.homeScore ?? null;
+  let awayScore = live?.awayScore ?? null;
+  if ((homeScore == null || awayScore == null) && phase !== "upcoming") {
+    const fromGoals = { home: 0, away: 0 };
+    for (const goal of goals) {
+      if (goal.side === "home") fromGoals.home += 1;
+      else fromGoals.away += 1;
+    }
+    if (homeScore == null) homeScore = fromGoals.home;
+    if (awayScore == null) awayScore = fromGoals.away;
+  }
+
+  const status =
+    live?.status ??
+    (phase === "live" ? "LIVE" : phase === "recent" ? "FT" : null);
+
+  const stage = matchStageLabel(fixture.group, {
+    matchId: fixture.id,
+    fixtureGroupId: fixture.fixtureGroupId,
+    date: fixture.date,
+  });
+
   return {
     id: fixture.id,
     home: fixture.home,
@@ -46,19 +107,20 @@ export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
     awayCode: getTeamCountryCode(fixture.away) ?? "UN",
     date: fixture.date,
     time: fixture.time,
-    group: fixtureMetaLabel(fixture.group),
+    stage,
     venueLine:
       fixture.venueLine !== undefined
         ? fixture.venueLine
         : formatVenueLine(venue),
-    status: live?.status ?? null,
+    status,
     statusLabel: fixture.statusLabel ?? null,
-    homeScore: live?.homeScore ?? null,
-    awayScore: live?.awayScore ?? null,
+    homeScore,
+    awayScore,
     elapsed: live?.elapsed ?? null,
-    phase: fixture.phase ?? "upcoming",
-    goals: fixture.goals ?? [],
+    phase,
+    goals,
     marketOdds: fixture.marketOdds ?? null,
+    kickoffUtcMs: fixture.kickoffUtcMs,
   };
 }
 
@@ -82,7 +144,7 @@ export const FALLBACK_FIXTURES: MundialFixture[] = [
     awayCode: "MA",
     date: "2026-06-13",
     time: "22:00",
-    group: null,
+    stage: "Group stage",
     venueLine: "Lincoln Financial Field · Philadelphia, USA",
     ...FALLBACK_LIVE,
   },
@@ -94,7 +156,7 @@ export const FALLBACK_FIXTURES: MundialFixture[] = [
     awayCode: "PY",
     date: "2026-06-13",
     time: "01:00",
-    group: null,
+    stage: "Group stage",
     venueLine: "SoFi Stadium · Los Angeles, USA",
     ...FALLBACK_LIVE,
   },
@@ -106,7 +168,7 @@ export const FALLBACK_FIXTURES: MundialFixture[] = [
     awayCode: "CH",
     date: "2026-06-13",
     time: "19:00",
-    group: null,
+    stage: "Group stage",
     venueLine: "Levi's Stadium · Santa Clara, USA",
     ...FALLBACK_LIVE,
   },

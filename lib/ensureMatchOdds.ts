@@ -9,38 +9,59 @@ import {
   resolveTxFixture,
 } from "@/lib/txodds";
 
+async function readLockedOdds(fixtureId: number): Promise<Match1x2Odds | null> {
+  try {
+    const existing = await getMatchOdds(fixtureId);
+    if (!existing) return null;
+    return {
+      homePct: existing.homePct,
+      drawPct: existing.drawPct,
+      awayPct: existing.awayPct,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchTxLineOdds(
+  fixtureId: number,
+  lookup?: { home: string; away: string; kickoffMs: number },
+): Promise<Match1x2Odds | null> {
+  if (!isTxoddsConfigured()) return null;
+
+  let txFixtureId = fixtureId;
+  if (lookup) {
+    const resolved = await resolveTxFixture(
+      lookup.home,
+      lookup.away,
+      lookup.kickoffMs,
+    );
+    if (resolved) txFixtureId = resolved.FixtureId;
+  }
+
+  const rows = await fetchOddsSnapshot(txFixtureId);
+  return parse1x2FullTime(rows);
+}
+
 /** Lock pre-kickoff 1X2 odds for a fixture (first snapshot wins). */
 export async function ensureMatchOddsLocked(
   fixtureId: number,
   lookup?: { home: string; away: string; kickoffMs: number },
 ): Promise<Match1x2Odds | null> {
+  const locked = await readLockedOdds(fixtureId);
+  if (locked) return locked;
+
   try {
-    const existing = await getMatchOdds(fixtureId);
-    if (existing) {
-      return {
-        homePct: existing.homePct,
-        drawPct: existing.drawPct,
-        awayPct: existing.awayPct,
-      };
-    }
-
-    if (!isTxoddsConfigured()) return null;
-
-    let txFixtureId = fixtureId;
-    if (lookup) {
-      const resolved = await resolveTxFixture(
-        lookup.home,
-        lookup.away,
-        lookup.kickoffMs,
-      );
-      if (resolved) txFixtureId = resolved.FixtureId;
-    }
-
-    const rows = await fetchOddsSnapshot(txFixtureId);
-    const parsed = parse1x2FullTime(rows);
+    const parsed = await fetchTxLineOdds(fixtureId, lookup);
     if (!parsed) return null;
 
-    await saveMatchOdds(fixtureId, parsed);
+    // Best-effort persist — display must work even if match_odds table is missing.
+    try {
+      await saveMatchOdds(fixtureId, parsed);
+    } catch {
+      /* Supabase not migrated yet */
+    }
+
     return parsed;
   } catch {
     return null;

@@ -13,7 +13,8 @@
     "sync:fixtures": "npx tsx scripts/sync-fixtures.ts",
     "collect:fixtures": "npx tsx scripts/collect-fixtures.ts",
     "gen:solana-keys": "npx tsx scripts/generate-solana-payout-keys.ts",
-    "open:solana-epoch": "npx tsx scripts/open-solana-epoch.ts"
+    "open:solana-epoch": "npx tsx scripts/open-solana-epoch.ts",
+    "migrate:txline": "node scripts/migrate-txline-tables.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

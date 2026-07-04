@@ -59,6 +59,24 @@
   color: var(--m-body);
 }
 
+.hackathon {
+  margin: var(--m-space-4) 0 0;
+  max-width: 320px;
+  font-size: var(--m-text-sm);
+  line-height: var(--m-leading-relaxed);
+  color: var(--m-muted);
+}
+
+.hackathon a {
+  color: #7cf4c8;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.hackathon a:hover {
+  text-decoration: underline;
+}
+
 .cta {
   margin-top: var(--m-space-8);
 }

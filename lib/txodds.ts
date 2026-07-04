@@ -177,10 +177,14 @@ export async function fetchOddsSnapshot(fixtureId: number): Promise<TxOddsRow[]>
 
 /** Full-time 1X2 implied percentages (part1 / draw / part2). */
 export function parse1x2FullTime(rows: TxOddsRow[]): Match1x2Odds | null {
+  const isFullTime = (period: string | null | undefined) =>
+    !period || period === "null" || period === "FT" || period === "FullTime";
+
   const candidates = rows.filter(
     (row) =>
-      row.SuperOddsType === "1X2_PARTICIPANT_RESULT" &&
-      (!row.MarketPeriod || row.MarketPeriod === "null"),
+      (row.SuperOddsType === "1X2_PARTICIPANT_RESULT" ||
+        row.SuperOddsType?.includes("1X2")) &&
+      isFullTime(row.MarketPeriod),
   );
   if (candidates.length === 0) return null;
 
@@ -221,7 +225,13 @@ export type TxScoreEvent = {
   /** Team the event is credited to (1 or 2). */
   Participant?: number;
   Clock?: { Running?: boolean; Seconds?: number };
-  Data?: { PlayerId?: number; GoalType?: string };
+  Data?: {
+    PlayerId?: number;
+    GoalType?: string;
+    PreferredName?: string;
+    PlayerName?: string;
+    [key: string]: unknown;
+  };
   /** Present on the "lineups" event: per-team squad with player names. */
   Lineups?: TxLineupTeam[];
   /** (period*1000)+base_key -> value. Base 1/2 = P1/P2 total goals. */
@@ -261,11 +271,7 @@ function formatPlayerName(preferred: string | null | undefined): string | null {
   return preferred.trim();
 }
 
-/**
- * Extract goals (scorer + minute) from a scores snapshot. Player names come from
- * the "lineups" event in the same snapshot, keyed by normativeId.
- */
-export function extractGoals(events: TxScoreEvent[]): TxGoal[] {
+function lineupNameById(events: TxScoreEvent[]): Map<number, string> {
   const nameById = new Map<number, string>();
   for (const e of events) {
     for (const team of e.Lineups ?? []) {
@@ -276,22 +282,171 @@ export function extractGoals(events: TxScoreEvent[]): TxGoal[] {
       }
     }
   }
+  return nameById;
+}
 
+function playerFromData(
+  data: Record<string, unknown> | undefined,
+  nameById: Map<number, string>,
+): string | null {
+  if (!data) return null;
+  const inlineName =
+    typeof data.PreferredName === "string"
+      ? data.PreferredName
+      : typeof data.PlayerName === "string"
+        ? data.PlayerName
+        : null;
+  const pid = typeof data.PlayerId === "number" ? data.PlayerId : null;
+  return (
+    formatPlayerName(inlineName) ??
+    (pid != null ? formatPlayerName(nameById.get(pid)) : null)
+  );
+}
+
+function goalMinute(seconds: number | undefined): number | null {
+  return typeof seconds === "number" ? Math.max(1, Math.floor(seconds / 60)) : null;
+}
+
+function goalKeyByMinute(goal: TxGoal): string {
+  return `${goal.participant}|${goal.minute ?? "?"}`;
+}
+
+/**
+ * Period stat keys: 1000+P = H1, 3000+P = H2, 4000+P = ET1, 5000+P = ET2.
+ * (7000+P is a running ET total — skip to avoid double-counting.)
+ */
+const PERIOD_GOAL_STAT_BASES = [1000, 3000, 4000, 5000];
+
+function goalsFromPeriodStats(events: TxScoreEvent[]): TxGoal[] {
+  const sorted = [...events].sort((a, b) => (a.Seq ?? 0) - (b.Seq ?? 0));
+  const prev = new Map<string, number>();
   const goals: TxGoal[] = [];
-  for (const e of events) {
-    if (e.Action !== "goal") continue;
-    const seconds = e.Clock?.Seconds;
-    const minute =
-      typeof seconds === "number" ? Math.max(1, Math.floor(seconds / 60)) : null;
-    const participant: 1 | 2 = e.Participant === 2 ? 2 : 1;
-    const pid = e.Data?.PlayerId;
-    const player = pid != null ? formatPlayerName(nameById.get(pid)) : null;
-    const ownGoal = /own/i.test(e.Data?.GoalType ?? "");
-    goals.push({ minute, participant, player, ownGoal });
+
+  for (const e of sorted) {
+    const minute = goalMinute(e.Clock?.Seconds);
+    for (const base of PERIOD_GOAL_STAT_BASES) {
+      for (const participant of [1, 2] as const) {
+        const statKey = String(base + participant);
+        const v = e.Stats?.[statKey];
+        if (v == null) continue;
+
+        const trackKey = `${base}|${participant}`;
+        const before = prev.get(trackKey) ?? 0;
+        if (v <= before) continue;
+        prev.set(trackKey, v);
+
+        for (let i = before; i < v; i += 1) {
+          goals.push({ minute, participant, player: null, ownGoal: false });
+        }
+      }
+    }
   }
 
-  goals.sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
   return goals;
+}
+
+function mergeGoalLists(periodGoals: TxGoal[], actionGoals: TxGoal[]): TxGoal[] {
+  const byKey = new Map<string, TxGoal>();
+  for (const goal of [...periodGoals, ...actionGoals]) {
+    const key = goalKeyByMinute(goal);
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, goal);
+      continue;
+    }
+    byKey.set(key, {
+      minute: goal.minute ?? prev.minute,
+      participant: goal.participant,
+      ownGoal: goal.ownGoal || prev.ownGoal,
+      player: goal.player ?? prev.player,
+    });
+  }
+  return [...byKey.values()];
+}
+
+function goalClockKey(participant: 1 | 2, seconds: number | undefined): string {
+  return `${participant}|${seconds ?? "?"}`;
+}
+
+/**
+ * Play-by-play goals only (goal + action_amend rows). Prefer this for persistence —
+ * period stat rows lack scorers and often attach the wrong clock after FT.
+ */
+export function extractActionGoals(events: TxScoreEvent[]): TxGoal[] {
+  const nameById = lineupNameById(events);
+  return goalsFromActions(events, nameById);
+}
+
+/** Every goal + action_amend row in the snapshot (latest amend wins per clock). */
+function goalsFromActions(
+  events: TxScoreEvent[],
+  nameById: Map<number, string>,
+): TxGoal[] {
+  const sorted = [...events].sort((a, b) => (a.Seq ?? 0) - (b.Seq ?? 0));
+  const byClock = new Map<string, TxGoal>();
+
+  const upsert = (key: string, next: TxGoal) => {
+    const prev = byClock.get(key);
+    if (!prev) {
+      byClock.set(key, next);
+      return;
+    }
+    byClock.set(key, {
+      minute: next.minute ?? prev.minute,
+      participant: next.participant,
+      ownGoal: next.ownGoal || prev.ownGoal,
+      player: next.player ?? prev.player,
+    });
+  };
+
+  for (const e of sorted) {
+    const participant: 1 | 2 = e.Participant === 2 ? 2 : 1;
+
+    if (e.Action === "goal") {
+      const seconds = e.Clock?.Seconds;
+      const data = e.Data as Record<string, unknown> | undefined;
+      upsert(goalClockKey(participant, seconds), {
+        minute: goalMinute(seconds),
+        participant,
+        player: playerFromData(data, nameById),
+        ownGoal: /own/i.test(String(data?.GoalType ?? "")),
+      });
+      continue;
+    }
+
+    if (e.Action !== "action_amend") continue;
+    const amend = e.Data as
+      | { Action?: string; New?: Record<string, unknown> }
+      | undefined;
+    if (amend?.Action !== "goal" || !amend.New) continue;
+
+    const seconds =
+      (amend.New.Clock as { Seconds?: number } | undefined)?.Seconds ??
+      e.Clock?.Seconds;
+    upsert(goalClockKey(participant, seconds), {
+      minute: goalMinute(seconds),
+      participant,
+      player: playerFromData(amend.New, nameById),
+      ownGoal: /own/i.test(String(amend.New.GoalType ?? "")),
+    });
+  }
+
+  return [...byClock.values()];
+}
+
+/**
+ * Extract goals (scorer + minute) from a scores snapshot. Player names come from
+ * lineups (normativeId), goal rows, and later action_amend patches. Period stat
+ * keys (1000/3000/4000/5000 + participant) rebuild goals when play-by-play rows
+ * are trimmed; action rows supply minutes and scorers where present.
+ */
+export function extractGoals(events: TxScoreEvent[]): TxGoal[] {
+  const nameById = lineupNameById(events);
+  const fromPeriod = goalsFromPeriodStats(events);
+  const fromActions = goalsFromActions(events, nameById);
+  const merged = mergeGoalLists(fromPeriod, fromActions);
+  merged.sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+  return merged;
 }
 
 export async function fetchScoresSnapshot(fixtureId: number): Promise<TxScoreEvent[]> {
@@ -321,6 +476,8 @@ export function latestScoreEvent(events: TxScoreEvent[]): TxScoreEvent | null {
 
 export { teamNamesMatch } from "./teamNames";
 import { teamNamesMatch } from "./teamNames";
+import { normalizeStartTimeMs } from "./formatKickoff";
+import { isFriendlyCompetition } from "./matchStage";
 
 const RESOLVE_MAX_DELTA_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -339,6 +496,8 @@ export async function resolveTxFixture(
   let bestDelta = Number.POSITIVE_INFINITY;
 
   for (const fx of fixtures) {
+    if (isFriendlyCompetition(fx.Competition ?? "")) continue;
+
     const p1Home = teamNamesMatch(fx.Participant1, home);
     const p2Away = teamNamesMatch(fx.Participant2, away);
     const p1Away = teamNamesMatch(fx.Participant1, away);
@@ -346,7 +505,7 @@ export async function resolveTxFixture(
     const teamsMatch = (p1Home && p2Away) || (p1Away && p2Home);
     if (!teamsMatch) continue;
 
-    const delta = Math.abs((fx.StartTime ?? 0) - kickoffMs);
+    const delta = Math.abs(normalizeStartTimeMs(fx.StartTime ?? 0) - kickoffMs);
     if (delta > RESOLVE_MAX_DELTA_MS) continue;
     if (delta < bestDelta) {
       best = fx;

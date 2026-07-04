@@ -6,20 +6,34 @@ import type { Fixture } from "@/app/data/fixtures";
 import {
   fetchMatchWithGoals,
   isFinishedStatus,
+  isGameStateFinished,
+  isGameStateInPlay,
+  isStartedOrFinishedStatus,
+  liveFromTxGameState,
   mapMatchRow,
   type LiveMatchData,
   type MatchGoal,
 } from "./apiFootball";
 import {
   BOARD_API_MAX_CALLS,
-  MATCH_ASSUMED_DURATION_MIN,
+  BOARD_MATCH_MAX_MIN,
   type BoardFixture,
   type FixturePhase,
 } from "./enrichFixtures";
-import { getMatchGoals, saveMatchGoals } from "@/app/lib/supabase";
+import {
+  persistTxlineGoals,
+  resolveMatchGoalsForDisplay,
+} from "@/lib/matchGoalsPersist";
 import { boardVenueLine } from "@/app/mundial/lib/venues";
 import { ensureMatchOddsLocked } from "@/lib/ensureMatchOdds";
+import { isFriendlyCompetition } from "@/lib/matchStage";
+import { normalizeStartTimeMs } from "@/lib/formatKickoff";
 import type { Match1x2Odds } from "@/lib/scoring";
+import {
+  PINNED_FIXTURE_IDS,
+  hydratePinnedRowFromScores,
+  pinnedFixtureIds,
+} from "./pinnedBoardFixtures";
 import { fetchFixturesSnapshot, isTxoddsConfigured, type TxFixture } from "./txodds";
 
 /** Board fixture carrying venue/competition line, live goals, and locked 1X2 odds. */
@@ -27,35 +41,44 @@ export type ScheduleBoardFixture = BoardFixture & {
   venueLine: string;
   goals: MatchGoal[];
   marketOdds: Match1x2Odds | null;
+  fixtureGroupId?: number;
+  kickoffUtcMs: number;
 };
 
 /** Only look up live scores for matches that kicked off within this window. */
 const LIVE_LOOKUP_MAX_HOURS_AFTER_KICKOFF = 4;
 
-function txStartToDateTime(startMs: number): { date: string; time: string } {
-  const iso = new Date(startMs).toISOString();
-  return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
+function txStartToDateTime(startMs: number): {
+  date: string;
+  time: string;
+  kickoffUtcMs: number;
+} {
+  const kickoffUtcMs = normalizeStartTimeMs(startMs);
+  const iso = new Date(kickoffUtcMs).toISOString();
+  return { date: iso.slice(0, 10), time: iso.slice(11, 16), kickoffUtcMs };
 }
 
 /**
- * Persist freshly-seen goals and return the accumulated set for the fixture.
- * Best-effort — if Supabase is not configured, the current snapshot goals are
- * returned unchanged.
+ * Merge live-accumulated goals with the current TxLINE snapshot for display.
  */
-async function accumulateGoals(
+async function goalsFromTxline(
   fixtureId: number,
   freshGoals: MatchGoal[],
+  homeScore: number | null,
+  awayScore: number | null,
 ): Promise<MatchGoal[]> {
-  try {
-    if (freshGoals.length > 0) await saveMatchGoals(fixtureId, freshGoals);
-    const stored = await getMatchGoals(fixtureId);
-    return stored.length > 0 ? stored : freshGoals;
-  } catch {
-    return freshGoals;
-  }
+  return resolveMatchGoalsForDisplay({
+    fixtureId,
+    freshGoals,
+    homeScore,
+    awayScore,
+  });
 }
 
-function txToFixture(fx: TxFixture): Fixture {
+function txToFixture(fx: TxFixture): Fixture | null {
+  const competition = fx.Competition ?? "";
+  if (isFriendlyCompetition(competition)) return null;
+
   const home = fx.Participant1IsHome ? fx.Participant1 : fx.Participant2;
   const away = fx.Participant1IsHome ? fx.Participant2 : fx.Participant1;
   const { date, time } = txStartToDateTime(fx.StartTime);
@@ -65,8 +88,72 @@ function txToFixture(fx: TxFixture): Fixture {
     away,
     date,
     time,
-    group: fx.Competition ?? "",
+    group: competition,
   };
+}
+
+type BoardRow = {
+  fx: TxFixture;
+  fixture: Fixture;
+  kickoffMs: number;
+  kickoffUtcMs: number;
+};
+
+function rowHasStarted(row: BoardRow, nowMs: number): boolean {
+  if (isGameStateInPlay(row.fx.GameState)) return true;
+  return row.kickoffMs <= nowMs;
+}
+
+function lookupPriority(a: BoardRow, b: BoardRow): number {
+  const pinned = pinnedFixtureIds();
+  const aPin = pinned.has(a.fx.FixtureId) ? 1 : 0;
+  const bPin = pinned.has(b.fx.FixtureId) ? 1 : 0;
+  if (bPin !== aPin) return bPin - aPin;
+  const aPlay = isGameStateInPlay(a.fx.GameState) ? 1 : 0;
+  const bPlay = isGameStateInPlay(b.fx.GameState) ? 1 : 0;
+  if (bPlay !== aPlay) return bPlay - aPlay;
+  return b.kickoffMs - a.kickoffMs;
+}
+
+function shouldFetchBoardLive(row: BoardRow, nowMs: number): boolean {
+  if (pinnedFixtureIds().has(row.fx.FixtureId) && row.kickoffMs <= nowMs) {
+    return true;
+  }
+  if (isGameStateInPlay(row.fx.GameState)) return true;
+  if (row.kickoffMs > nowMs) return false;
+  if (
+    (nowMs - row.kickoffMs) / 3_600_000 >
+    LIVE_LOOKUP_MAX_HOURS_AFTER_KICKOFF
+  ) {
+    return false;
+  }
+  return nowMs - row.kickoffMs < BOARD_MATCH_MAX_MIN * 60_000;
+}
+
+function isBoardMatchFinished(
+  row: BoardRow,
+  live: LiveMatchData | null,
+  nowMs: number,
+): boolean {
+  if (live?.status && isFinishedStatus(live.status)) return true;
+  if (
+    live?.status &&
+    isStartedOrFinishedStatus(live.status) &&
+    !isFinishedStatus(live.status)
+  ) {
+    return false;
+  }
+  if (isGameStateInPlay(row.fx.GameState)) return false;
+  if (isGameStateFinished(row.fx.GameState)) return true;
+  return nowMs - row.kickoffMs >= BOARD_MATCH_MAX_MIN * 60_000;
+}
+
+function resolveLive(
+  row: BoardRow,
+  fetched: { live: LiveMatchData | null; goals: MatchGoal[] } | undefined,
+): LiveMatchData | null {
+  if (fetched?.live) return fetched.live;
+  return liveFromTxGameState(row.fx.FixtureId, row.fx.GameState);
 }
 
 export async function getTxScheduleBoard(
@@ -75,86 +162,138 @@ export async function getTxScheduleBoard(
   if (!isTxoddsConfigured()) return [];
 
   const txFixtures = await fetchFixturesSnapshot();
-  const sorted = [...txFixtures].sort((a, b) => a.StartTime - b.StartTime);
-
-  const kickoffs = Array.from(new Set(sorted.map((f) => f.StartTime))).sort(
-    (a, b) => a - b,
+  const sorted = [...txFixtures].sort(
+    (a, b) => normalizeStartTimeMs(a.StartTime) - normalizeStartTimeMs(b.StartTime),
   );
+
+  const nowMs = now.getTime();
+  const rows: BoardRow[] = [];
+  for (const fx of sorted) {
+    const fixture = txToFixture(fx);
+    if (!fixture) continue;
+    const kickoffUtcMs = normalizeStartTimeMs(fx.StartTime);
+    rows.push({ fx, fixture, kickoffMs: kickoffUtcMs, kickoffUtcMs });
+  }
+
+  for (const fixtureId of PINNED_FIXTURE_IDS) {
+    if (rows.some((row) => row.fx.FixtureId === fixtureId)) continue;
+    const pinned = await hydratePinnedRowFromScores(fixtureId);
+    if (pinned) rows.push(pinned);
+  }
+
+  rows.sort((a, b) => a.kickoffMs - b.kickoffMs);
+
+  const kickoffs = rows.map((row) => row.kickoffMs).sort((a, b) => a - b);
   const nextKickoffAfter = (ms: number): number => {
     for (const k of kickoffs) if (k > ms) return k;
     return Number.POSITIVE_INFINITY;
   };
 
-  const nowMs = now.getTime();
-  const board: ScheduleBoardFixture[] = [];
+  // Fetch live scores for in-progress matches first (in-play GameState wins budget).
+  const liveData = new Map<
+    number,
+    { live: LiveMatchData | null; goals: MatchGoal[] }
+  >();
   let liveLookups = 0;
+  const lookupCandidates = rows
+    .filter((row) => shouldFetchBoardLive(row, nowMs))
+    .sort(lookupPriority);
 
-  for (const fx of sorted) {
-    const fixture = txToFixture(fx);
-    const kickoffMs = fx.StartTime;
+  for (const row of lookupCandidates) {
+    if (liveLookups >= BOARD_API_MAX_CALLS) break;
+    liveLookups += 1;
+    try {
+      const { match, goals: matchGoals } = await fetchMatchWithGoals({
+        id: row.fixture.id,
+        home: row.fixture.home,
+        away: row.fixture.away,
+        date: row.fixture.date,
+        time: row.fixture.time,
+      });
+      liveData.set(row.fx.FixtureId, {
+        live: match ? mapMatchRow(match) : null,
+        goals: matchGoals,
+      });
+    } catch {
+      liveData.set(row.fx.FixtureId, { live: null, goals: [] });
+    }
+  }
+
+  const board: ScheduleBoardFixture[] = [];
+  const oddsByFixtureId = new Map<number, Match1x2Odds | null>();
+
+  const upcomingByKickoff = rows
+    .filter((row) => !rowHasStarted(row, nowMs))
+    .sort((a, b) => a.kickoffMs - b.kickoffMs);
+
+  const inPlayRows = rows
+    .filter((row) => {
+      if (!rowHasStarted(row, nowMs)) return false;
+      const fetched = liveData.get(row.fx.FixtureId);
+      const live = resolveLive(row, fetched);
+      return !isBoardMatchFinished(row, live, nowMs);
+    })
+    .sort(lookupPriority);
+
+  const currentRow = inPlayRows[0] ?? upcomingByKickoff[0] ?? null;
+  if (currentRow) {
+    oddsByFixtureId.set(
+      currentRow.fx.FixtureId,
+      await ensureMatchOddsLocked(currentRow.fx.FixtureId, {
+        home: currentRow.fixture.home,
+        away: currentRow.fixture.away,
+        kickoffMs: currentRow.kickoffMs,
+      }).catch(() => null),
+    );
+  }
+
+  for (const row of rows) {
+    const { fx, fixture, kickoffMs, kickoffUtcMs } = row;
     const venueLine = boardVenueLine(
       fixture.home,
       fixture.away,
       fixture.date,
       fx.Competition,
     );
-    const marketOdds = await ensureMatchOddsLocked(fx.FixtureId, {
-      home: fixture.home,
-      away: fixture.away,
-      kickoffMs,
-    }).catch(() => null);
+    const marketOdds = oddsByFixtureId.get(fx.FixtureId) ?? null;
     const base = {
       ...fixture,
       apiConfigured: true,
+      fixtureGroupId: fx.FixtureGroupId,
       venueLine,
       goals: [] as MatchGoal[],
       marketOdds,
+      kickoffUtcMs,
     };
 
-    if (kickoffMs > nowMs) {
+    if (!rowHasStarted(row, nowMs)) {
       board.push({ ...base, live: null, phase: "upcoming" });
       continue;
     }
 
-    // Fetch a fresh live score (+ goals) for recently-started matches (bounded budget).
-    let live: LiveMatchData | null = null;
-    let goals: MatchGoal[] = [];
-    const hoursSince = (nowMs - kickoffMs) / 3_600_000;
-    if (
-      hoursSince <= LIVE_LOOKUP_MAX_HOURS_AFTER_KICKOFF &&
-      liveLookups < BOARD_API_MAX_CALLS
-    ) {
-      liveLookups += 1;
-      try {
-        const { match, goals: matchGoals } = await fetchMatchWithGoals(fixture);
-        live = match ? mapMatchRow(match) : null;
-        goals = matchGoals;
-      } catch {
-        live = null;
-      }
-    }
+    const fetched = liveData.get(fx.FixtureId);
+    let live: LiveMatchData | null = resolveLive(row, fetched);
+    let goals: MatchGoal[] = fetched?.goals ?? [];
 
-    const assumedFinished =
-      nowMs - kickoffMs >= MATCH_ASSUMED_DURATION_MIN * 60_000;
-    const finished = (live ? isFinishedStatus(live.status) : false) || assumedFinished;
+    const finished = isBoardMatchFinished(row, live, nowMs);
 
-    // Devnet feeds can stay stuck "in play" long after a match ends. Once we
-    // consider it finished, present it as FT so the card shows a final result.
     const displayLive: LiveMatchData | null =
       finished && live && !isFinishedStatus(live.status)
         ? { ...live, status: "FT", elapsed: null }
         : live;
 
-    // The snapshot only exposes the latest goal, so accumulate what we see across
-    // polls. Falls back to snapshot-only goals if Supabase is unavailable.
-    const mergedGoals = await accumulateGoals(fx.FixtureId, goals);
+    const mergedGoals = await goalsFromTxline(
+      fx.FixtureId,
+      goals,
+      displayLive?.homeScore ?? live?.homeScore ?? null,
+      displayLive?.awayScore ?? live?.awayScore ?? null,
+    );
 
     if (!finished) {
       board.push({ ...base, live: displayLive, goals: mergedGoals, phase: "live" });
       continue;
     }
 
-    // Finished: keep the result up until the next match kicks off.
     if (nowMs < nextKickoffAfter(kickoffMs)) {
       board.push({ ...base, live: displayLive, goals: mergedGoals, phase: "recent" });
     }
@@ -168,9 +307,9 @@ export async function getTxScheduleBoard(
   board.sort((a, b) => {
     const byPhase = phaseRank[a.phase] - phaseRank[b.phase];
     if (byPhase !== 0) return byPhase;
-    const aMs = new Date(`${a.date}T${a.time}:00Z`).getTime();
-    const bMs = new Date(`${b.date}T${b.time}:00Z`).getTime();
-    return aMs - bMs;
+    // Upcoming: soonest kickoff first. Live/recent: most recent first.
+    if (a.phase === "upcoming") return a.kickoffUtcMs - b.kickoffUtcMs;
+    return b.kickoffUtcMs - a.kickoffUtcMs;
   });
 
   return board;

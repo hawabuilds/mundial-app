@@ -235,9 +235,115 @@ export type StoredGoal = {
   ownGoal: boolean;
 };
 
-/** Stable per-goal key so repeated polls of the same goal upsert (not duplicate). */
+/** Stable per-goal key — must not include player (name may arrive on a later poll). */
 function goalKey(goal: StoredGoal): string {
-  return `${goal.side}|${goal.minute ?? "?"}|${goal.player ?? ""}|${goal.ownGoal ? 1 : 0}`;
+  return `${goal.side}|${goal.minute ?? "?"}|${goal.ownGoal ? 1 : 0}`;
+}
+
+function goalQuality(goal: StoredGoal): number {
+  let score = 0;
+  if (goal.player) score += 4;
+  if (goal.minute != null) score += 2;
+  if (goal.ownGoal) score += 1;
+  return score;
+}
+
+function pickBetterGoal(a: StoredGoal, b: StoredGoal): StoredGoal {
+  const qa = goalQuality(a);
+  const qb = goalQuality(b);
+  if (qb !== qa) return qb > qa ? b : a;
+  return {
+    side: a.side,
+    minute: b.minute ?? a.minute,
+    ownGoal: b.ownGoal || a.ownGoal,
+    player: b.player ?? a.player,
+  };
+}
+
+/** One row per side+minute — keeps OG amends over the original scorer credit. */
+function collapseBySideMinute(goals: StoredGoal[]): StoredGoal[] {
+  const timed = new Map<string, StoredGoal>();
+  const untimed: StoredGoal[] = [];
+
+  for (const goal of goals) {
+    if (goal.minute == null) {
+      untimed.push(goal);
+      continue;
+    }
+    const slot = `${goal.side}|${goal.minute}`;
+    const prev = timed.get(slot);
+    timed.set(slot, prev ? pickBetterGoal(prev, goal) : goal);
+  }
+
+  return [...untimed, ...timed.values()].sort(
+    (a, b) => (a.minute ?? 0) - (b.minute ?? 0),
+  );
+}
+
+/** Merge stored + fresh goals; prefer non-null scorer names and latest data. */
+export function mergeMatchGoals(
+  stored: StoredGoal[],
+  fresh: StoredGoal[],
+): StoredGoal[] {
+  const byKey = new Map<string, StoredGoal>();
+
+  for (const goal of [...stored, ...fresh]) {
+    const key = goalKey(goal);
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, goal);
+      continue;
+    }
+    byKey.set(key, pickBetterGoal(prev, goal));
+  }
+
+  return collapseBySideMinute([...byKey.values()]);
+}
+
+/**
+ * Drop vague stats-only rows when named goals exist, then align list length with
+ * the live score so every goal slot is shown once per side.
+ */
+export function finalizeMatchGoals(
+  goals: StoredGoal[],
+  homeScore: number | null,
+  awayScore: number | null,
+): StoredGoal[] {
+  const pickSide = (side: "home" | "away", target: number | null): StoredGoal[] => {
+    if (target == null || target < 0) {
+      return goals.filter((g) => g.side === side);
+    }
+
+    const ranked = goals
+      .filter((g) => g.side === side)
+      .sort((a, b) => {
+        const quality = goalQuality(b) - goalQuality(a);
+        if (quality !== 0) return quality;
+        return (a.minute ?? 999) - (b.minute ?? 999);
+      });
+
+    const picked: StoredGoal[] = [];
+    const usedMinutes = new Set<number>();
+
+    for (const goal of ranked) {
+      if (picked.length >= target) break;
+      if (goal.minute != null && usedMinutes.has(goal.minute)) continue;
+      if (goal.minute != null) usedMinutes.add(goal.minute);
+      picked.push(goal);
+    }
+
+    for (const goal of ranked) {
+      if (picked.length >= target) break;
+      if (picked.includes(goal)) continue;
+      picked.push(goal);
+    }
+
+    return picked.slice(0, target);
+  };
+
+  const home = pickSide("home", homeScore);
+  const away = pickSide("away", awayScore);
+  return [...home, ...away].sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
 }
 
 /**
@@ -250,8 +356,15 @@ export async function saveMatchGoals(
   goals: StoredGoal[],
 ): Promise<void> {
   if (goals.length === 0) return;
+
+  const existing = await getMatchGoals(fixtureId).catch(() => [] as StoredGoal[]);
+  const merged = mergeMatchGoals(existing, goals);
+  const incomingKeys = new Set(goals.map(goalKey));
+  const toWrite = merged.filter((goal) => incomingKeys.has(goalKey(goal)));
+  if (toWrite.length === 0) return;
+
   const supabase = getSupabaseAdminClient();
-  const rows = goals.map((goal) => ({
+  const rows = toWrite.map((goal) => ({
     fixture_id: fixtureId,
     goal_key: goalKey(goal),
     minute: goal.minute,
@@ -262,7 +375,7 @@ export async function saveMatchGoals(
 
   const { error } = await supabase
     .from("match_goals")
-    .upsert(rows, { onConflict: "fixture_id,goal_key", ignoreDuplicates: true });
+    .upsert(rows, { onConflict: "fixture_id,goal_key" });
 
   if (error) throw new Error(error.message);
 }
@@ -278,12 +391,14 @@ export async function getMatchGoals(fixtureId: number): Promise<StoredGoal[]> {
 
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row) => ({
+  const rows = (data ?? []).map((row) => ({
     minute: row.minute as number | null,
     side: (row.side as "home" | "away") ?? "home",
     player: (row.player as string | null) ?? null,
     ownGoal: Boolean(row.own_goal),
   }));
+
+  return mergeMatchGoals(rows, []);
 }
 
 export type StoredMatchOdds = {
@@ -415,6 +530,68 @@ export type ScoreMatchResult = {
   };
 };
 
+async function updatePredictionPoints(
+  supabase: SupabaseClient,
+  userId: string,
+  matchId: number,
+  scored: ReturnType<typeof scorePredictionDetailed>,
+  extra?: Record<string, unknown>,
+): Promise<void> {
+  const payload: Record<string, unknown> = {
+    points: scored.points,
+    score_base: scored.base,
+    score_multiplier: scored.multiplier,
+    ...extra,
+  };
+
+  let { error } = await supabase
+    .from("predictions")
+    .update(payload)
+    .eq("user_id", userId)
+    .eq("match_id", matchId);
+
+  if (
+    error &&
+    (error.message.includes("score_base") || error.message.includes("score_multiplier"))
+  ) {
+    const { score_base: _b, score_multiplier: _m, points, ...rest } = payload;
+    ({ error } = await supabase
+      .from("predictions")
+      .update({ points, ...rest })
+      .eq("user_id", userId)
+      .eq("match_id", matchId));
+  }
+
+  if (error?.message.includes("replied_at")) {
+    const { replied_at: _r, ...withoutReplied } = payload;
+    ({ error } = await supabase
+      .from("predictions")
+      .update({
+        points: scored.points,
+        score_base: scored.base,
+        score_multiplier: scored.multiplier,
+        ...Object.fromEntries(
+          Object.entries(withoutReplied).filter(([k]) => k !== "replied_at"),
+        ),
+      })
+      .eq("user_id", userId)
+      .eq("match_id", matchId));
+  }
+
+  if (
+    error &&
+    (error.message.includes("score_base") || error.message.includes("score_multiplier"))
+  ) {
+    ({ error } = await supabase
+      .from("predictions")
+      .update({ points: scored.points })
+      .eq("user_id", userId)
+      .eq("match_id", matchId));
+  }
+
+  if (error) throw new Error(error.message);
+}
+
 async function scoreStoredPredictionsOnly(
   supabase: SupabaseClient,
   matchId: number,
@@ -453,13 +630,7 @@ async function scoreStoredPredictionsOnly(
       odds,
     );
 
-    const { error: updateError } = await supabase
-      .from("predictions")
-      .update({ points: scored.points })
-      .eq("user_id", row.user_id)
-      .eq("match_id", matchId);
-
-    if (updateError) throw new Error(updateError.message);
+    await updatePredictionPoints(supabase, row.user_id, matchId, scored);
     return scored;
   });
 
@@ -596,30 +767,12 @@ export async function scoreMatchPredictions(
 
     breakdown[tierToBreakdownBucket(scored.tier)] += 1;
 
-    const scoreUpdate: Record<string, unknown> = {
-      points: scored.points,
+    await updatePredictionPoints(supabase, row.user_id, matchId, scored, {
       home_score: eligiblePrediction.homeScore,
       away_score: eligiblePrediction.awayScore,
       user_handle: eligiblePrediction.userHandle,
-    };
-
-    let { error: updateError } = await supabase
-      .from("predictions")
-      .update({ ...scoreUpdate, replied_at: eligiblePrediction.repliedAt })
-      .eq("user_id", row.user_id)
-      .eq("match_id", matchId);
-
-    if (updateError?.message.includes("replied_at")) {
-      ({ error: updateError } = await supabase
-        .from("predictions")
-        .update(scoreUpdate)
-        .eq("user_id", row.user_id)
-        .eq("match_id", matchId));
-    }
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
+      replied_at: eligiblePrediction.repliedAt,
+    });
 
     predictionsScored += 1;
   }
@@ -650,15 +803,12 @@ export async function scoreMatchPredictions(
 
     breakdown[tierToBreakdownBucket(scored.tier)] += 1;
 
-    const { error: updateError } = await supabase
-      .from("predictions")
-      .update({ points: scored.points })
-      .eq("user_id", eligiblePrediction.userId)
-      .eq("match_id", matchId);
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
+    await updatePredictionPoints(
+      supabase,
+      eligiblePrediction.userId,
+      matchId,
+      scored,
+    );
 
     predictionsScored += 1;
   }
@@ -799,4 +949,91 @@ function rankLeaderboardRows(
   }));
 
   return limit ? ranked.slice(0, limit) : ranked;
+}
+
+export type UserScoreBreakdown = {
+  match_id: number;
+  prediction: { home: number; away: number };
+  final: { home: number; away: number } | null;
+  base: number;
+  multiplier: number;
+  points: number;
+};
+
+export async function getUserScoringExtras(userId: string): Promise<{
+  upsetBonusTotal: number;
+  lastBreakdown: UserScoreBreakdown | null;
+}> {
+  const supabase = getSupabaseAdminClient();
+
+  type PredictionScoreRow = {
+    match_id: number;
+    home_score: number;
+    away_score: number;
+    points: number;
+    score_base?: number | null;
+    score_multiplier?: number | null;
+    replied_at?: string | null;
+  };
+
+  const selectWithBreakdown =
+    "match_id, home_score, away_score, points, score_base, score_multiplier, replied_at";
+  const first = await supabase
+    .from("predictions")
+    .select(selectWithBreakdown)
+    .eq("user_id", userId)
+    .not("points", "is", null);
+
+  let rows: PredictionScoreRow[] = (first.data ?? []) as PredictionScoreRow[];
+  let error = first.error;
+
+  if (error?.message.includes("score_base")) {
+    const fallback = await supabase
+      .from("predictions")
+      .select("match_id, home_score, away_score, points, replied_at")
+      .eq("user_id", userId)
+      .not("points", "is", null);
+    rows = (fallback.data ?? []) as PredictionScoreRow[];
+    error = fallback.error;
+  }
+
+  if (error) throw new Error(error.message);
+
+  const data = rows;
+
+  let upsetBonusTotal = 0;
+  for (const row of rows) {
+    const base = row.score_base ?? row.points;
+    const mult = row.score_multiplier ?? 1;
+    if (mult > 1 && row.points > base) {
+      upsetBonusTotal += row.points - base;
+    }
+  }
+
+  const sorted = [...rows].sort((a, b) =>
+    (b.replied_at ?? "").localeCompare(a.replied_at ?? ""),
+  );
+  const latest = sorted[0];
+  if (!latest) {
+    return { upsetBonusTotal, lastBreakdown: null };
+  }
+
+  const state = await getMatchState(latest.match_id);
+  const base = latest.score_base ?? latest.points;
+  const multiplier = latest.score_multiplier ?? 1;
+
+  return {
+    upsetBonusTotal,
+    lastBreakdown: {
+      match_id: latest.match_id,
+      prediction: { home: latest.home_score, away: latest.away_score },
+      final:
+        state?.final_home_score != null && state?.final_away_score != null
+          ? { home: state.final_home_score, away: state.final_away_score }
+          : null,
+      base,
+      multiplier,
+      points: latest.points,
+    },
+  };
 }

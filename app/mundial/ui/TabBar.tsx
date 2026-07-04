@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import BrandMark from "./BrandMark";
+import TxLineCredit from "./TxLineCredit";
 import styles from "./TabBar.module.css";
 
 export type TabId = "fixtures" | "standings" | "call" | "vault";
@@ -100,6 +101,7 @@ export function AppShell({
     <div className={styles.shell}>
       <AppHeader trailing={headerTrailing} />
       <main className={styles.main}>{children}</main>
+      <TxLineCredit />
       <TabBar active={tab} onChange={onTabChange} vaultDot={vaultDot} />
     </div>
   );

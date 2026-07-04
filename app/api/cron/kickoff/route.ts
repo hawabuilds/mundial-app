@@ -4,6 +4,7 @@ import {
   autoScoreFinishedMatches,
   getFixturesPendingAutoScore,
 } from "@/lib/scoreFinishedMatches";
+import { syncLiveMatchGoals } from "@/lib/syncLiveMatchGoals";
 import {
   registryGap,
   syncFixtureRegistryToSupabase,
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
     // Score before X collection so a slow collect cannot block leaderboard updates.
     const pendingScore = await getFixturesPendingAutoScore();
     const scoreResults = await autoScoreFinishedMatches(pendingScore);
+    const liveGoals = await syncLiveMatchGoals();
     const collection = await runDuePredictionCollection();
 
     return NextResponse.json({
@@ -39,6 +41,7 @@ export async function GET(request: NextRequest) {
         errors: registry.errors,
       },
       scoring: scoreResults,
+      liveGoals,
       collection,
     });
   } catch (error) {

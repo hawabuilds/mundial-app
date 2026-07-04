@@ -1,4 +1,5 @@
 import { WORLD_CUP_2026_FIXTURES } from "@/app/data/fixtures";
+import { matchStageLabel } from "@/lib/matchStage";
 import { teamNamesMatch } from "@/lib/teamNames";
 
 /** Host cities for World Cup 2026 fixtures (FIFA group stage schedule). */
@@ -87,7 +88,7 @@ export function getVenueForMatch(matchId: number): MatchVenue {
   return (
     VENUES[matchId] ?? {
       city: "TBD",
-      country: "World Cup 2026",
+      country: "TBD",
       stadium: "Venue TBD",
     }
   );
@@ -157,35 +158,25 @@ export function venueLineForMatch(
   return "";
 }
 
-/** Card footer when TxLINE has no venue — exact stadium, else honest competition label. */
+/** Card footer — stadium line when known; never a generic tournament name. */
 export function boardVenueLine(
   home: string,
   away: string,
   date: string,
-  competition?: string,
+  _competition?: string,
 ): string {
-  const exact = venueLineForMatch(home, away, date);
-  if (exact) return exact;
-  const label = sanitizeTournamentLabel(competition ?? "World Cup");
-  return label || "World Cup 2026";
+  return venueLineForMatch(home, away, date);
 }
 
-/** World Cup branding without naming the governing body. */
+/** @deprecated Use {@link matchStageLabel} from lib/matchStage.ts */
 export function sanitizeTournamentLabel(group: string): string {
-  return group
-    .replace(/FIFA\s+World\s+Cup/gi, "World Cup 2026")
-    .replace(/\s+/g, " ")
-    .trim();
+  return group.replace(/\s+/g, " ").trim();
 }
 
-/** Card meta label — strips matchday numbers; hides generic tournament-only strings. */
-export function fixtureMetaLabel(group: string): string | null {
-  const label = sanitizeTournamentLabel(group)
-    .replace(/\s*[·•|]\s*matchday\s*\d+\s*/gi, " ")
-    .replace(/\bmatchday\s*\d+\b\s*[·•|]?\s*/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!label || /^world cup 2026$/i.test(label)) return null;
-  return label;
+/** Card meta label — delegates to lib/matchStage.ts */
+export function fixtureMetaLabel(
+  group: string,
+  opts?: { matchId?: number; fixtureGroupId?: number; date?: string },
+): string | null {
+  return matchStageLabel(group, opts);
 }

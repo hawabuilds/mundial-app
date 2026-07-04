@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  extractDisplayScores,
   extractLiveScores,
   extractSettlementScores,
   isTerminalMatchStatus,
@@ -33,6 +34,30 @@ assert.deepEqual(
   }),
   { homeScore: 1, awayScore: 1 },
   "live during ET shows fulltime not cumulative goals",
+);
+
+assert.deepEqual(
+  extractDisplayScores({
+    status: "AET",
+    score: {
+      goals: { home: 3, away: 2 },
+      fullTime: { home: 1, away: 1 },
+    },
+  }),
+  { homeScore: 3, awayScore: 2 },
+  "finished after ET shows final total on the board",
+);
+
+assert.deepEqual(
+  extractDisplayScores({
+    status: "FT",
+    score: {
+      goals: { home: 2, away: 1 },
+      fullTime: { home: 2, away: 1 },
+    },
+  }),
+  { homeScore: 2, awayScore: 1 },
+  "plain FT shows regulation score",
 );
 
 console.log("matchScoreSettlement.test.ts: ok");

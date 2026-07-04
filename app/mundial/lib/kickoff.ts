@@ -3,34 +3,36 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   formatKickoffLocalLine,
+  formatKickoffUtcLine,
   kickoffDate,
 } from "@/lib/formatKickoff";
 
-export function useVisitorTimeZone(): string {
+export function useLocalKickoff(
+  date: string,
+  time: string,
+  kickoffUtcMs?: number | null,
+): {
+  line: string;
+  ready: boolean;
+} {
+  const kickoff = useMemo(
+    () => kickoffDate({ date, time, kickoffUtcMs }),
+    [date, time, kickoffUtcMs],
+  );
+  const [mounted, setMounted] = useState(false);
   const [timeZone, setTimeZone] = useState("UTC");
 
   useEffect(() => {
     setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    setMounted(true);
   }, []);
 
-  return timeZone;
-}
+  const line = useMemo(() => {
+    if (!mounted) return formatKickoffUtcLine(kickoff);
+    return formatKickoffLocalLine(kickoff, "en", timeZone);
+  }, [kickoff, mounted, timeZone]);
 
-export function useLocalKickoff(date: string, time: string): {
-  line: string | null;
-  ready: boolean;
-} {
-  const timeZone = useVisitorTimeZone();
-  const kickoff = useMemo(() => kickoffDate({ date, time }), [date, time]);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    setReady(true);
-  }, []);
-
-  const line = ready ? formatKickoffLocalLine(kickoff, "en", timeZone) : null;
-
-  return { line, ready };
+  return { line, ready: mounted };
 }
 
 export function formatExampleReply(home: string, away: string): string {

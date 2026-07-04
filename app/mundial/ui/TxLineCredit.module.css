@@ -1,0 +1,41 @@
+.credit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: var(--m-space-2) var(--m-space-4);
+  font-family: var(--m-font-body);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--m-muted);
+  text-decoration: none;
+  border-top: 1px solid var(--m-border);
+  background: rgba(0, 0, 0, 0.65);
+  transition: color var(--m-duration) var(--m-ease);
+}
+
+.credit:hover {
+  color: var(--m-white);
+}
+
+.credit strong {
+  font-weight: 700;
+  color: var(--m-white);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: #0a0a0a;
+  background: linear-gradient(135deg, #7cf4c8 0%, #4fd1a5 100%);
+}

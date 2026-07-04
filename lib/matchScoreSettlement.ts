@@ -45,6 +45,33 @@ export function extractLiveScores(
   return { homeScore: null, awayScore: null };
 }
 
+/**
+ * Score shown on the fixture card when a match is finished. Knockouts that
+ * went to extra time show the final total (e.g. 3–2 AET), not 90-minute only.
+ */
+export function extractDisplayScores(match: {
+  status: string;
+  score?: MatchScores;
+}): { homeScore: number | null; awayScore: number | null } {
+  const scores = match.score;
+  if (!scores) return { homeScore: null, awayScore: null };
+
+  if (
+    (match.status === "AET" || match.status === "PEN") &&
+    lineValid(scores.goals)
+  ) {
+    return { homeScore: scores.goals.home, awayScore: scores.goals.away };
+  }
+
+  if (lineValid(scores.fullTime)) {
+    return { homeScore: scores.fullTime.home, awayScore: scores.fullTime.away };
+  }
+  if (lineValid(scores.goals)) {
+    return { homeScore: scores.goals.home, awayScore: scores.goals.away };
+  }
+  return { homeScore: null, awayScore: null };
+}
+
 const TERMINAL_STATUSES = new Set(["FT", "AET", "PEN", "AWD", "WO"]);
 
 export function isTerminalMatchStatus(statusShort: string): boolean {

@@ -45,6 +45,18 @@ export default function Landing() {
           Reply on X before kickoff with your scoreline. The top 20 each day win
           USDC rewards across three tiers — connect a Solana wallet in Wallet to collect.
         </p>
+        <p className={styles.hackathon}>
+          Built for the TxOdds World Cup hackathon — live fixtures, scores, and
+          pre-kickoff odds via{" "}
+          <a
+            href="https://txline.txodds.com/documentation/worldcup"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            TxLINE
+          </a>
+          .
+        </p>
         <Button
           fullWidth
           className={styles.cta}

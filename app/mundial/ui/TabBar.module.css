@@ -36,7 +36,7 @@
 
 .main {
   flex: 1;
-  padding: 0 var(--m-space-5) var(--m-tab-total);
+  padding: 0 var(--m-space-5) calc(var(--m-tab-total) + 36px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }

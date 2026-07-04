@@ -5,8 +5,9 @@ import { useSession } from "next-auth/react";
 import {
   fetchBoardMatches,
   fetchMyLeaderboardStats,
+  type UserScoreBreakdown,
 } from "@/app/lib/leaderboard-client";
-import { toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { resolveCurrentMatch, sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
 import Card from "../ui/Card";
 import FixtureCard from "../ui/FixtureCard";
 import ProfileMenu from "../ui/ProfileMenu";
@@ -25,6 +26,9 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [rank, setRank] = useState<number | null>(null);
   const [points, setPoints] = useState<number | null>(null);
+  const [lastBreakdown, setLastBreakdown] = useState<UserScoreBreakdown | null>(
+    null,
+  );
   const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
@@ -62,11 +66,13 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
         if (cancelled) return;
         setRank(stats.rank);
         setPoints(stats.total_points);
+        setLastBreakdown(stats.last_breakdown);
       })
       .catch(() => {
         if (cancelled) return;
         setRank(null);
         setPoints(null);
+        setLastBreakdown(null);
       })
       .finally(() => {
         if (!cancelled) setStatsLoading(false);
@@ -79,13 +85,17 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const liveList = fixtures.filter(
     (f) => f.phase === "live" || f.phase === "recent",
   );
-  const upcomingList = fixtures.filter((f) => f.phase === "upcoming");
+  const upcomingList = sortFixturesByKickoffAsc(
+    fixtures.filter((f) => f.phase === "upcoming"),
+  );
 
   const featuredLive = liveList[0] ?? null;
   const liveRest = liveList.slice(1);
   // Only the next game (soonest upcoming) gets a tap-to-reply prompt.
   const nextGame = upcomingList[0] ?? null;
   const comingUp = upcomingList.slice(1);
+  const currentMatch = resolveCurrentMatch(fixtures);
+  const currentMatchId = currentMatch?.id ?? null;
 
   const featuredLiveLabel = !featuredLive
     ? null
@@ -95,6 +105,18 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const rankLabel = statsLoading ? "—" : rank != null ? `#${rank}` : "—";
   const ptsLabel =
     statsLoading ? "—" : points != null ? points.toLocaleString() : "0";
+  const lastScoreLine =
+    lastBreakdown?.final != null
+      ? `${lastBreakdown.prediction.home}–${lastBreakdown.prediction.away} → ${lastBreakdown.final.home}–${lastBreakdown.final.away}`
+      : lastBreakdown
+        ? `${lastBreakdown.prediction.home}–${lastBreakdown.prediction.away}`
+        : null;
+  const lastPointsLine =
+    lastBreakdown && lastBreakdown.multiplier > 1
+      ? `Base ${lastBreakdown.base} × Upset ${lastBreakdown.multiplier}× = ${lastBreakdown.points} pts`
+      : lastBreakdown
+        ? `${lastBreakdown.points} pts`
+        : null;
 
   return (
     <AppShell
@@ -115,6 +137,13 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
         </div>
       </Card>
 
+      {lastScoreLine && lastPointsLine ? (
+        <p className={styles.lastScore}>
+          Last call · {lastScoreLine}
+          <span className={styles.lastScorePts}>{lastPointsLine}</span>
+        </p>
+      ) : null}
+
       {!loaded ? (
         <p className={styles.emptyFixtures}>Loading matches…</p>
       ) : fixtures.length === 0 ? (
@@ -124,7 +153,11 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
           {featuredLive ? (
             <section className={styles.section}>
               <p className="m-label">{featuredLiveLabel}</p>
-              <FixtureCard fixture={featuredLive} featured />
+              <FixtureCard
+                fixture={featuredLive}
+                featured
+                showMarketOdds={featuredLive.id === currentMatchId}
+              />
               {liveRest.length > 0 ? (
                 <ul className={styles.list}>
                   {liveRest.map((f) => (
@@ -140,7 +173,12 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
           {nextGame ? (
             <section className={styles.section}>
               <p className="m-label">Next whistle</p>
-              <FixtureCard fixture={nextGame} featured withReply />
+              <FixtureCard
+                fixture={nextGame}
+                featured
+                withReply
+                showMarketOdds={nextGame.id === currentMatchId}
+              />
             </section>
           ) : null}
 

@@ -14,6 +14,7 @@ export type LiveMatchData = {
 };
 
 import {
+  extractDisplayScores,
   extractLiveScores,
   extractSettlementScores,
   isTerminalMatchStatus,
@@ -21,7 +22,6 @@ import {
 } from "@/lib/matchScoreSettlement";
 
 import {
-  extractGoals,
   fetchScoresSnapshot,
   isTxoddsConfigured,
   latestScoreEvent,
@@ -31,6 +31,11 @@ import {
   type TxScoreEvent,
 } from "./txodds";
 
+import {
+  matchGoalsFromEvents,
+  persistTxlineGoals,
+  resolveMatchGoalsForDisplay,
+} from "./matchGoalsPersist";
 import {
   FIXTURE_CACHE_LIVE_TTL_MS,
   FIXTURE_CACHE_TTL_MS,
@@ -50,6 +55,8 @@ export type FootballDataMatch = {
 
 /** Enough of a fixture to resolve it against the TxLINE schedule. */
 export type MatchLookup = {
+  /** TxLINE FixtureId — when set, scores are fetched directly (no snapshot lookup). */
+  id?: number;
   home: string;
   away: string;
   date: string;
@@ -90,6 +97,7 @@ function mapStatusIdToShort(statusId: number): string {
     case 8:
       return "HT"; // Extra-time halftime
     case 10:
+    case 100:
       return "AET"; // Ended after extra time
     case 11:
     case 12:
@@ -152,8 +160,9 @@ function goalsFor(
   participant: 1 | 2,
 ): { total: number | null; regulation: number | null } {
   const total = statVal(event, participant);
+  // TxLINE: 1000+P = H1, 3000+P = H2 (2000+P is not second-half goals).
   const h1 = statVal(event, 1000 + participant);
-  const h2 = statVal(event, 2000 + participant);
+  const h2 = statVal(event, 3000 + participant);
   let regulation: number | null = null;
   if (h1 != null || h2 != null) regulation = (h1 ?? 0) + (h2 ?? 0);
 
@@ -172,7 +181,7 @@ function goalsFor(
   return { total: null, regulation: null };
 }
 
-const TERMINAL_STATUS_IDS = new Set([5, 10, 13]);
+const TERMINAL_STATUS_IDS = new Set([5, 10, 13, 100]);
 
 function buildMatch(
   txFixture: TxFixture,
@@ -236,11 +245,9 @@ export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
   let awayScore: number | null = null;
 
   if (isTerminalMatchStatus(match.status)) {
-    const settled = extractSettlementScores(match.score);
-    if (settled) {
-      homeScore = settled.homeScore;
-      awayScore = settled.awayScore;
-    }
+    const display = extractDisplayScores(match);
+    homeScore = display.homeScore;
+    awayScore = display.awayScore;
   } else {
     const live = extractLiveScores(match.score);
     homeScore = live.homeScore;
@@ -308,6 +315,48 @@ export type MatchGoal = {
   ownGoal: boolean;
 };
 
+function stubTxFixture(fixtureId: number, lookup: MatchLookup, gameState?: number): TxFixture {
+  return {
+    Ts: 0,
+    StartTime: kickoffMsOf(lookup),
+    Competition: "World Cup",
+    CompetitionId: 0,
+    FixtureGroupId: 0,
+    Participant1Id: 0,
+    Participant1: lookup.home,
+    Participant2Id: 0,
+    Participant2: lookup.away,
+    FixtureId: fixtureId,
+    Participant1IsHome: true,
+    GameState: gameState,
+  };
+}
+
+async function fetchMatchWithGoalsForId(
+  fixtureId: number,
+  lookup: MatchLookup,
+  txFixture?: TxFixture,
+): Promise<{ match: FootballDataMatch | null; goals: MatchGoal[] }> {
+  const events = await fetchScoresSnapshot(fixtureId);
+  const latest = latestScoreEvent(events);
+  const fx =
+    txFixture ??
+    stubTxFixture(fixtureId, lookup, latest?.StatusId ?? undefined);
+
+  const match = buildMatch(fx, lookup, latest);
+  const homeIsP1 = txFixtureHomeIsP1(fx, lookup);
+  const goals: MatchGoal[] = matchGoalsFromEvents(events, homeIsP1, "display");
+  const actionGoals = matchGoalsFromEvents(events, homeIsP1, "persist");
+  await persistTxlineGoals(fixtureId, actionGoals);
+
+  const ttlMs = isTerminalMatchStatus(match.status)
+    ? FIXTURE_CACHE_TTL_MS
+    : FIXTURE_CACHE_LIVE_TTL_MS;
+  setCachedFixture(fixtureId, match, ttlMs);
+
+  return { match, goals };
+}
+
 /**
  * Fetch the live match plus its goals (scorer + minute) in a single scores
  * lookup. Always reads fresh — intended for the live board.
@@ -315,6 +364,10 @@ export type MatchGoal = {
 export async function fetchMatchWithGoals(
   lookup: MatchLookup,
 ): Promise<{ match: FootballDataMatch | null; goals: MatchGoal[] }> {
+  if (lookup.id != null && lookup.id > 0) {
+    return fetchMatchWithGoalsForId(lookup.id, lookup);
+  }
+
   const txFixture = await resolveTxFixture(
     lookup.home,
     lookup.away,
@@ -322,23 +375,7 @@ export async function fetchMatchWithGoals(
   );
   if (!txFixture) return { match: null, goals: [] };
 
-  const events = await fetchScoresSnapshot(txFixture.FixtureId);
-  const match = buildMatch(txFixture, lookup, latestScoreEvent(events));
-
-  const homeIsP1 = txFixtureHomeIsP1(txFixture, lookup);
-  const goals: MatchGoal[] = extractGoals(events).map((g) => ({
-    minute: g.minute,
-    side: (g.participant === 1 ? homeIsP1 : !homeIsP1) ? "home" : "away",
-    player: g.player,
-    ownGoal: g.ownGoal,
-  }));
-
-  const ttlMs = isTerminalMatchStatus(match.status)
-    ? FIXTURE_CACHE_TTL_MS
-    : FIXTURE_CACHE_LIVE_TTL_MS;
-  setCachedFixture(txFixture.FixtureId, match, ttlMs);
-
-  return { match, goals };
+  return fetchMatchWithGoalsForId(txFixture.FixtureId, lookup, txFixture);
 }
 
 export { ApiFootballBudgetError, getApiFootballQuota } from "./apiFootballCache";
@@ -363,6 +400,46 @@ export function resolveFinalScoreFromApiMatch(
 
 export function isFinishedStatus(status: string): boolean {
   return isTerminalMatchStatus(status) || status === "FINISHED";
+}
+
+/** TxLINE GameState values that mean the match is still in play. */
+export function isGameStateInPlay(gameState?: number): boolean {
+  switch (gameState) {
+    case 2: // 1H
+    case 3: // HT
+    case 4: // 2H
+    case 6: // Waiting for extra time
+    case 7: // ET first half
+    case 8: // ET halftime
+    case 9: // ET second half
+    case 11: // Penalties waiting
+    case 12: // Penalties in progress
+    case 14: // Interrupted / live
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function isGameStateFinished(gameState?: number): boolean {
+  return gameState === 5 || gameState === 10 || gameState === 13 || gameState === 100;
+}
+
+/** Minimal live row from fixtures-snapshot GameState when scores were not fetched. */
+export function liveFromTxGameState(
+  fixtureId: number,
+  gameState?: number,
+): LiveMatchData | null {
+  if (gameState == null || isGameStateFinished(gameState)) return null;
+  if (!isGameStateInPlay(gameState)) return null;
+  const status = gameState === 3 || gameState === 8 ? "HT" : "LIVE";
+  return {
+    externalFixtureId: fixtureId,
+    status,
+    homeScore: null,
+    awayScore: null,
+    elapsed: null,
+  };
 }
 
 /** True when the feed reports the match has kicked off or ended. */

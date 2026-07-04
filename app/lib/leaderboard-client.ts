@@ -76,18 +76,39 @@ export function handleToInitials(handle: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
+export type UserScoreBreakdown = {
+  match_id: number;
+  prediction: { home: number; away: number };
+  final: { home: number; away: number } | null;
+  base: number;
+  multiplier: number;
+  points: number;
+};
+
 export async function fetchMyLeaderboardStats(): Promise<{
   rank: number | null;
   total_points: number | null;
+  upset_bonus_total: number | null;
+  last_breakdown: UserScoreBreakdown | null;
 }> {
   const response = await fetch("/api/me/leaderboard-stats", { cache: "no-store" });
   if (response.status === 401) {
-    return { rank: null, total_points: null };
+    return {
+      rank: null,
+      total_points: null,
+      upset_bonus_total: null,
+      last_breakdown: null,
+    };
   }
   if (!response.ok) {
     throw new Error("Could not load your leaderboard stats");
   }
-  return (await response.json()) as { rank: number | null; total_points: number | null };
+  return (await response.json()) as {
+    rank: number | null;
+    total_points: number | null;
+    upset_bonus_total: number | null;
+    last_breakdown: UserScoreBreakdown | null;
+  };
 }
 
 export async function fetchLeaderboard(
@@ -139,6 +160,10 @@ export type UpcomingMatch = Fixture & {
   goals?: MatchGoalInfo[];
   /** Pre-kickoff 1X2 implied % from TxLINE (locked at first board fetch). */
   marketOdds?: MatchMarketOdds | null;
+  /** Epoch ms (UTC) from TxLINE StartTime. */
+  kickoffUtcMs?: number;
+  /** TxLINE FixtureGroupId — used to resolve knockout round labels. */
+  fixtureGroupId?: number;
 };
 
 export type ApiUpcomingMatchesResponse = {

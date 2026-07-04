@@ -8,10 +8,10 @@ import {
   type Fixture,
 } from "../data/fixtures";
 import {
-  formatKickoffLocalLine,
   formatNextMatchBadgeLocal,
   kickoffDate,
 } from "@/lib/formatKickoff";
+import { useLocalKickoff } from "@/app/mundial/lib/kickoff";
 import styles from "./FixtureKickoffDisplay.module.css";
 
 function useVisitorTimeZone(): { mounted: boolean; timeZone: string } {
@@ -27,17 +27,9 @@ function useVisitorTimeZone(): { mounted: boolean; timeZone: string } {
 }
 
 function useKickoffLocalLine(fixture: Pick<Fixture, "date" | "time">) {
-  const locale = useLocale();
-  const { mounted, timeZone } = useVisitorTimeZone();
-  const kickoff = useMemo(() => kickoffDate(fixture), [fixture.date, fixture.time]);
-  const localLine = mounted
-    ? formatKickoffLocalLine(kickoff, locale, timeZone)
-    : null;
-  const placeholder = formatFixtureDateShort(fixture.date);
-
-  return { localLine, placeholder };
+  const { line } = useLocalKickoff(fixture.date, fixture.time);
+  return { localLine: line, placeholder: line };
 }
-
 type FixtureKickoffTimeProps = {
   fixture: Pick<Fixture, "date" | "time">;
   className?: string;

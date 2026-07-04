@@ -106,6 +106,15 @@ export function upsetMultiplier(
   return Math.min(MAX_UPSET_MULTIPLIER, 100 / pct);
 }
 
+/** Compact label for market-line UI (×1, ×1.1, ×3). */
+export function formatUpsetMultiplier(multiplier: number): string {
+  if (multiplier >= MAX_UPSET_MULTIPLIER - 0.01) return "×3";
+  if (multiplier <= 1.05) return "×1";
+  const rounded = Math.round(multiplier * 10) / 10;
+  const text = rounded.toFixed(1);
+  return `×${text.endsWith(".0") ? text.slice(0, -2) : text}`;
+}
+
 export function scorePredictionDetailed(
   prediction: PredictionScore,
   actual: MatchScore,

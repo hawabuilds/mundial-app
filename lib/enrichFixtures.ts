@@ -145,6 +145,12 @@ export async function enrichNextFixture(
  */
 export const MATCH_ASSUMED_DURATION_MIN = 130;
 
+/**
+ * Live board keeps polling through extra time and penalties
+ * (≈90 + 15 + 15 + 30 ET + 30 pens + buffer).
+ */
+export const BOARD_MATCH_MAX_MIN = 210;
+
 /** Extra live lookups allowed for the board — covers simultaneous kickoffs. */
 export const BOARD_API_MAX_CALLS = 6;
 

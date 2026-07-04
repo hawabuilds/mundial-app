@@ -1,10 +1,20 @@
 export type KickoffFixture = {
   date: string;
   time: string;
+  /** Epoch ms from TxLINE StartTime — preferred over date/time strings. */
+  kickoffUtcMs?: number | null;
 };
 
-/** Parse stored UTC kickoff (YYYY-MM-DD + HH:mm). */
+/** TxLINE StartTime may be Unix seconds or milliseconds. */
+export function normalizeStartTimeMs(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw < 1_000_000_000_000 ? raw * 1000 : raw;
+}
+
+/** Parse stored UTC kickoff (YYYY-MM-DD + HH:mm), or epoch ms when provided. */
 export function kickoffDate(fixture: KickoffFixture): Date {
+  const ms = normalizeStartTimeMs(fixture.kickoffUtcMs ?? 0);
+  if (ms > 0) return new Date(ms);
   return new Date(`${fixture.date}T${fixture.time}:00Z`);
 }
 
@@ -89,6 +99,21 @@ function formatLocalTimeWithZone(kickoff: Date, timeZone: string): string {
 
 export function formatKickoffUtcLabel(time: string): string {
   return `${time} UTC`;
+}
+
+/** Stable UTC kickoff line for SSR / pre-timezone hydration. */
+export function formatKickoffUtcLine(kickoff: Date): string {
+  const intlLocale = resolveIntlLocale();
+  const datePart = new Intl.DateTimeFormat(intlLocale, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(kickoff);
+  const timePart = formatKickoffUtcLabel(
+    kickoff.toISOString().slice(11, 16),
+  );
+  return `${datePart} · ${timePart}`;
 }
 
 export function formatKickoffLocalLine(
