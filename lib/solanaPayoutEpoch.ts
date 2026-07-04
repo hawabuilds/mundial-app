@@ -5,10 +5,7 @@ import {
   upsertPayoutEpochPot,
   type PayoutEpochRow,
 } from "@/app/lib/payoutEpochs";
-import {
-  PLACEHOLDER_MUNDIAL_REWARDS_PROGRAM_ID,
-  readSolanaPayoutConfig,
-} from "@/lib/solanaPayoutConfig";
+import { readSolanaPayoutConfig } from "@/lib/solanaPayoutConfig";
 import {
   openSolanaEpoch,
   readSolanaConfig,
@@ -27,9 +24,12 @@ export type SolanaEpochPotMeta = {
 };
 
 export function isSolanaPayoutEnabled(): boolean {
-  const config = readSolanaPayoutConfig();
-  if (!config) return false;
-  return config.programId.toBase58() !== PLACEHOLDER_MUNDIAL_REWARDS_PROGRAM_ID;
+  try {
+    readSolanaPayoutConfig();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getAvailableSolanaEpochPot(
@@ -108,9 +108,13 @@ export async function ensureSolanaPayoutEpochForSnapshot(
     }
   | { epoch: null; created: false; reason: string }
 > {
-  const config = readSolanaPayoutConfig();
-  if (!config) {
-    return { epoch: null, created: false, reason: "Solana payout not configured" };
+  let config;
+  try {
+    config = readSolanaPayoutConfig();
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : "Solana payout not configured";
+    return { epoch: null, created: false, reason };
   }
 
   const connection = new Connection(config.rpcUrl, "confirmed");

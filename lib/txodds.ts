@@ -15,13 +15,20 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import {
+  binaryFieldToBase64,
+  isBinaryField,
+  normalizeBinaryField,
+} from "./txBinaryProof";
+import {
+  REGULATION_GOAL_STAT_KEYS,
+  TOTAL_GOAL_STAT_KEYS,
+} from "./txScoreProofSemantics";
+import { getTxoddsOrigin } from "./txoddsOrigin";
+import type { TxScoreStat } from "./txScoreStat";
 
-/** Devnet host by default; set TXODDS_API_ORIGIN to the mainnet host in prod. */
-const DEFAULT_ORIGIN = "https://txline-dev.txodds.com";
-
-export function getTxoddsOrigin(): string {
-  return (process.env.TXODDS_API_ORIGIN?.trim() || DEFAULT_ORIGIN).replace(/\/$/, "");
-}
+export { getTxoddsOrigin };
+export type { TxScoreStat } from "./txScoreStat";
 
 let cachedFileToken: string | null | undefined;
 
@@ -86,11 +93,20 @@ async function getGuestJwt(): Promise<string> {
   return token;
 }
 
-async function txFetch(pathname: string): Promise<Response> {
+async function txFetch(
+  pathname: string,
+  query?: Record<string, string | number | undefined>,
+): Promise<Response> {
   const apiToken = getTxoddsToken();
   if (!apiToken) throw new Error("TXODDS_API_TOKEN is not configured");
   const jwt = await getGuestJwt();
-  return fetch(`${getTxoddsOrigin()}${pathname}`, {
+  const url = new URL(`${getTxoddsOrigin()}${pathname}`);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
+    }
+  }
+  return fetch(url.toString(), {
     headers: {
       Authorization: `Bearer ${jwt}`,
       "X-Api-Token": apiToken,
@@ -454,12 +470,55 @@ export async function fetchScoresSnapshot(fixtureId: number): Promise<TxScoreEve
   const text = await res.text();
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(`TxLINE scores snapshot failed: ${res.status} ${text.slice(0, 200)}`);
-  try {
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+  return parseScoreSequenceBody(text);
+}
+
+/**
+ * Parse GET /api/scores/historical/{fixtureId} — JSON array or SSE (`data: {...}` lines).
+ */
+export function parseScoreSequenceBody(text: string): TxScoreEvent[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) return parsed as TxScoreEvent[];
+      if (parsed && typeof parsed === "object") return [parsed as TxScoreEvent];
+    } catch {
+      return [];
+    }
   }
+
+  const events: TxScoreEvent[] = [];
+  for (const line of trimmed.split(/\r?\n/)) {
+    const prefix = "data:";
+    if (!line.startsWith(prefix)) continue;
+    const payload = line.slice(prefix.length).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      events.push(JSON.parse(payload) as TxScoreEvent);
+    } catch {
+      // skip malformed SSE rows
+    }
+  }
+  return events;
+}
+
+/**
+ * Full ordered score-update sequence for one fixture (play-by-play + period stats).
+ * GET /api/scores/historical/{fixtureId} — retained ~2 weeks after kickoff.
+ */
+export async function fetchScoreSequence(fixtureId: number): Promise<TxScoreEvent[]> {
+  const res = await txFetch(`/api/scores/historical/${fixtureId}`);
+  const text = await res.text();
+  if (res.status === 404) return [];
+  if (!res.ok) {
+    throw new Error(
+      `TxLINE scores historical failed: ${res.status} ${text.slice(0, 200)}`,
+    );
+  }
+  return parseScoreSequenceBody(text);
 }
 
 /** Latest state = highest Seq (falls back to array order). */
@@ -468,6 +527,340 @@ export function latestScoreEvent(events: TxScoreEvent[]): TxScoreEvent | null {
   return events.reduce((best, e) =>
     (e.Seq ?? -1) >= (best.Seq ?? -1) ? e : best,
   );
+}
+
+const TERMINAL_SCORE_STATUS_IDS = new Set([5, 10, 13, 100]);
+
+/** Seq of the latest terminal scores event (FT / AET / PEN) for stat-validation. */
+export function terminalScoreEventSeq(events: TxScoreEvent[]): number | null {
+  const terminal = events.filter(
+    (event) =>
+      event.StatusId != null && TERMINAL_SCORE_STATUS_IDS.has(event.StatusId),
+  );
+  if (terminal.length === 0) return null;
+  const latest = terminal.reduce((best, event) =>
+    (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
+  );
+  return latest.Seq ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Scores stat-validation proofs (GET /api/scores/stat-validation)
+// ---------------------------------------------------------------------------
+
+
+/** Normalised proof node — hash stored as base64 (32 bytes). */
+export type TxProofNode = {
+  hash: string;
+  isRightSibling: boolean;
+};
+
+/** OpenAPI: ScoresUpdateStats */
+export type TxScoresUpdateStats = {
+  updateCount: number;
+  minTimestamp: number;
+  maxTimestamp: number;
+};
+
+/** Normalised batch summary — binary roots as base64. */
+export type TxScoresBatchSummary = {
+  fixtureId: number;
+  updateStats: TxScoresUpdateStats;
+  eventStatsSubTreeRoot: string;
+};
+
+/** OpenAPI: ScoresStatValidation (legacy mode). */
+export type TxScoresStatValidation = {
+  ts: number;
+  statToProve: TxScoreStat;
+  eventStatRoot: string;
+  summary: TxScoresBatchSummary;
+  statProof: TxProofNode[];
+  subTreeProof: TxProofNode[];
+  mainTreeProof: TxProofNode[];
+  statToProve2?: TxScoreStat;
+  statProof2?: TxProofNode[];
+};
+
+/** OpenAPI: ScoresStatValidationV2 (statKeys mode). */
+export type TxScoresStatValidationV2 = {
+  ts: number;
+  statsToProve?: TxScoreStat[];
+  eventStatRoot: string;
+  summary: TxScoresBatchSummary;
+  statProofs?: TxProofNode[][];
+  subTreeProof: TxProofNode[];
+  mainTreeProof: TxProofNode[];
+};
+
+export type TxScoreProofPayload = TxScoresStatValidation | TxScoresStatValidationV2;
+
+export type FetchScoreProofResult =
+  | {
+      status: "ok";
+      proof: TxScoreProofPayload;
+      seq: number;
+      statKeys: number[];
+      proofMode: "regulation" | "total";
+    }
+  | { status: "not_yet_available"; reason: string }
+  | { status: "error"; message: string };
+
+export type FetchScoreProofOptions = {
+  /** Required unless resolved from the scores snapshot by the caller. */
+  seq?: number;
+  /** Explicit stat keys; default tries regulation (1001/1002/3001/3002) then total (1/2). */
+  statKeys?: number[];
+};
+
+function normalizeProofNode(value: unknown): TxProofNode | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const bytes = normalizeBinaryField(record.hash);
+  if (!bytes) return null;
+  return {
+    hash: binaryFieldToBase64(bytes),
+    isRightSibling: Boolean(record.isRightSibling),
+  };
+}
+
+function normalizeProofNodeList(value: unknown): TxProofNode[] | null {
+  if (!Array.isArray(value)) return null;
+  const nodes = value.map(normalizeProofNode);
+  if (nodes.some((node) => node == null)) return null;
+  return nodes as TxProofNode[];
+}
+
+function normalizeSummary(value: unknown): TxScoresBatchSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const updateStats = record.updateStats;
+  if (!updateStats || typeof updateStats !== "object") return null;
+  const stats = updateStats as Record<string, unknown>;
+  const rootBytes = normalizeBinaryField(record.eventStatsSubTreeRoot);
+  if (!rootBytes) return null;
+  if (typeof record.fixtureId !== "number") return null;
+  if (typeof stats.updateCount !== "number") return null;
+  if (typeof stats.minTimestamp !== "number") return null;
+  if (typeof stats.maxTimestamp !== "number") return null;
+  return {
+    fixtureId: record.fixtureId,
+    updateStats: {
+      updateCount: stats.updateCount,
+      minTimestamp: stats.minTimestamp,
+      maxTimestamp: stats.maxTimestamp,
+    },
+    eventStatsSubTreeRoot: binaryFieldToBase64(rootBytes),
+  };
+}
+
+/** Accept devnet byte arrays or base64 strings; emit normalised payload. */
+export function normalizeScoreProofPayload(value: unknown): TxScoreProofPayload | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.ts !== "number") return null;
+
+  const eventRootBytes = normalizeBinaryField(record.eventStatRoot);
+  if (!eventRootBytes) return null;
+
+  const summary = normalizeSummary(record.summary);
+  const subTreeProof = normalizeProofNodeList(record.subTreeProof);
+  const mainTreeProof = normalizeProofNodeList(record.mainTreeProof);
+  if (!summary || !subTreeProof || !mainTreeProof) return null;
+
+  const eventStatRoot = binaryFieldToBase64(eventRootBytes);
+
+  if (Array.isArray(record.statsToProve)) {
+    const statProofs = record.statProofs;
+    if (!Array.isArray(statProofs)) return null;
+    const normalizedProofs: TxProofNode[][] = [];
+    for (const group of statProofs) {
+      const nodes = normalizeProofNodeList(group);
+      if (!nodes) return null;
+      normalizedProofs.push(nodes);
+    }
+    return {
+      ts: record.ts,
+      statsToProve: record.statsToProve as TxScoreStat[],
+      eventStatRoot,
+      summary,
+      statProofs: normalizedProofs,
+      subTreeProof,
+      mainTreeProof,
+    };
+  }
+
+  if (!record.statToProve || typeof record.statToProve !== "object") return null;
+  const statProof = normalizeProofNodeList(record.statProof);
+  if (!statProof) return null;
+
+  const legacy: TxScoresStatValidation = {
+    ts: record.ts,
+    statToProve: record.statToProve as TxScoreStat,
+    eventStatRoot,
+    summary,
+    statProof,
+    subTreeProof,
+    mainTreeProof,
+  };
+
+  if (record.statToProve2 && typeof record.statToProve2 === "object") {
+    const statProof2 = normalizeProofNodeList(record.statProof2);
+    if (!statProof2) return null;
+    legacy.statToProve2 = record.statToProve2 as TxScoreStat;
+    legacy.statProof2 = statProof2;
+  }
+
+  return legacy;
+}
+
+function isIncompleteProofPayload(value: unknown): boolean {
+  if (!value || typeof value !== "object") return true;
+  const record = value as Record<string, unknown>;
+  if (typeof record.ts !== "number") return true;
+  if (!isBinaryField(record.eventStatRoot)) return true;
+  if (!record.summary || typeof record.summary !== "object") return true;
+  const summary = record.summary as Record<string, unknown>;
+  if (!isBinaryField(summary.eventStatsSubTreeRoot)) return true;
+  if (!Array.isArray(record.subTreeProof) || !Array.isArray(record.mainTreeProof)) {
+    return true;
+  }
+  const hasLegacy = record.statToProve != null && Array.isArray(record.statProof);
+  const hasV2 = Array.isArray(record.statsToProve) && Array.isArray(record.statProofs);
+  return !hasLegacy && !hasV2;
+}
+
+/** Classify HTTP failures for stat-validation (OpenAPI lists 400/401/403/500). */
+export function classifyScoreProofHttpFailure(
+  status: number,
+  body: string,
+): "not_yet_available" | "error" {
+  const lower = body.toLowerCase();
+  if (status === 404) return "not_yet_available";
+  if (
+    status === 400 &&
+    /not found|not available|not ready|no proof|missing|unknown seq|invalid seq/i.test(
+      lower,
+    )
+  ) {
+    return "not_yet_available";
+  }
+  if (
+    status === 500 &&
+    /not found|not available|not ready|merkle|proof/i.test(lower)
+  ) {
+    return "not_yet_available";
+  }
+  return "error";
+}
+
+/** Parse a 200 JSON body from GET /api/scores/stat-validation. */
+export function parseScoreProofResponse(
+  status: number,
+  body: string,
+  context: { seq: number; statKeys: number[] },
+): FetchScoreProofResult {
+  if (status !== 200) {
+    const kind = classifyScoreProofHttpFailure(status, body);
+    if (kind === "not_yet_available") {
+      return {
+        status: "not_yet_available",
+        reason: body.trim().slice(0, 240) || `HTTP ${status}`,
+      };
+    }
+    return {
+      status: "error",
+      message: `TxLINE stat-validation failed: ${status} ${body.slice(0, 200)}`,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return { status: "error", message: "TxLINE stat-validation returned invalid JSON" };
+  }
+
+  if (isIncompleteProofPayload(parsed)) {
+    return {
+      status: "not_yet_available",
+      reason: "Response missing required proof fields",
+    };
+  }
+
+  const normalized = normalizeScoreProofPayload(parsed);
+  if (!normalized) {
+    return {
+      status: "error",
+      message: "TxLINE stat-validation returned unparseable binary proof fields",
+    };
+  }
+
+  const proofMode = context.statKeys.every((key) =>
+    (REGULATION_GOAL_STAT_KEYS as readonly number[]).includes(key),
+  )
+    ? "regulation"
+    : "total";
+
+  return {
+    status: "ok",
+    proof: normalized,
+    seq: context.seq,
+    statKeys: context.statKeys,
+    proofMode,
+  };
+}
+
+async function requestScoreProof(
+  txFixtureId: number,
+  seq: number,
+  statKeys: number[],
+): Promise<FetchScoreProofResult> {
+  const res = await txFetch("/api/scores/stat-validation", {
+    fixtureId: txFixtureId,
+    seq,
+    statKeys: statKeys.join(","),
+  });
+  const text = await res.text();
+  return parseScoreProofResponse(res.status, text, { seq, statKeys });
+}
+
+/**
+ * Fetch Merkle proofs for fixture score stats via GET /api/scores/stat-validation.
+ * Auth: guest JWT + X-Api-Token (Quickstart / On-Chain Validation docs).
+ *
+ * Default: request regulation keys (H1+H2 per soccer feed encoding), fall back to totals.
+ */
+export async function fetchScoreProof(
+  txFixtureId: number,
+  options?: FetchScoreProofOptions,
+): Promise<FetchScoreProofResult> {
+  let seq = options?.seq;
+
+  if (seq == null) {
+    const events = await fetchScoresSnapshot(txFixtureId);
+    seq = terminalScoreEventSeq(events) ?? undefined;
+    if (seq == null) {
+      return {
+        status: "not_yet_available",
+        reason: "No terminal scores event (FT/AET/PEN) in snapshot yet",
+      };
+    }
+  }
+
+  if (options?.statKeys) {
+    return requestScoreProof(txFixtureId, seq, options.statKeys);
+  }
+
+  const regulation = await requestScoreProof(
+    txFixtureId,
+    seq,
+    [...REGULATION_GOAL_STAT_KEYS],
+  );
+  if (regulation.status === "ok") return regulation;
+  if (regulation.status === "error") return regulation;
+
+  return requestScoreProof(txFixtureId, seq, [...TOTAL_GOAL_STAT_KEYS]);
 }
 
 // ---------------------------------------------------------------------------

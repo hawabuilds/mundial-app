@@ -29,8 +29,8 @@
   min-width: 0;
   padding: var(--m-space-2) var(--m-space-1);
   border-radius: var(--m-radius-md);
-  background: rgba(124, 244, 200, 0.06);
-  border: 1px solid rgba(124, 244, 200, 0.14);
+  background: var(--m-accent-soft);
+  border: 1px solid var(--m-accent-border);
 }
 
 .tierPts {
@@ -59,6 +59,10 @@
   font-size: var(--m-text-xs);
   line-height: 1.45;
   color: var(--m-muted);
+}
+
+.bonus + .bonus {
+  margin-top: var(--m-space-1);
 }
 
 .bonus strong {

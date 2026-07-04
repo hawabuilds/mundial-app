@@ -27,6 +27,7 @@ export type Fixture = {
 };
 
 import { WORLD_CUP_2026_FIXTURES } from "./worldCup2026Fixtures";
+import { teamNamesMatch } from "@/lib/teamNames";
 
 /** Re-enable full tournament: spread `...WORLD_CUP_2026_FIXTURES` into FIXTURES below. */
 export { WORLD_CUP_2026_FIXTURES };
@@ -121,14 +122,44 @@ export function getTeamCountryCode(team: string): CountryCode | null {
 
 /**
  * Do not reuse match_ids that already have predictions in Supabase.
- * World Cup 2026: ids 1–72 in app/data/worldCup2026Fixtures.ts.
+ * World Cup 2026: ids 1–81 in app/data/worldCup2026Fixtures.ts.
  *
  * Match posts: set tweetId from @copamundialapp when the post is live (best reliability).
  * Otherwise sync/kickoff crons validate cache + search X before collection.
  */
 
-/** Active slate — FIFA World Cup 2026 group stage (match ids 1–72). */
+/** Active slate — FIFA World Cup 2026 (group stage + Round of 32). */
 export const FIXTURES: Fixture[] = [...WORLD_CUP_2026_FIXTURES];
+
+const KICKOFF_MATCH_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+/** Resolve a static registry row by team names and kickoff (board / TxLINE). */
+export function findFixtureByTeamsAndKickoff(
+  home: string,
+  away: string,
+  kickoffUtcMs: number,
+  fixtures: Fixture[] = FIXTURES,
+): Fixture | undefined {
+  let best: Fixture | undefined;
+  let bestDelta = Number.POSITIVE_INFINITY;
+
+  for (const fixture of fixtures) {
+    const normal =
+      teamNamesMatch(fixture.home, home) && teamNamesMatch(fixture.away, away);
+    const flipped =
+      teamNamesMatch(fixture.home, away) && teamNamesMatch(fixture.away, home);
+    if (!normal && !flipped) continue;
+
+    const delta = Math.abs(fixtureDateTime(fixture).getTime() - kickoffUtcMs);
+    if (delta > KICKOFF_MATCH_WINDOW_MS) continue;
+    if (delta < bestDelta) {
+      best = fixture;
+      bestDelta = delta;
+    }
+  }
+
+  return best;
+}
 
 export function getFixtureById(
   matchId: number,

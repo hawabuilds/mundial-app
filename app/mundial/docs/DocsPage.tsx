@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { mundialDocsPath, mundialHomePath } from "../lib/mundial-path";
 import BrandMark from "../ui/BrandMark";
+import TxLineCredit from "../ui/TxLineCredit";
 import styles from "./DocsPage.module.css";
 
 const SECTIONS = [
@@ -453,6 +454,7 @@ export default function DocsPage() {
       </main>
 
       <footer className={styles.footer}>
+        <TxLineCredit />
         <Link href={home} className={styles.footerBrand}>
           <BrandMark />
         </Link>

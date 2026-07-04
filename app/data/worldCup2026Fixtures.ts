@@ -1,6 +1,6 @@
 import type { Fixture } from "./fixtures";
 
-/** FIFA World Cup 2026 group stage (72 matches, match ids 1–72). */
+/** FIFA World Cup 2026 — group stage (72) + Round of 32 (match ids 1–81). */
 export const WORLD_CUP_2026_FIXTURES: Fixture[] = [
   {
     id: 1,
@@ -649,5 +649,87 @@ export const WORLD_CUP_2026_FIXTURES: Fixture[] = [
     time: "02:00",
     group: "FIFA World Cup · Matchday 3",
     externalFixtureId: 1489421,
+  },
+  // Round of 32 — TxLINE fixture ids (Jul 2026)
+  {
+    id: 73,
+    home: "Colombia",
+    away: "Ghana",
+    date: "2026-07-04",
+    time: "01:30",
+    group: "FIFA World Cup",
+    externalFixtureId: 18179549,
+  },
+  {
+    id: 74,
+    home: "Canada",
+    away: "Morocco",
+    date: "2026-07-04",
+    time: "17:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18185036,
+  },
+  {
+    id: 75,
+    home: "Paraguay",
+    away: "France",
+    date: "2026-07-04",
+    time: "21:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18188721,
+  },
+  {
+    id: 76,
+    home: "Brazil",
+    away: "Norway",
+    date: "2026-07-05",
+    time: "20:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18187298,
+  },
+  {
+    id: 77,
+    home: "Mexico",
+    away: "England",
+    date: "2026-07-06",
+    time: "00:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18192996,
+  },
+  {
+    id: 78,
+    home: "Portugal",
+    away: "Spain",
+    date: "2026-07-06",
+    time: "19:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18198205,
+  },
+  {
+    id: 79,
+    home: "USA",
+    away: "Belgium",
+    date: "2026-07-07",
+    time: "00:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18193785,
+  },
+  {
+    id: 80,
+    home: "Argentina",
+    away: "Egypt",
+    date: "2026-07-07",
+    time: "16:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18202701,
+  },
+  {
+    id: 81,
+    home: "Switzerland",
+    away: "Colombia",
+    date: "2026-07-07",
+    time: "20:00",
+    group: "FIFA World Cup",
+    externalFixtureId: 18202783,
   },
 ];

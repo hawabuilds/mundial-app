@@ -1,29 +1,88 @@
 .overlay {
+  --goal-duration: 3s;
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 100000;
   pointer-events: none;
   overflow: hidden;
-  perspective: 720px;
-  perspective-origin: 50% 42%;
+  perspective: 460px;
+  perspective-origin: 50% 44%;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 72% 68% at 50% 44%,
+    transparent 0%,
+    rgba(0, 0, 0, 0.08) 42%,
+    rgba(0, 0, 0, 0.72) 100%
+  );
+  opacity: 0;
+  animation: goalVignette var(--goal-duration) ease-out forwards;
+}
+
+@keyframes goalVignette {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  38% {
+    opacity: 0.85;
+  }
+  62% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .flash {
   position: absolute;
   inset: 0;
   background: transparent;
-  animation: goalScreenFlash 1.2s ease-out forwards;
+  animation: goalScreenFlash 0.42s ease-out forwards;
 }
 
 @keyframes goalScreenFlash {
   0% {
-    background: rgba(124, 244, 200, 0.42);
+    background: rgba(124, 244, 200, 0.52);
   }
-  22% {
-    background: rgba(124, 244, 200, 0.12);
+  35% {
+    background: rgba(124, 244, 200, 0.14);
   }
   100% {
     background: transparent;
+  }
+}
+
+.stageShake {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: goalStageShake var(--goal-duration) ease-out forwards;
+}
+
+@keyframes goalStageShake {
+  0%,
+  30%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  34% {
+    transform: translate3d(-3px, 2px, 0) rotate(-0.35deg);
+  }
+  36% {
+    transform: translate3d(4px, -2px, 0) rotate(0.45deg);
+  }
+  38% {
+    transform: translate3d(-2px, 1px, 0) rotate(-0.2deg);
+  }
+  40% {
+    transform: translate3d(2px, 0, 0) rotate(0.15deg);
   }
 }
 
@@ -56,60 +115,131 @@
     0 0 48px rgba(124, 244, 200, 0.55),
     0 0 80px rgba(124, 244, 200, 0.25);
   pointer-events: none;
-  animation: goalWordStamp 1.2s cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
+  animation: goalWordStamp var(--goal-duration) cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
 }
 
 @keyframes goalWordStamp {
   0% {
     opacity: 0;
-    transform: scale(0.35) translateY(28px);
-    filter: blur(6px);
+    transform: scale(0.3) translateY(32px);
+    filter: blur(8px);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1.14) translateY(0);
+    filter: blur(0);
   }
   22% {
+    transform: scale(1) translateY(-2px);
+  }
+  58% {
     opacity: 1;
-    transform: scale(1.12) translateY(0);
+    transform: scale(1.02) translateY(-4px);
     filter: blur(0);
   }
-  48% {
-    opacity: 1;
-    transform: scale(1) translateY(-4px);
-    filter: blur(0);
+  82% {
+    opacity: 0.55;
+    transform: scale(1.06) translateY(-10px);
+    filter: blur(1px);
   }
   100% {
     opacity: 0;
-    transform: scale(1.08) translateY(-18px);
-    filter: blur(2px);
+    transform: scale(1.1) translateY(-20px);
+    filter: blur(3px);
+  }
+}
+
+.ballWrap {
+  position: relative;
+  z-index: 2;
+  transform-style: preserve-3d;
+}
+
+.lensFlare {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 140%;
+  height: 140%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(124, 244, 200, 0.35) 0%,
+    rgba(124, 244, 200, 0.08) 28%,
+    transparent 62%
+  );
+  opacity: 0;
+  pointer-events: none;
+  animation: goalLensFlare var(--goal-duration) ease-out forwards;
+}
+
+@keyframes goalLensFlare {
+  0%,
+  28% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  58% {
+    opacity: 0.75;
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.8);
   }
 }
 
 .ball {
   position: relative;
-  z-index: 2;
-  width: 92px;
-  height: 92px;
+  display: block;
+  width: 96px;
+  height: 96px;
   transform-style: preserve-3d;
-  filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.55));
-  animation: ballTowardViewer 1.2s cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.6));
+  animation: ballTowardViewer var(--goal-duration) cubic-bezier(0.22, 1, 0.28, 1) forwards;
 }
 
 @keyframes ballTowardViewer {
   0% {
-    transform: translate3d(0, 18vh, -560px) scale(0.12) rotateX(22deg) rotateY(-18deg)
-      rotateZ(-140deg);
+    transform: translate3d(0, 20vh, -680px) scale(0.08) rotateX(28deg) rotateY(-22deg)
+      rotateZ(-160deg);
     opacity: 0;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35)) blur(0);
   }
-  10% {
+  8% {
     opacity: 1;
   }
-  48% {
-    transform: translate3d(0, -1vh, 60px) scale(1.25) rotateX(-6deg) rotateY(8deg)
-      rotateZ(35deg);
+  22% {
+    transform: translate3d(0, 6vh, -280px) scale(0.45) rotateX(16deg) rotateY(-10deg)
+      rotateZ(-70deg);
+    filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.45)) blur(1px);
+  }
+  36% {
+    transform: translate3d(0, -2vh, 40px) scale(1.35) rotateX(-8deg) rotateY(6deg)
+      rotateZ(28deg);
+    filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.65)) blur(0);
+  }
+  58% {
+    transform: translate3d(0, -4vh, 120px) scale(2.85) rotateX(-10deg) rotateY(4deg)
+      rotateZ(55deg);
     opacity: 1;
+    filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.7)) blur(0);
+  }
+  72% {
+    transform: translate3d(0, -6vh, 280px) scale(3.6) rotateX(-14deg) rotateY(-2deg)
+      rotateZ(85deg);
+    opacity: 1;
+    filter: drop-shadow(0 28px 56px rgba(0, 0, 0, 0.75)) blur(2px);
   }
   100% {
-    transform: translate3d(0, -10vh, 480px) scale(3.4) rotateX(-12deg) rotateY(-4deg)
-      rotateZ(110deg);
+    transform: translate3d(0, -12vh, 980px) scale(5.8) rotateX(-18deg) rotateY(-6deg)
+      rotateZ(130deg);
     opacity: 0;
+    filter: drop-shadow(0 32px 64px rgba(0, 0, 0, 0.8)) blur(5px);
   }
 }
 
@@ -119,18 +249,28 @@
 
 @keyframes ballTowardViewerHome {
   0% {
-    transform: translate3d(-28vw, 16vh, -560px) scale(0.12) rotateX(22deg) rotateZ(-140deg);
+    transform: translate3d(-32vw, 18vh, -680px) scale(0.08) rotateX(28deg) rotateZ(-160deg);
     opacity: 0;
   }
-  10% {
+  8% {
     opacity: 1;
   }
-  48% {
-    transform: translate3d(-4vw, -1vh, 60px) scale(1.25) rotateX(-6deg) rotateZ(35deg);
+  22% {
+    transform: translate3d(-14vw, 6vh, -280px) scale(0.45) rotateX(16deg) rotateZ(-70deg);
+  }
+  36% {
+    transform: translate3d(-5vw, -2vh, 40px) scale(1.35) rotateX(-8deg) rotateZ(28deg);
+  }
+  58% {
+    transform: translate3d(-1vw, -4vh, 120px) scale(2.85) rotateX(-10deg) rotateZ(55deg);
+    opacity: 1;
+  }
+  72% {
+    transform: translate3d(0, -6vh, 280px) scale(3.6) rotateX(-14deg) rotateZ(85deg);
     opacity: 1;
   }
   100% {
-    transform: translate3d(0, -10vh, 480px) scale(3.4) rotateX(-12deg) rotateZ(110deg);
+    transform: translate3d(0, -12vh, 980px) scale(5.8) rotateX(-18deg) rotateZ(130deg);
     opacity: 0;
   }
 }
@@ -141,18 +281,28 @@
 
 @keyframes ballTowardViewerAway {
   0% {
-    transform: translate3d(28vw, 16vh, -560px) scale(0.12) rotateX(22deg) rotateZ(-140deg);
+    transform: translate3d(32vw, 18vh, -680px) scale(0.08) rotateX(28deg) rotateZ(-160deg);
     opacity: 0;
   }
-  10% {
+  8% {
     opacity: 1;
   }
-  48% {
-    transform: translate3d(4vw, -1vh, 60px) scale(1.25) rotateX(-6deg) rotateZ(35deg);
+  22% {
+    transform: translate3d(14vw, 6vh, -280px) scale(0.45) rotateX(16deg) rotateZ(-70deg);
+  }
+  36% {
+    transform: translate3d(5vw, -2vh, 40px) scale(1.35) rotateX(-8deg) rotateZ(28deg);
+  }
+  58% {
+    transform: translate3d(1vw, -4vh, 120px) scale(2.85) rotateX(-10deg) rotateZ(55deg);
+    opacity: 1;
+  }
+  72% {
+    transform: translate3d(0, -6vh, 280px) scale(3.6) rotateX(-14deg) rotateZ(85deg);
     opacity: 1;
   }
   100% {
-    transform: translate3d(0, -10vh, 480px) scale(3.4) rotateX(-12deg) rotateZ(110deg);
+    transform: translate3d(0, -12vh, 980px) scale(5.8) rotateX(-18deg) rotateZ(130deg);
     opacity: 0;
   }
 }
@@ -160,50 +310,124 @@
 .label {
   position: absolute;
   left: 50%;
-  bottom: 22%;
+  bottom: 20%;
   margin: 0;
   padding: 0;
   transform: translateX(-50%);
   white-space: nowrap;
-  animation: goalLabelPop 1.2s cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
+  animation: goalLabelPop var(--goal-duration) cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
 }
 
 .scorer {
   display: block;
   font-family: var(--m-font-body);
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: none;
   color: var(--m-accent);
   text-align: center;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.65);
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.75);
 }
 
 @keyframes goalLabelPop {
-  0% {
+  0%,
+  26% {
     opacity: 0;
-    transform: translateX(-50%) translateY(16px);
+    transform: translateX(-50%) translateY(20px);
   }
-  32% {
+  34% {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+  72% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-2px);
+  }
   100% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-6px);
+    transform: translateX(-50%) translateY(-10px);
+  }
+}
+
+@media (max-width: 480px) {
+  .ball {
+    width: 84px;
+    height: 84px;
+  }
+
+  @keyframes ballTowardViewer {
+    58% {
+      transform: translate3d(0, -4vh, 120px) scale(2.45) rotateX(-10deg) rotateY(4deg)
+        rotateZ(55deg);
+    }
+    72% {
+      transform: translate3d(0, -6vh, 280px) scale(3.1) rotateX(-14deg) rotateY(-2deg)
+        rotateZ(85deg);
+    }
+    100% {
+      transform: translate3d(0, -12vh, 980px) scale(4.8) rotateX(-18deg) rotateY(-6deg)
+        rotateZ(130deg);
+    }
+  }
+
+  @keyframes ballTowardViewerHome {
+    58% {
+      transform: translate3d(-1vw, -4vh, 120px) scale(2.45) rotateX(-10deg) rotateZ(55deg);
+    }
+    72% {
+      transform: translate3d(0, -6vh, 280px) scale(3.1) rotateX(-14deg) rotateZ(85deg);
+    }
+    100% {
+      transform: translate3d(0, -12vh, 980px) scale(4.8) rotateX(-18deg) rotateZ(130deg);
+    }
+  }
+
+  @keyframes ballTowardViewerAway {
+    58% {
+      transform: translate3d(1vw, -4vh, 120px) scale(2.45) rotateX(-10deg) rotateZ(55deg);
+    }
+    72% {
+      transform: translate3d(0, -6vh, 280px) scale(3.1) rotateX(-14deg) rotateZ(85deg);
+    }
+    100% {
+      transform: translate3d(0, -12vh, 980px) scale(4.8) rotateX(-18deg) rotateZ(130deg);
+    }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .flash,
+  .vignette,
+  .stageShake,
   .ball,
   .goalWord,
-  .label {
-    animation: none;
+  .label,
+  .lensFlare {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 
-  .overlay {
-    display: none;
+  .vignette {
+    opacity: 0.75;
+  }
+
+  .flash {
+    background: rgba(124, 244, 200, 0.28);
+  }
+
+  .goalWord {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .ball {
+    opacity: 1;
+    transform: translate3d(0, -4vh, 180px) scale(2.4);
+  }
+
+  .label {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
 }

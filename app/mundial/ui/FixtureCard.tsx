@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MundialFixture, MundialGoal } from "../lib/fixtures";
+import { settledOnRegulationScore } from "../lib/fixtures";
 import { useLocalKickoff } from "../lib/kickoff";
 import Card from "./Card";
 import ExampleCallPreview from "./ExampleCallPreview";
 import Flag from "./Flag";
-import GoalBallBurst, { type GoalBurstEvent } from "./GoalBallBurst";
 import MarketOddsLine from "./MarketOddsLine";
+import TxLineProofPopover from "./TxLineProofPopover";
 import styles from "./FixtureCard.module.css";
 
 type FixtureCardProps = {
@@ -18,6 +19,19 @@ type FixtureCardProps = {
   /** Show TxLINE market odds (must be set explicitly for the current match only). */
   showMarketOdds?: boolean;
 };
+
+function fixtureInPlay(fixture: MundialFixture): boolean {
+  if (fixture.phase === "live") return true;
+  const status = fixture.status;
+  return (
+    status === "LIVE" ||
+    status === "HT" ||
+    status === "1H" ||
+    status === "2H" ||
+    status === "ET" ||
+    status === "P"
+  );
+}
 
 type GroupedScorer = {
   side: "home" | "away";
@@ -90,38 +104,40 @@ export default function FixtureCard({
     fixture.kickoffUtcMs,
   );
   const prevGoalCount = useRef(fixture.goals.length);
+  const prevHomeScore = useRef(fixture.homeScore ?? 0);
+  const prevAwayScore = useRef(fixture.awayScore ?? 0);
   const [newGoalKey, setNewGoalKey] = useState<string | null>(null);
-  const [goalBurst, setGoalBurst] = useState<GoalBurstEvent | null>(null);
   const [scorePop, setScorePop] = useState(false);
 
-  const clearGoalBurst = useCallback(() => setGoalBurst(null), []);
-
   useEffect(() => {
-    const inPlayNow =
-      fixture.status === "LIVE" ||
-      fixture.status === "HT" ||
-      fixture.phase === "live";
+    const homeScore = fixture.homeScore ?? 0;
+    const awayScore = fixture.awayScore ?? 0;
+    const goalsIncreased = fixture.goals.length > prevGoalCount.current;
+    const scoreIncreased =
+      homeScore > prevHomeScore.current || awayScore > prevAwayScore.current;
 
-    if (fixture.goals.length <= prevGoalCount.current) {
+    if (!goalsIncreased && !scoreIncreased) {
       prevGoalCount.current = fixture.goals.length;
+      prevHomeScore.current = homeScore;
+      prevAwayScore.current = awayScore;
       return;
     }
 
     const latest = fixture.goals[fixture.goals.length - 1];
-    const key = `${latest?.side}-${latest?.minute}-${latest?.player}`;
-    setNewGoalKey(key);
+    if (latest) {
+      const key = `${latest.side}-${latest.minute}-${latest.player}`;
+      setNewGoalKey(key);
+    }
     setScorePop(true);
 
-    if (featured && inPlayNow && latest) {
-      setGoalBurst({
-        side: latest.side,
-        player: latest.player,
-        ownGoal: latest.ownGoal,
-      });
-    }
-
     prevGoalCount.current = fixture.goals.length;
-  }, [fixture.goals, fixture.status, fixture.phase, featured]);
+    prevHomeScore.current = homeScore;
+    prevAwayScore.current = awayScore;
+  }, [
+    fixture.goals,
+    fixture.homeScore,
+    fixture.awayScore,
+  ]);
 
   useEffect(() => {
     if (!scorePop) return;
@@ -129,20 +145,22 @@ export default function FixtureCard({
     return () => window.clearTimeout(timer);
   }, [scorePop]);
 
-  const inPlay =
-    fixture.status === "LIVE" ||
-    fixture.status === "HT" ||
-    fixture.phase === "live";
+  const inPlay = fixtureInPlay(fixture);
   const finished = fixture.status === "FT" || fixture.phase === "recent";
   const showLive = inPlay || finished;
   const hasScore = fixture.homeScore != null && fixture.awayScore != null;
   const showOdds = showMarketOdds && fixture.marketOdds;
+  const endedAfterRegulation = settledOnRegulationScore(fixture.terminalStatusId);
+  const showVerifiedProof =
+    finished && fixture.txlineProof?.showVerifiedBadge === true;
 
   const pillText =
     fixture.status === "HT"
       ? "HT"
       : finished
-        ? "FT · Settled via TxLINE"
+        ? showVerifiedProof
+          ? null
+          : "FT · Settled via TxLINE"
         : fixture.elapsed != null
           ? `LIVE ${fixture.elapsed}'`
           : "LIVE";
@@ -189,26 +207,26 @@ export default function FixtureCard({
     ) : null;
 
   return (
-    <>
-      {featured ? (
-        <GoalBallBurst event={goalBurst} onDone={clearGoalBurst} />
-      ) : null}
-      <Card glow={featured} className={featured ? styles.featured : styles.compact}>
+    <Card glow={featured} className={featured ? styles.featured : styles.compact}>
       <div className={styles.meta}>
         {fixture.stage ? (
           <span className={styles.metaGroup}>{fixture.stage}</span>
         ) : null}
         {showLive ? (
-          <span
-            className={`${styles.statusPill} ${
-              inPlay ? styles.statusLive : styles.statusDone
-            } ${finished ? styles.statusSettled : ""} ${
-              fixture.stage ? "" : styles.pillSolo
-            }`}
-          >
-            {inPlay ? <span className={styles.pulse} aria-hidden /> : null}
-            {pillText}
-          </span>
+          showVerifiedProof && fixture.txlineProof ? (
+            <TxLineProofPopover proof={fixture.txlineProof} />
+          ) : (
+            <span
+              className={`${styles.statusPill} ${
+                inPlay ? styles.statusLive : styles.statusDone
+              } ${finished ? styles.statusSettled : ""} ${
+                fixture.stage ? "" : styles.pillSolo
+              }`}
+            >
+              {inPlay ? <span className={styles.pulse} aria-hidden /> : null}
+              {pillText}
+            </span>
+          )
         ) : (
           <span className={fixture.stage ? undefined : styles.metaSolo} suppressHydrationWarning>
             {kickoffLine}
@@ -244,6 +262,10 @@ export default function FixtureCard({
         <p className={styles.venue}>{fixture.venueLine}</p>
       ) : null}
 
+      {finished && endedAfterRegulation ? (
+        <p className={styles.settlementNote}>Settled on 90-min score</p>
+      ) : null}
+
       {showOdds && fixture.marketOdds ? (
         <MarketOddsLine
           home={fixture.home}
@@ -257,6 +279,5 @@ export default function FixtureCard({
 
       {withReply && !showLive ? <ExampleCallPreview fixture={fixture} /> : null}
     </Card>
-    </>
   );
 }

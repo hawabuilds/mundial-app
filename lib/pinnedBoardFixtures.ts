@@ -1,4 +1,5 @@
 import type { Fixture } from "@/app/data/fixtures";
+import { findFixtureByTeamsAndKickoff } from "@/app/data/fixtures";
 import {
   fetchScoresSnapshot,
   latestScoreEvent,
@@ -44,12 +45,18 @@ function pinnedToBoardRow(input: {
     Participant1IsHome: true,
   };
   const fixture: Fixture = {
-    id: input.fixtureId,
+    id:
+      findFixtureByTeamsAndKickoff(
+        input.home,
+        input.away,
+        kickoffUtcMs,
+      )?.id ?? input.fixtureId,
     home: input.home,
     away: input.away,
     date: iso.slice(0, 10),
     time: iso.slice(11, 16),
     group: input.competition ?? "World Cup",
+    externalFixtureId: input.fixtureId,
   };
   return { fx, fixture, kickoffMs: kickoffUtcMs, kickoffUtcMs };
 }

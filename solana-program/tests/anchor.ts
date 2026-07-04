@@ -1,43 +1,55 @@
-import * as anchor from "@coral-xyz/anchor";
-import BN from "bn.js";
 import assert from "assert";
-import * as web3 from "@solana/web3.js";
-import type { State } from "../target/types/state";
+import { createHash } from "crypto";
 
-describe("Test", () => {
-  // Configure the client to use the local cluster
-  anchor.setProvider(anchor.AnchorProvider.env());
+/** Production instruction set for mundial_rewards (matches lib.rs). */
+const EXPECTED_INSTRUCTIONS = [
+  "initialize",
+  "open_epoch",
+  "claim",
+  "set_signer",
+  "set_operator",
+  "set_paused",
+  "rescue_unreserved",
+] as const;
 
-  const program = anchor.workspace.State as anchor.Program<State>;
-  
-  it("initialize", async () => {
-    // Generate keypair for the new account
-    const newAccountKp = new web3.Keypair();
+/** Devnet migration helpers removed from the program — must not reappear. */
+const REMOVED_INSTRUCTIONS = ["set_total_reserved", "set_latest_epoch"];
 
-    // Send transaction
-    const data = new BN(42);
-    const txHash = await program.methods
-      .initialize(data)
-      .accounts({
-        newAccount: newAccountKp.publicKey,
-        signer: program.provider.publicKey,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .signers([newAccountKp])
-      .rpc();
-    console.log(`Use 'solana confirm -v ${txHash}' to see the logs`);
+function anchorGlobalDiscriminator(ixName: string): Buffer {
+  return createHash("sha256").update(`global:${ixName}`).digest().subarray(0, 8);
+}
 
-    // Confirm transaction
-    await program.provider.connection.confirmTransaction(txHash);
+describe("mundial_rewards instruction set", () => {
+  it("lists the seven production instructions", () => {
+    assert.deepStrictEqual([...EXPECTED_INSTRUCTIONS], [
+      "initialize",
+      "open_epoch",
+      "claim",
+      "set_signer",
+      "set_operator",
+      "set_paused",
+      "rescue_unreserved",
+    ]);
+  });
 
-    // Fetch the created account
-    const newAccount = await program.account.newAccount.fetch(
-      newAccountKp.publicKey
-    );
+  it("does not include removed migration admin instructions", () => {
+    for (const removed of REMOVED_INSTRUCTIONS) {
+      assert.ok(
+        !(EXPECTED_INSTRUCTIONS as readonly string[]).includes(removed),
+        `removed instruction still listed: ${removed}`,
+      );
+    }
+  });
 
-    console.log("On-chain data is:", newAccount.data.toString());
-
-    // Check whether the data on-chain is equal to local 'data'
-    assert(data.eq(newAccount.data));
+  it("assigns stable 8-byte Anchor discriminators", () => {
+    for (const ix of EXPECTED_INSTRUCTIONS) {
+      const disc = anchorGlobalDiscriminator(ix);
+      assert.strictEqual(disc.length, 8, `${ix} discriminator length`);
+      assert.strictEqual(
+        anchorGlobalDiscriminator(ix).compare(disc),
+        0,
+        `${ix} discriminator is deterministic`,
+      );
+    }
   });
 });

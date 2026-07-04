@@ -153,6 +153,22 @@ export type MatchMarketOdds = {
   awayPct: number;
 };
 
+/** TxLINE on-chain score proof summary (when stored after settlement). */
+export type MatchTxLineProof = {
+  fixtureId: number;
+  txFixtureId: number;
+  seq: number;
+  proofTs: number | null;
+  proofReference: string | null;
+  stats: Array<{ key: number; value: number; period: number }>;
+  solanaExplorerUrl: string | null;
+  fetchedAt: string;
+  showVerifiedBadge: boolean;
+  semanticsMismatch: boolean;
+  proofMode: "regulation" | "total" | null;
+  verificationCopy: string | null;
+};
+
 export type UpcomingMatch = Fixture & {
   statusLabel?: string | null;
   live?: MatchLiveInfo;
@@ -166,6 +182,10 @@ export type UpcomingMatch = Fixture & {
   kickoffUtcMs?: number;
   /** TxLINE FixtureGroupId — used to resolve knockout round labels. */
   fixtureGroupId?: number;
+  /** TxLINE stat-validation Merkle proof when fetched after settlement. */
+  txlineProof?: MatchTxLineProof | null;
+  /** TxLINE terminal StatusId (5=FT, 10=AET, 13=FPE) when known. */
+  terminalStatusId?: number | null;
 };
 
 export type ApiUpcomingMatchesResponse = {

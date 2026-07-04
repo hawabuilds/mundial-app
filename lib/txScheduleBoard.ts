@@ -3,6 +3,7 @@
 // and just-finished matches — so the Fixtures tab always reflects real games.
 
 import type { Fixture } from "@/app/data/fixtures";
+import { findFixtureByTeamsAndKickoff } from "@/app/data/fixtures";
 import {
   fetchMatchWithGoals,
   isFinishedStatus,
@@ -35,6 +36,11 @@ import {
   pinnedFixtureIds,
 } from "./pinnedBoardFixtures";
 import { fetchFixturesSnapshot, isTxoddsConfigured, type TxFixture } from "./txodds";
+import {
+  getMatchProofSummariesForTxFixtures,
+  type MatchProofSummary,
+} from "@/app/lib/supabase";
+import { readTerminalStatusId } from "@/lib/matchProofFetch";
 
 /** Board fixture carrying venue/competition line, live goals, and locked 1X2 odds. */
 export type ScheduleBoardFixture = BoardFixture & {
@@ -43,6 +49,11 @@ export type ScheduleBoardFixture = BoardFixture & {
   marketOdds: Match1x2Odds | null;
   fixtureGroupId?: number;
   kickoffUtcMs: number;
+  /** TxLINE FixtureId — always use for score/proof lookups, not {@link Fixture.id}. */
+  txFixtureId: number;
+  /** Stored TxLINE stat-validation proof when settlement proof was fetched. */
+  txlineProof?: MatchProofSummary | null;
+  terminalStatusId?: number | null;
 };
 
 /** Only look up live scores for matches that kicked off within this window. */
@@ -81,14 +92,16 @@ function txToFixture(fx: TxFixture): Fixture | null {
 
   const home = fx.Participant1IsHome ? fx.Participant1 : fx.Participant2;
   const away = fx.Participant1IsHome ? fx.Participant2 : fx.Participant1;
-  const { date, time } = txStartToDateTime(fx.StartTime);
+  const { date, time, kickoffUtcMs } = txStartToDateTime(fx.StartTime);
+  const registry = findFixtureByTeamsAndKickoff(home, away, kickoffUtcMs);
   return {
-    id: fx.FixtureId,
+    id: registry?.id ?? fx.FixtureId,
     home,
     away,
     date,
     time,
-    group: competition,
+    group: registry?.group ?? competition,
+    externalFixtureId: registry?.externalFixtureId ?? fx.FixtureId,
   };
 }
 
@@ -120,6 +133,10 @@ function shouldFetchBoardLive(row: BoardRow, nowMs: number): boolean {
     return true;
   }
   if (isGameStateInPlay(row.fx.GameState)) return true;
+  // Fetch final scores for FT matches still shown on the board (may be >4h after kickoff).
+  if (isGameStateFinished(row.fx.GameState) && row.kickoffMs <= nowMs) {
+    return true;
+  }
   if (row.kickoffMs > nowMs) return false;
   if (
     (nowMs - row.kickoffMs) / 3_600_000 >
@@ -204,7 +221,7 @@ export async function getTxScheduleBoard(
     liveLookups += 1;
     try {
       const { match, goals: matchGoals } = await fetchMatchWithGoals({
-        id: row.fixture.id,
+        id: row.fx.FixtureId,
         home: row.fixture.home,
         away: row.fixture.away,
         date: row.fixture.date,
@@ -247,11 +264,15 @@ export async function getTxScheduleBoard(
     if (!row) continue;
     oddsByFixtureId.set(
       fixtureId,
-      await ensureMatchOddsLocked(fixtureId, {
-        home: row.fixture.home,
-        away: row.fixture.away,
-        kickoffMs: row.kickoffMs,
-      }).catch(() => null),
+      await ensureMatchOddsLocked(
+        row.fixture.id,
+        {
+          home: row.fixture.home,
+          away: row.fixture.away,
+          kickoffMs: row.kickoffMs,
+        },
+        row.fx.FixtureId,
+      ).catch(() => null),
     );
   }
 
@@ -268,6 +289,7 @@ export async function getTxScheduleBoard(
       ...fixture,
       apiConfigured: true,
       fixtureGroupId: fx.FixtureGroupId,
+      txFixtureId: fx.FixtureId,
       venueLine,
       goals: [] as MatchGoal[],
       marketOdds,
@@ -320,5 +342,33 @@ export async function getTxScheduleBoard(
     return b.kickoffUtcMs - a.kickoffUtcMs;
   });
 
-  return board;
+  const recentTxIds = board
+    .filter((row) => row.phase === "recent")
+    .map((row) => row.txFixtureId);
+  const proofByTxId = await getMatchProofSummariesForTxFixtures(recentTxIds).catch(
+    () => new Map<number, MatchProofSummary>(),
+  );
+
+  const recentRows = board.filter((row) => row.phase === "recent");
+  const terminalByTxId = new Map<number, number | null>();
+  await Promise.all(
+    recentRows.map(async (row) => {
+      terminalByTxId.set(
+        row.txFixtureId,
+        await readTerminalStatusId(row.txFixtureId),
+      );
+    }),
+  );
+
+  return board.map((row) => ({
+    ...row,
+    txlineProof:
+      row.phase === "recent"
+        ? (proofByTxId.get(row.txFixtureId) ?? null)
+        : null,
+    terminalStatusId:
+      row.phase === "recent"
+        ? (terminalByTxId.get(row.txFixtureId) ?? null)
+        : null,
+  }));
 }

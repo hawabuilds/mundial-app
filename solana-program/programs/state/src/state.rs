@@ -152,8 +152,6 @@ pub enum Err {
     NotAdmin,
     #[msg("epoch id not increasing")]
     EpochNotIncreasing,
-    #[msg("latest epoch can only move backward for migration")]
-    EpochCursorRewind,
     #[msg("zero pot")]
     ZeroPot,
     #[msg("zero amount")]

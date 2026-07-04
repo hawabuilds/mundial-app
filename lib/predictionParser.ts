@@ -29,10 +29,23 @@ const TEAM_ALIASES: Record<string, readonly string[]> = {
     "Les Verts",
   ],
   Nice: ["Nice", "OGC Nice", "Les Aiglons", "Aiglons"],
-  "Bosnia & Herzegovina": ["Bosnia", "BIH", "Bosnia Herzegovina"],
-  "FYR Macedonia": ["Macedonia", "North Macedonia", "MK"],
-  "North Macedonia": ["FYR Macedonia", "Macedonia", "MK", "North Macedonia"],
+  "Bosnia & Herzegovina": [
+    "Bosnia",
+    "BIH",
+    "Bosnia Herzegovina",
+    "Bosnia and Herzegovina",
+  ],
+  "FYR Macedonia": ["Macedonia", "North Macedonia", "MKD", "MK"],
+  "North Macedonia": [
+    "FYR Macedonia",
+    "Macedonia",
+    "MKD",
+    "MK",
+    "North Macedonia",
+  ],
   Türkiye: ["Türkiye", "Turkiye", "Turkey", "TUR"],
+  Japan: ["Japan", "JPN"],
+  Canada: ["Canada", "CAN"],
   Slovakia: ["Slovakia", "SVK"],
   Malta: ["Malta", "MLT"],
   Norway: ["Norway", "NOR"],
@@ -236,6 +249,27 @@ function isValidScore(score: number): boolean {
   return Number.isInteger(score) && score >= 0 && score <= MAX_SCORE;
 }
 
+function countPairedScorelines(text: string): number {
+  const pattern = new RegExp(SCORE_PATTERN.source, "g");
+  let count = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    const scoreStart = match.index;
+    const scoreEnd = scoreStart + match[0].length;
+    const charBefore = scoreStart > 0 ? text[scoreStart - 1] : "";
+    const charAfter = scoreEnd < text.length ? text[scoreEnd] : "";
+    if (charBefore === "-" || charBefore === "." || charAfter === ".") continue;
+
+    const firstNumber = Number.parseInt(match[1]!, 10);
+    const secondNumber = Number.parseInt(match[2]!, 10);
+    if (!isValidScore(firstNumber) || !isValidScore(secondNumber)) continue;
+    count += 1;
+  }
+
+  return count;
+}
+
 function parseSingleScoreToken(fragment: string): number | null {
   const match = fragment.trim().match(/^(\d{1,2})(?:\D|$)/);
   if (!match) return null;
@@ -367,6 +401,8 @@ export function parsePrediction(
 
   const teams = findBothTeams(text, fixture);
   if (!teams) return null;
+
+  if (countPairedScorelines(text) > 1) return null;
 
   return (
     parsePairedScoreAdjacent(text, teams.homeMatch, teams.awayMatch) ??

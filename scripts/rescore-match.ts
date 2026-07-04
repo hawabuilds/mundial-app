@@ -1,27 +1,36 @@
 import { config } from "dotenv";
-config({ path: ".env.local" });
+config({ path: process.env.ENV_FILE ?? ".env.local" });
 
-import {
-  getLeaderboard,
-  resetMatchScoring,
-  scoreMatchPredictions,
-} from "../app/lib/supabase";
+import { rescoreMatches } from "../lib/rescoreMatch";
 
 async function main() {
-  const matchId = Number(process.argv[2] ?? 2);
-  const home = Number(process.argv[3] ?? 3);
-  const away = Number(process.argv[4] ?? 0);
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
+  const matchIds =
+    args.length > 0
+      ? args.map((arg) => Number.parseInt(arg, 10)).filter((id) => Number.isFinite(id))
+      : [];
 
-  await resetMatchScoring(matchId);
-  const scored = await scoreMatchPredictions(matchId, {
-    homeScore: home,
-    awayScore: away,
-  });
-  console.log("Scored:", JSON.stringify(scored, null, 2));
-  console.log("Leaderboard:", JSON.stringify(await getLeaderboard(), null, 2));
+  if (matchIds.length === 0) {
+    console.error("Usage: npm run rescore:match -- <matchId> [matchId…]");
+    process.exit(1);
+  }
+
+  const results = await rescoreMatches(matchIds);
+  for (const row of results) {
+    if (row.status === "ok") {
+      console.log(
+        `Match ${row.matchId}: ${row.result.predictionsScored} predictions`,
+        row.result.breakdown,
+      );
+    } else if (row.status === "skipped") {
+      console.log(`Match ${row.matchId}: skipped — ${row.reason}`);
+    } else {
+      console.error(`Match ${row.matchId}: error — ${row.error}`);
+    }
+  }
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

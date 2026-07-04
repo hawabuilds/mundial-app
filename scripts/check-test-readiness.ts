@@ -70,50 +70,48 @@ async function main() {
     });
   }
 
-  const cfg = readSolanaPayoutConfig();
-  if (cfg) {
-    try {
-      const connection = new Connection(cfg.rpcUrl, "confirmed");
-      const onChain = await readSolanaConfig(connection, cfg.programId);
-      const vault = await readSolanaVaultBalance(connection, cfg.programId);
-      const opSecret = parseSolanaSecretKey(
-        process.env.SOLANA_OPERATOR_SECRET_KEY?.trim(),
-      );
-      const opPub = opSecret
-        ? Keypair.fromSecretKey(opSecret).publicKey.toBase58()
-        : null;
+  try {
+    const cfg = readSolanaPayoutConfig();
+    const connection = new Connection(cfg.rpcUrl, "confirmed");
+    const onChain = await readSolanaConfig(connection, cfg.programId);
+    const vault = await readSolanaVaultBalance(connection, cfg.programId);
+    const opSecret = parseSolanaSecretKey(
+      process.env.SOLANA_OPERATOR_SECRET_KEY?.trim(),
+    );
+    const opPub = opSecret
+      ? Keypair.fromSecretKey(opSecret).publicKey.toBase58()
+      : null;
 
+    checks.push({
+      ok: !!onChain,
+      label: "On-chain config",
+      detail: onChain
+        ? `latest epoch ${onChain.latestEpoch.toString()}`
+        : "not found",
+    });
+
+    if (onChain && opPub) {
       checks.push({
-        ok: !!onChain,
-        label: "On-chain config",
-        detail: onChain
-          ? `latest epoch ${onChain.latestEpoch.toString()}`
-          : "not found",
-      });
-
-      if (onChain && opPub) {
-        checks.push({
-          ok: onChain.operator.toBase58() === opPub,
-          label: "Operator matches on-chain",
-          detail: `on-chain ${onChain.operator.toBase58()}`,
-        });
-      }
-
-      if (vault !== null && onChain) {
-        const free = vault > onChain.totalReserved ? vault - onChain.totalReserved : 0n;
-        checks.push({
-          ok: free > 0n,
-          label: "Vault has free USDC",
-          detail: `${formatUsdcFromBaseUnits(free)} free (${formatUsdcFromBaseUnits(vault)} total, ${formatUsdcFromBaseUnits(onChain.totalReserved)} reserved)`,
-        });
-      }
-    } catch (error) {
-      checks.push({
-        ok: false,
-        label: "Solana RPC / on-chain read",
-        detail: error instanceof Error ? error.message : "failed",
+        ok: onChain.operator.toBase58() === opPub,
+        label: "Operator matches on-chain",
+        detail: `on-chain ${onChain.operator.toBase58()}`,
       });
     }
+
+    if (vault !== null && onChain) {
+      const free = vault > onChain.totalReserved ? vault - onChain.totalReserved : 0n;
+      checks.push({
+        ok: free > 0n,
+        label: "Vault has free USDC",
+        detail: `${formatUsdcFromBaseUnits(free)} free (${formatUsdcFromBaseUnits(vault)} total, ${formatUsdcFromBaseUnits(onChain.totalReserved)} reserved)`,
+      });
+    }
+  } catch (error) {
+    checks.push({
+      ok: false,
+      label: "Solana RPC / on-chain read",
+      detail: error instanceof Error ? error.message : "failed",
+    });
   }
 
   console.log("\n=== Copa Mundial devnet test readiness ===\n");

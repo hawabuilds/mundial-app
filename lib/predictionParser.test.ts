@@ -13,11 +13,23 @@ type TestCase = {
   expected: ParsedPrediction | null;
 };
 
+/** Resolve a WC 2026 fixture by canonical team names (see worldCup2026Fixtures.ts). */
+function fixtureByTeams(home: string, away: string): Pick<Fixture, "home" | "away"> {
+  const match = FIXTURES.find((f) => f.home === home && f.away === away);
+  if (!match) {
+    throw new Error(`No fixture for ${home} vs ${away}`);
+  }
+  return { home: match.home, away: match.away };
+}
+
 const MATCH = { home: "Saint-Étienne", away: "Nice" };
-const BOSNIA_MATCH = FIXTURES.find((f) => f.id === 10)!;
-const UCL_FINAL = FIXTURES.find((f) => f.id === 12)!;
-const SCOTLAND_MATCH = FIXTURES.find((f) => f.id === 11)!;
-const TURKIYE_MATCH = FIXTURES.find((f) => f.id === 19)!;
+const TURKIYE_MATCH = fixtureByTeams("Australia", "Türkiye");
+const BOSNIA_MATCH = fixtureByTeams("Canada", "Bosnia & Herzegovina");
+const USA_MATCH = fixtureByTeams("USA", "Paraguay");
+const KOREA_MATCH = fixtureByTeams("South Korea", "Czech Republic");
+const NED_JPN_MATCH = fixtureByTeams("Netherlands", "Japan");
+const CURACAO_MATCH = fixtureByTeams("Germany", "Curaçao");
+const IVORY_MATCH = fixtureByTeams("Ivory Coast", "Ecuador");
 
 const CASES: TestCase[] = [
   {
@@ -34,21 +46,21 @@ const CASES: TestCase[] = [
   },
   {
     name: "valid: Türkiye with umlaut",
-    reply: "Türkiye 2-1 North Macedonia",
+    reply: "Türkiye 2-1 Australia",
     fixture: TURKIYE_MATCH,
-    expected: { homeScore: 2, awayScore: 1 },
+    expected: { homeScore: 1, awayScore: 2 },
   },
   {
     name: "valid: Turkiye ASCII u",
-    reply: "Turkiye 1-0 FYR Macedonia",
+    reply: "Turkiye 1-0 Australia",
     fixture: TURKIYE_MATCH,
-    expected: { homeScore: 1, awayScore: 0 },
+    expected: { homeScore: 0, awayScore: 1 },
   },
   {
     name: "valid: Turkey alias",
-    reply: "Turkey 3-2 Macedonia",
+    reply: "Turkey 3-2 Australia",
     fixture: TURKIYE_MATCH,
-    expected: { homeScore: 3, awayScore: 2 },
+    expected: { homeScore: 2, awayScore: 3 },
   },
   {
     name: "valid: Saint-Etienne without accent",
@@ -129,40 +141,82 @@ const CASES: TestCase[] = [
     expected: null,
   },
   {
+    name: "reject: two scorelines in one reply",
+    reply: "Saint-Étienne 2-1 Nice 3-0",
+    fixture: MATCH,
+    expected: null,
+  },
+  {
     name: "valid: Bosnia short names",
-    reply: "Bosnia 1-0 Macedonia",
+    reply: "Bosnia 1-0 Canada",
     fixture: BOSNIA_MATCH,
-    expected: { homeScore: 1, awayScore: 0 },
-  },
-  {
-    name: "valid: Bosnia reversed short names",
-    reply: "Macedonia 0-1 Bosnia",
-    fixture: BOSNIA_MATCH,
-    expected: { homeScore: 1, awayScore: 0 },
-  },
-  {
-    name: "valid: UCL Arsenal 1-0 PSG abbreviations",
-    reply: "Arsenal 1-0 PSG",
-    fixture: UCL_FINAL,
     expected: { homeScore: 0, awayScore: 1 },
   },
   {
-    name: "valid: UCL PSG hyphenated full name",
-    reply: "Paris Saint-Germain 2-1 Arsenal",
-    fixture: UCL_FINAL,
+    name: "valid: Bosnia reversed short names",
+    reply: "Canada 0-1 Bosnia",
+    fixture: BOSNIA_MATCH,
+    expected: { homeScore: 0, awayScore: 1 },
+  },
+  {
+    name: "valid: USMNT alias",
+    reply: "USMNT 2-1 Paraguay",
+    fixture: USA_MATCH,
     expected: { homeScore: 2, awayScore: 1 },
   },
   {
-    name: "valid: UCL Gunners nickname",
-    reply: "Gunners 1-1 PSG",
-    fixture: UCL_FINAL,
-    expected: { homeScore: 1, awayScore: 1 },
+    name: "valid: United States full name reversed",
+    reply: "Paraguay 0-2 United States",
+    fixture: USA_MATCH,
+    expected: { homeScore: 2, awayScore: 0 },
   },
   {
-    name: "valid: Scotland corrupted Curaçao in reply",
-    reply: "Scotland 2-0 Cura??ao",
-    fixture: SCOTLAND_MATCH,
+    name: "valid: Korea Republic alias",
+    reply: "Korea Republic 1-0 Czech Republic",
+    fixture: KOREA_MATCH,
+    expected: { homeScore: 1, awayScore: 0 },
+  },
+  {
+    name: "valid: corrupted Curaçao in reply",
+    reply: "Germany 2-0 Cura??ao",
+    fixture: CURACAO_MATCH,
     expected: { homeScore: 2, awayScore: 0 },
+  },
+  {
+    name: "valid: Holland alias en-dash score",
+    reply: "Holland 2–1 Japan",
+    fixture: NED_JPN_MATCH,
+    expected: { homeScore: 2, awayScore: 1 },
+  },
+  {
+    name: "valid: colon score separator",
+    reply: "Netherlands 2:1 Japan",
+    fixture: NED_JPN_MATCH,
+    expected: { homeScore: 2, awayScore: 1 },
+  },
+  {
+    name: "valid: space-separated score",
+    reply: "Netherlands 2 1 Japan",
+    fixture: NED_JPN_MATCH,
+    expected: { homeScore: 2, awayScore: 1 },
+  },
+  {
+    name: "valid: Côte d'Ivoire accent alias",
+    reply: "Côte d'Ivoire 1-0 Ecuador",
+    fixture: IVORY_MATCH,
+    expected: { homeScore: 1, awayScore: 0 },
+  },
+  {
+    name: "valid: Ivory Coast alias reversed",
+    reply: "Ecuador 0-1 Ivory Coast",
+    fixture: IVORY_MATCH,
+    expected: { homeScore: 1, awayScore: 0 },
+  },
+  {
+    name: "valid: KOR abbreviation",
+    reply: "KOR 3-2 Czech Republic",
+    fixture: KOREA_MATCH,
+    expected: { homeScore: 3, awayScore: 2 },
   },
 ];
 

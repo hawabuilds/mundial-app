@@ -4,7 +4,9 @@ import type {
   FixturePhase,
   MatchGoalInfo,
   MatchMarketOdds,
+  MatchTxLineProof,
 } from "@/app/lib/leaderboard-client";
+import { endedAfterRegulation } from "@/lib/txScoreProofSemantics";
 import { matchStageLabel } from "@/lib/matchStage";
 import { formatVenueLine, getVenueForMatch } from "./venues";
 
@@ -67,9 +69,17 @@ export type MundialFixture = {
   goals: MundialGoal[];
   /** Locked pre-kickoff 1X2 market (TxLINE). */
   marketOdds: MatchMarketOdds | null;
+  /** TxLINE on-chain score proof when available. */
+  txlineProof?: MatchTxLineProof | null;
+  /** TxLINE terminal status (5=FT, 10=AET, 13=FPE). */
+  terminalStatusId?: number | null;
   /** Epoch ms (UTC) from TxLINE StartTime when available. */
   kickoffUtcMs?: number;
 };
+
+export function settledOnRegulationScore(terminalStatusId?: number | null): boolean {
+  return endedAfterRegulation(terminalStatusId);
+}
 
 export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
   const venue = getVenueForMatch(fixture.id);
@@ -120,6 +130,8 @@ export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
     phase,
     goals,
     marketOdds: fixture.marketOdds ?? null,
+    txlineProof: fixture.txlineProof ?? null,
+    terminalStatusId: fixture.terminalStatusId ?? null,
     kickoffUtcMs: fixture.kickoffUtcMs,
   };
 }

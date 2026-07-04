@@ -2,20 +2,20 @@ import styles from "./TxLineCredit.module.css";
 
 const TXLINE_DOCS = "https://txline.txodds.com/documentation/worldcup";
 
-export default function TxLineCredit() {
+type TxLineCreditProps = {
+  /** Compact row inside the fixed app bottom dock. */
+  variant?: "dock" | "footer";
+};
+
+export default function TxLineCredit({ variant = "footer" }: TxLineCreditProps) {
   return (
     <a
       href={TXLINE_DOCS}
-      className={styles.credit}
+      className={variant === "dock" ? styles.creditDock : styles.creditFooter}
       target="_blank"
       rel="noopener noreferrer"
     >
-      <span className={styles.mark} aria-hidden>
-        Tx
-      </span>
-      <span>
-        Powered by <strong>TxLINE</strong>
-      </span>
+      Powered by <strong>TxLINE</strong>
     </a>
   );
 }

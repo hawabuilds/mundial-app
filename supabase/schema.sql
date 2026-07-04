@@ -37,37 +37,8 @@ alter table match_state
 alter table predictions enable row level security;
 alter table match_state enable row level security;
 
-drop policy if exists "Allow anon select on predictions" on predictions;
-create policy "Allow anon select on predictions"
-  on predictions for select to anon using (true);
-
-drop policy if exists "Allow anon insert on predictions" on predictions;
-create policy "Allow anon insert on predictions"
-  on predictions for insert to anon with check (true);
-
-drop policy if exists "Allow anon update on predictions" on predictions;
-create policy "Allow anon update on predictions"
-  on predictions for update to anon using (true) with check (true);
-
-drop policy if exists "Allow anon delete on predictions" on predictions;
-create policy "Allow anon delete on predictions"
-  on predictions for delete to anon using (true);
-
-drop policy if exists "Allow anon select on match_state" on match_state;
-create policy "Allow anon select on match_state"
-  on match_state for select to anon using (true);
-
-drop policy if exists "Allow anon insert on match_state" on match_state;
-create policy "Allow anon insert on match_state"
-  on match_state for insert to anon with check (true);
-
-drop policy if exists "Allow anon update on match_state" on match_state;
-create policy "Allow anon update on match_state"
-  on match_state for update to anon using (true) with check (true);
-
-drop policy if exists "Allow anon delete on match_state" on match_state;
-create policy "Allow anon delete on match_state"
-  on match_state for delete to anon using (true);
+-- No anon/authenticated policies — API routes and crons use SUPABASE_SERVICE_ROLE_KEY.
+-- Apply supabase/migrations/20260704153000_lock_rls.sql on databases created from older schema.sql.
 
 -- Payout wallet mapping (X user_id → EVM address). Written only via API + service_role.
 create table if not exists user_wallets (

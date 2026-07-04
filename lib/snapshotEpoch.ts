@@ -55,7 +55,6 @@ async function resolveSnapshotEpochId(now: Date): Promise<bigint | null> {
 
   if (isSolanaPayoutEnabled() && useSequentialSolanaEpochIds()) {
     const config = readSolanaPayoutConfig();
-    if (!config) return null;
     const connection = new Connection(config.rpcUrl, "confirmed");
     return resolveSolanaOpenEpochId({ connection, programId: config.programId });
   }

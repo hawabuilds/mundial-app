@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-config({ path: ".env.local" });
+config({ path: process.env.ENV_FILE ?? ".env.local" });
 
 import { FIXTURES } from "../app/data/fixtures";
 import {
@@ -58,6 +58,52 @@ async function clearUserWallets(): Promise<number> {
   return data?.length ?? 0;
 }
 
+function isMissingTableError(message: string): boolean {
+  return (
+    message.includes("does not exist") ||
+    message.includes("Could not find the table")
+  );
+}
+
+async function clearMatchGoals(): Promise<number> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_goals")
+    .delete()
+    .gte("match_id", 0)
+    .select("match_id");
+
+  if (error && isMissingTableError(error.message)) return 0;
+  if (error) throw new Error(`match_goals: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+async function clearMatchProofs(): Promise<number> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_proofs")
+    .delete()
+    .gte("fixture_id", 0)
+    .select("fixture_id");
+
+  if (error && isMissingTableError(error.message)) return 0;
+  if (error) throw new Error(`match_proofs: ${error.message}`);
+  return data?.length ?? 0;
+}
+
+async function clearMatchOdds(): Promise<number> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_odds")
+    .delete()
+    .gte("match_id", 0)
+    .select("match_id");
+
+  if (error && isMissingTableError(error.message)) return 0;
+  if (error) throw new Error(`match_odds: ${error.message}`);
+  return data?.length ?? 0;
+}
+
 async function removeTestMatchState(): Promise<{
   deleted: number;
   reset: number;
@@ -95,6 +141,7 @@ async function removeTestMatchState(): Promise<{
         final_home_score: null,
         final_away_score: null,
         match_tweet_id: null,
+        match_fixture_key: null,
       })
       .eq("match_id", row.match_id);
 
@@ -116,12 +163,18 @@ async function main() {
   const snapshotsDeleted = await clearLeaderboardSnapshots();
   const epochsDeleted = await clearPayoutEpochs();
   const walletsDeleted = await clearUserWallets();
+  const matchGoalsDeleted = await clearMatchGoals();
+  const matchProofsDeleted = await clearMatchProofs();
+  const matchOddsDeleted = await clearMatchOdds();
   const matchState = await removeTestMatchState();
 
   console.log(`\nCleared ${predictionsDeleted} prediction row(s).`);
   console.log(`Cleared ${snapshotsDeleted} leaderboard_snapshot row(s).`);
   console.log(`Cleared ${epochsDeleted} payout_epoch row(s).`);
   console.log(`Cleared ${walletsDeleted} user_wallet row(s).`);
+  console.log(`Cleared ${matchGoalsDeleted} match_goals row(s).`);
+  console.log(`Cleared ${matchProofsDeleted} match_proof row(s).`);
+  console.log(`Cleared ${matchOddsDeleted} match_odds row(s).`);
   console.log(
     `Removed ${matchState.deleted} test match_state row(s); reset ${matchState.reset} World Cup row(s).`,
   );

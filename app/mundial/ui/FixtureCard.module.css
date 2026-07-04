@@ -185,6 +185,17 @@
 
 }
 
+.settlementNote {
+  margin: 0;
+  font-family: var(--m-font-body);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--m-muted);
+  text-align: center;
+}
+
 .market {
   margin: 0;
   font-family: var(--m-font-body);

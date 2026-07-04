@@ -36,7 +36,7 @@
 
 .main {
   flex: 1;
-  padding: 0 var(--m-space-5) calc(var(--m-tab-total) + 36px);
+  padding: 0 var(--m-space-5) calc(var(--m-bottom-dock-h) + var(--m-space-2));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -45,7 +45,7 @@
   display: none;
 }
 
-.bar {
+.dock {
   position: fixed;
   bottom: 0;
   left: 50%;
@@ -53,14 +53,20 @@
   width: 100%;
   max-width: var(--m-max-width);
   display: flex;
-  align-items: stretch;
-  gap: var(--m-space-1);
-  padding: var(--m-space-2) var(--m-space-4)
-    calc(var(--m-space-3) + env(safe-area-inset-bottom, 0px));
+  flex-direction: column;
+  z-index: 50;
   background: rgba(0, 0, 0, 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--m-border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bar {
+  display: flex;
+  align-items: stretch;
+  gap: var(--m-space-1);
+  padding: var(--m-space-2) var(--m-space-4) var(--m-space-3);
 }
 
 .tab {

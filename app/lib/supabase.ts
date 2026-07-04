@@ -10,6 +10,16 @@ import {
   isReplyBeforeKickoff,
   loadEligiblePreKickoffPredictions,
 } from "@/lib/predictionEligibility";
+import type { Match1x2Odds } from "@/lib/scoring";
+import {
+  dailyScoresMerkleRootsPda,
+  solanaExplorerAddressUrl,
+} from "@/lib/txlineProofDisplay";
+import {
+  proofPopoverCopy,
+  statsFromProofPayload,
+  type ProofScoreMode,
+} from "@/lib/txScoreProofSemantics";
 
 let client: SupabaseClient | null = null;
 let adminClient: SupabaseClient | null = null;
@@ -19,6 +29,7 @@ export function normalizeSupabaseUrl(raw: string): string {
   return raw.trim().replace(/\/rest\/v1\/?$/i, "").replace(/\/+$/, "");
 }
 
+/** Anon Supabase client — Storage uploads only (bounty buckets). Do not use for DB table access. */
 export function getSupabaseClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -82,7 +93,7 @@ export async function savePrediction(row: PredictionRow): Promise<void> {
     );
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const base = {
     user_id: row.user_id,
@@ -144,7 +155,7 @@ export async function deletePredictionsForMatch(matchId: number): Promise<number
 
 /** Clears collection/scoring flags so crons do not treat a voided match as done. */
 export async function resetMatchCollection(matchId: number): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { error } = await supabase
     .from("match_state")
     .update({ predictions_collected_at: null })
@@ -154,7 +165,7 @@ export async function resetMatchCollection(matchId: number): Promise<void> {
 }
 
 export async function resetMatchScoring(matchId: number): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { error: pointsError } = await supabase
     .from("predictions")
@@ -189,7 +200,7 @@ export async function saveMatchTweetId(
   tweetId: string,
   fixtureKey?: string,
 ): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const existing = await getMatchState(matchId);
   const payload = {
     match_tweet_id: tweetId,
@@ -215,7 +226,7 @@ export async function saveMatchTweetId(
 }
 
 export async function clearMatchTweetId(matchId: number): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const existing = await getMatchState(matchId);
   if (!existing?.match_tweet_id && !existing?.match_fixture_key) return;
 
@@ -380,6 +391,39 @@ export async function saveMatchGoals(
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Merge incoming goals with stored rows and upsert the full merged set.
+ * Used by historical backfill — unlike {@link saveMatchGoals}, writes every
+ * merged row, not only keys seen in the latest live poll.
+ */
+export async function upsertMatchGoals(
+  fixtureId: number,
+  goals: StoredGoal[],
+): Promise<{ before: StoredGoal[]; after: StoredGoal[] }> {
+  const existing = await getMatchGoals(fixtureId).catch(() => [] as StoredGoal[]);
+  const merged = mergeMatchGoals(existing, goals);
+  if (merged.length === 0) {
+    return { before: existing, after: existing };
+  }
+
+  const supabase = getSupabaseAdminClient();
+  const rows = merged.map((goal) => ({
+    fixture_id: fixtureId,
+    goal_key: goalKey(goal),
+    minute: goal.minute,
+    side: goal.side,
+    player: goal.player,
+    own_goal: goal.ownGoal,
+  }));
+
+  const { error } = await supabase
+    .from("match_goals")
+    .upsert(rows, { onConflict: "fixture_id,goal_key" });
+
+  if (error) throw new Error(error.message);
+  return { before: existing, after: merged };
+}
+
 /** All goals accumulated for a fixture, ordered by minute. */
 export async function getMatchGoals(fixtureId: number): Promise<StoredGoal[]> {
   const supabase = getSupabaseAdminClient();
@@ -449,8 +493,211 @@ export async function getMatchOdds(fixtureId: number): Promise<StoredMatchOdds |
   };
 }
 
+export type StoredMatchProof = {
+  fixtureId: number;
+  txFixtureId: number;
+  seq: number;
+  statKeys: number[];
+  proofPayload: unknown;
+  proofReference: string | null;
+  proofTs: number | null;
+  fetchedAt: string;
+  semanticsMismatch: boolean;
+  showVerifiedBadge: boolean;
+  proofMode: ProofScoreMode | null;
+  terminalStatusId: number | null;
+};
+
+/** UI-facing summary derived from a stored TxLINE stat-validation proof. */
+export type MatchProofSummary = {
+  fixtureId: number;
+  txFixtureId: number;
+  seq: number;
+  proofTs: number | null;
+  proofReference: string | null;
+  stats: Array<{ key: number; value: number; period: number }>;
+  solanaExplorerUrl: string | null;
+  fetchedAt: string;
+  showVerifiedBadge: boolean;
+  semanticsMismatch: boolean;
+  proofMode: ProofScoreMode | null;
+  verificationCopy: string | null;
+};
+
+function mapStoredMatchProofRow(data: Record<string, unknown>): StoredMatchProof {
+  return {
+    fixtureId: Number(data.fixture_id),
+    txFixtureId: Number(data.tx_fixture_id),
+    seq: Number(data.seq),
+    statKeys: String(data.stat_keys)
+      .split(",")
+      .map((key) => Number.parseInt(key.trim(), 10))
+      .filter((key) => Number.isFinite(key)),
+    proofPayload: data.proof_payload,
+    proofReference: (data.proof_reference as string | null) ?? null,
+    proofTs: data.proof_ts != null ? Number(data.proof_ts) : null,
+    fetchedAt: data.fetched_at as string,
+    semanticsMismatch: Boolean(data.semantics_mismatch),
+    showVerifiedBadge: Boolean(data.show_verified_badge),
+    proofMode:
+      data.proof_mode === "regulation" || data.proof_mode === "total"
+        ? data.proof_mode
+        : null,
+    terminalStatusId:
+      data.terminal_status_id != null ? Number(data.terminal_status_id) : null,
+  };
+}
+
+export async function saveMatchProof(input: {
+  fixtureId: number;
+  txFixtureId: number;
+  seq: number;
+  statKeys: number[];
+  proofPayload: unknown;
+  proofReference?: string | null;
+  proofTs?: number | null;
+  semanticsMismatch?: boolean;
+  showVerifiedBadge?: boolean;
+  proofMode?: ProofScoreMode | null;
+  terminalStatusId?: number | null;
+}): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const row: Record<string, unknown> = {
+    fixture_id: input.fixtureId,
+    tx_fixture_id: input.txFixtureId,
+    seq: input.seq,
+    stat_keys: input.statKeys.join(","),
+    proof_payload: input.proofPayload,
+    proof_reference: input.proofReference ?? null,
+    proof_ts: input.proofTs ?? null,
+    fetched_at: new Date().toISOString(),
+    semantics_mismatch: input.semanticsMismatch ?? false,
+    show_verified_badge: input.showVerifiedBadge ?? false,
+    proof_mode: input.proofMode ?? null,
+    terminal_status_id: input.terminalStatusId ?? null,
+  };
+
+  let { error } = await supabase.from("match_proofs").upsert(row, {
+    onConflict: "fixture_id",
+  });
+
+  if (
+    error &&
+    (error.message.includes("semantics_mismatch") ||
+      error.message.includes("show_verified_badge") ||
+      error.message.includes("proof_mode") ||
+      error.message.includes("terminal_status_id"))
+  ) {
+    const {
+      semantics_mismatch: _a,
+      show_verified_badge: _b,
+      proof_mode: _c,
+      terminal_status_id: _d,
+      ...legacy
+    } = row;
+    ({ error } = await supabase.from("match_proofs").upsert(legacy, {
+      onConflict: "fixture_id",
+    }));
+  }
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getMatchProof(fixtureId: number): Promise<StoredMatchProof | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_proofs")
+    .select("*")
+    .eq("fixture_id", fixtureId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return mapStoredMatchProofRow(data as Record<string, unknown>);
+}
+
+export async function getMatchProofByTxFixtureId(
+  txFixtureId: number,
+): Promise<StoredMatchProof | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_proofs")
+    .select("*")
+    .eq("tx_fixture_id", txFixtureId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return mapStoredMatchProofRow(data as Record<string, unknown>);
+}
+
+export function toMatchProofSummary(stored: StoredMatchProof): MatchProofSummary {
+  const payload = stored.proofPayload as {
+    summary?: { updateStats?: { minTimestamp?: number } };
+  };
+  const minTs = payload.summary?.updateStats?.minTimestamp;
+  const solanaExplorerUrl =
+    typeof minTs === "number"
+      ? solanaExplorerAddressUrl(dailyScoresMerkleRootsPda(minTs).toBase58())
+      : null;
+
+  return {
+    fixtureId: stored.fixtureId,
+    txFixtureId: stored.txFixtureId,
+    seq: stored.seq,
+    proofTs: stored.proofTs,
+    proofReference: stored.proofReference,
+    stats: statsFromProofPayload(stored.proofPayload),
+    solanaExplorerUrl,
+    fetchedAt: stored.fetchedAt,
+    showVerifiedBadge: stored.showVerifiedBadge,
+    semanticsMismatch: stored.semanticsMismatch,
+    proofMode: stored.proofMode,
+    verificationCopy: stored.proofMode ? proofPopoverCopy(stored.proofMode) : null,
+  };
+}
+
+export async function getMatchProofSummary(
+  lookup: { fixtureId?: number; txFixtureId?: number },
+): Promise<MatchProofSummary | null> {
+  const stored =
+    lookup.fixtureId != null
+      ? await getMatchProof(lookup.fixtureId).catch(() => null)
+      : null;
+  const resolved =
+    stored ??
+    (lookup.txFixtureId != null
+      ? await getMatchProofByTxFixtureId(lookup.txFixtureId).catch(() => null)
+      : null);
+  if (!resolved) return null;
+  return toMatchProofSummary(resolved);
+}
+
+export async function getMatchProofSummariesForTxFixtures(
+  txFixtureIds: number[],
+): Promise<Map<number, MatchProofSummary>> {
+  const unique = [...new Set(txFixtureIds.filter((id) => id > 0))];
+  const map = new Map<number, MatchProofSummary>();
+  if (unique.length === 0) return map;
+
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_proofs")
+    .select("*")
+    .in("tx_fixture_id", unique);
+
+  if (error) throw new Error(error.message);
+
+  for (const row of data ?? []) {
+    const stored = mapStoredMatchProofRow(row as Record<string, unknown>);
+    map.set(stored.txFixtureId, toMatchProofSummary(stored));
+  }
+
+  return map;
+}
+
 export async function getMatchState(matchId: number): Promise<MatchStateRow | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data, error } = await supabase
     .from("match_state")
@@ -466,7 +713,7 @@ export async function getMatchState(matchId: number): Promise<MatchStateRow | nu
 }
 
 export async function markMatchCollected(matchId: number): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const now = new Date().toISOString();
   const existing = await getMatchState(matchId);
 
@@ -494,7 +741,7 @@ export async function isMatchCollected(matchId: number): Promise<boolean> {
 }
 
 export async function countPredictionsForMatch(matchId: number): Promise<number> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { count, error } = await supabase
     .from("predictions")
     .select("*", { count: "exact", head: true })
@@ -673,26 +920,50 @@ async function persistMatchFinalScore(
   if (error) throw new Error(error.message);
 }
 
+async function oddsForScoring(fixture: Fixture): Promise<Match1x2Odds | null> {
+  const fromRegistry = await getMatchOdds(fixture.id).catch(() => null);
+  if (fromRegistry) {
+    return {
+      homePct: fromRegistry.homePct,
+      drawPct: fromRegistry.drawPct,
+      awayPct: fromRegistry.awayPct,
+    };
+  }
+
+  const txFixtureId = fixture.externalFixtureId;
+  if (txFixtureId != null && txFixtureId !== fixture.id) {
+    const fromTx = await getMatchOdds(txFixtureId).catch(() => null);
+    if (fromTx) {
+      const odds: Match1x2Odds = {
+        homePct: fromTx.homePct,
+        drawPct: fromTx.drawPct,
+        awayPct: fromTx.awayPct,
+      };
+      try {
+        await saveMatchOdds(fixture.id, odds);
+      } catch {
+        /* optional migration of legacy TxLINE-keyed rows */
+      }
+      return odds;
+    }
+  }
+
+  return null;
+}
+
 export async function scoreMatchPredictions(
   matchId: number,
   finalScore: MatchScore,
   fixtureOverride?: Fixture,
 ): Promise<ScoreMatchResult> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const fixture = fixtureOverride ?? getFixtureById(matchId);
 
   if (!fixture) {
     throw new Error(`Unknown matchId: ${matchId}`);
   }
 
-  const storedOdds = await getMatchOdds(matchId).catch(() => null);
-  const odds = storedOdds
-    ? {
-        homePct: storedOdds.homePct,
-        drawPct: storedOdds.drawPct,
-        awayPct: storedOdds.awayPct,
-      }
-    : null;
+  const odds = await oddsForScoring(fixture);
   const matchState = await getMatchState(matchId);
 
   const { data: predictions, error: fetchError } = await supabase
@@ -861,7 +1132,7 @@ export type LeaderboardEntry = {
 };
 
 export async function getLeaderboard(limit?: number): Promise<LeaderboardEntry[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data, error } = await supabase
     .from("predictions")

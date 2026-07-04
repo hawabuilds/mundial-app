@@ -1,8 +1,8 @@
 /**
- * Tournament stage labels for match cards (no "World Cup" branding).
+ * Tournament stage labels for match cards.
  *
- * TxLINE often sends Competition: "World Cup" with no round — we only label a
- * stage when the competition string or static schedule gives us one. No guessing.
+ * TxLINE often sends Competition: "World Cup" with no round — knockout matches
+ * label as "World Cup"; group matches use group letter or "Group stage".
  */
 
 /** International friendlies — excluded from the live board. */
@@ -49,7 +49,7 @@ export function matchStageLabel(
   if (!raw || isFriendlyCompetition(raw)) return null;
 
   if (/round\s*of\s*32|last\s*32\b|round\s*32\b/i.test(raw)) {
-    return "Round of 32";
+    return "World Cup";
   }
   if (/round\s*of\s*16|last\s*16\b|round\s*16\b/i.test(raw)) {
     return "Round of 16";
@@ -77,9 +77,9 @@ export function matchStageLabel(
     return `Group ${stripped.match(/\bgroup\s+([A-L])\b/i)![1]!.toUpperCase()}`;
   }
 
-  // Bare "World Cup" from TxLINE — no round in the feed; don't invent one.
+  // Bare "World Cup" from TxLINE — no round in the feed.
   if (/^world\s*cup$/i.test(raw) || /^world\s*cup$/i.test(stripped)) {
-    return null;
+    return "World Cup";
   }
 
   if (/\bmatchday\s*\d+\b/i.test(raw) || (opts?.date && opts.date < WC_2026_KNOCKOUT_FROM)) {
@@ -89,6 +89,8 @@ export function matchStageLabel(
   if (stripped && !/world\s*cup/i.test(stripped)) {
     return titleCaseWords(stripped);
   }
+
+  if (/world\s*cup/i.test(raw)) return "World Cup";
 
   return null;
 }

@@ -90,9 +90,16 @@ export function pickBestTweet(
     if (!tweetIsValidMatchPost(hit, fixture)) continue;
 
     const mentioned = fixturesMentionedInTweet(hit.text);
-    const isExclusive =
-      mentioned.length === 1 && mentioned[0]!.id === fixture.id;
-    const tier = isExclusive ? 2 : mentioned.some((f) => f.id === fixture.id) ? 1 : 0;
+    let tier = 0;
+
+    if (mentioned.some((f) => f.id === fixture.id)) {
+      tier =
+        mentioned.length === 1 && mentioned[0]!.id === fixture.id ? 2 : 1;
+    } else if (tweetMatchesFixture(hit.text, fixture)) {
+      // Knockout / board fixtures: text matches but no registry row lists this pairing.
+      tier = mentioned.length === 0 ? 2 : 1;
+    }
+
     if (tier === 0) continue;
 
     const time = new Date(hit.createdAt).getTime();

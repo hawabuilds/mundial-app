@@ -12,6 +12,7 @@ import {
 import { parseSolanaAddress } from "@/lib/solanaAddress";
 import {
   diagnoseSolanaPayoutConfig,
+  isPlaceholderProgramId,
   readSolanaPayoutConfig,
 } from "@/lib/solanaPayoutConfig";
 import { getSolanaClaimAccounts } from "@/lib/solanaClaimMarker";
@@ -79,10 +80,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: configError }, { status: 503 });
   }
 
-  const config = readSolanaPayoutConfig();
-  if (!config) {
+  let config;
+  try {
+    config = readSolanaPayoutConfig();
+  } catch (error) {
     return NextResponse.json(
-      { error: "Solana payout is not configured" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Solana payout is not configured",
+      },
       { status: 503 },
     );
   }
@@ -193,9 +201,7 @@ export async function POST(request: NextRequest) {
       voucherId,
     );
 
-    const programDeployed =
-      config.programId.toBase58() !==
-      "11111111111111111111111111111111";
+    const programDeployed = !isPlaceholderProgramId(config.programId.toBase58());
 
     return NextResponse.json({
       epochId: epochId.toString(),

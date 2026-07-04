@@ -4,7 +4,7 @@ config({ path: ".env.local" });
 import type { Fixture } from "../app/data/fixtures";
 import {
   getLeaderboard,
-  getSupabaseClient,
+  getSupabaseAdminClient,
   scoreMatchPredictions,
 } from "../app/lib/supabase";
 import { collectPredictionsForFixture } from "../lib/collectPredictions";
@@ -22,7 +22,7 @@ const MATCH_1: Fixture = {
 };
 
 async function hasCompositePrimaryKey(): Promise<boolean> {
-  const sb = getSupabaseClient();
+  const sb = getSupabaseAdminClient();
   const testUser = "__pk_test__";
   await sb.from("predictions").delete().eq("user_id", testUser);
 

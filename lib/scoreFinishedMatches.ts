@@ -14,6 +14,10 @@ import {
 } from "@/app/lib/supabase";
 
 import { ensureMatchOddsForFixture } from "@/lib/ensureMatchOdds";
+import {
+  fetchAndPersistMatchProof,
+  retryMissingMatchProofs,
+} from "@/lib/matchProofFetch";
 
 import {
 
@@ -398,7 +402,7 @@ export async function autoScoreFinishedMatches(
 
       await scoreMatchPredictions(fixture.id, finalScore);
 
-
+      void fetchAndPersistMatchProof(fixture.id, fixture);
 
       results.push({
 
@@ -430,7 +434,12 @@ export async function autoScoreFinishedMatches(
 
   }
 
-
+  void retryMissingMatchProofs(active).catch((error) => {
+    console.warn(
+      "[match-proof] Retry pass failed:",
+      error instanceof Error ? error.message : error,
+    );
+  });
 
   return results;
 

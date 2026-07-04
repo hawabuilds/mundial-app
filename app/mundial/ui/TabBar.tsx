@@ -50,7 +50,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   },
 ];
 
-export default function TabBar({ active, onChange, vaultDot }: TabBarProps) {
+function TabBarNav({ active, onChange, vaultDot }: TabBarProps) {
   return (
     <nav className={styles.bar} aria-label="Main">
       {TABS.map(({ id, label, icon }) => {
@@ -72,6 +72,15 @@ export default function TabBar({ active, onChange, vaultDot }: TabBarProps) {
         );
       })}
     </nav>
+  );
+}
+
+export default function TabBar(props: TabBarProps) {
+  return (
+    <footer className={styles.dock}>
+      <TxLineCredit variant="dock" />
+      <TabBarNav {...props} />
+    </footer>
   );
 }
 
@@ -101,7 +110,6 @@ export function AppShell({
     <div className={styles.shell}>
       <AppHeader trailing={headerTrailing} />
       <main className={styles.main}>{children}</main>
-      <TxLineCredit />
       <TabBar active={tab} onChange={onTabChange} vaultDot={vaultDot} />
     </div>
   );

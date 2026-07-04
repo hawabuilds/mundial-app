@@ -30,9 +30,13 @@ async function main() {
     process.exit(1);
   }
 
-  const payoutConfig = readSolanaPayoutConfig();
-  if (!payoutConfig) {
-    console.error("Solana payout config missing — set MUNDIAL_REWARDS_PROGRAM_ID and USDC_MINT");
+  let payoutConfig;
+  try {
+    payoutConfig = readSolanaPayoutConfig();
+  } catch (error) {
+    console.error(
+      error instanceof Error ? error.message : "Solana payout config missing",
+    );
     process.exit(1);
   }
 

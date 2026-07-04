@@ -13,6 +13,7 @@ import {
 } from "@solana/spl-token";
 import type { SolanaClaimVoucherResponse } from "@/app/lib/solana-claim-voucher-client";
 import { encodeClaimInstructionData } from "@/lib/solanaClaimInstruction";
+import { isPlaceholderProgramId } from "@/lib/solanaPayoutConfig";
 
 function hexToBytes(hex: string): Uint8Array {
   const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
@@ -27,6 +28,12 @@ export function buildSolanaClaimTransaction(
   voucher: SolanaClaimVoucherResponse,
   payer: PublicKey,
 ): Transaction {
+  if (isPlaceholderProgramId(voucher.programId)) {
+    throw new Error(
+      "MUNDIAL_REWARDS_PROGRAM_ID is still the placeholder — set it to the deployed devnet program ID before claiming",
+    );
+  }
+
   if (!voucher.programDeployed) {
     throw new Error(
       "Solana rewards program is not deployed yet — your voucher is signed and ready once deploy finishes",

@@ -52,3 +52,8 @@ scripts/_*.png
 /terminals/
 /mcps/
 /canvases/
+
+# Solana Anchor build output (keypairs under target/deploy/)
+/solana-program/target/
+
+.vercel

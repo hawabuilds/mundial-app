@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
   fetchBoardMatches,
   fetchMyLeaderboardStats,
   type UserScoreBreakdown,
 } from "@/app/lib/leaderboard-client";
-import { sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { resolveCurrentMatch, sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
 import Card from "../ui/Card";
 import FixtureCard from "../ui/FixtureCard";
+import GoalBallBurst, { type GoalBurstEvent } from "../ui/GoalBallBurst";
 import ProfileMenu from "../ui/ProfileMenu";
 import ScoringRules from "../ui/ScoringRules";
 import { AppShell } from "../ui/TabBar";
@@ -19,6 +20,28 @@ import styles from "./Fixtures.module.css";
 function scoreLine(home: number, away: number): string {
   return `${home}-${away}`;
 }
+
+function findLiveMatch(fixtures: MundialFixture[]): MundialFixture | null {
+  const inPlay = fixtures.find((f) => f.phase === "live");
+  if (inPlay) return inPlay;
+  return (
+    fixtures.find(
+      (f) =>
+        f.status === "LIVE" ||
+        f.status === "HT" ||
+        f.status === "1H" ||
+        f.status === "2H" ||
+        f.status === "ET",
+    ) ?? null
+  );
+}
+
+type LiveScoreSnapshot = {
+  id: number;
+  home: number;
+  away: number;
+  goalCount: number;
+};
 
 type Props = {
   onTabChange: (t: TabId) => void;
@@ -35,6 +58,13 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     null,
   );
   const [statsLoading, setStatsLoading] = useState(true);
+  const liveScoreRef = useRef<LiveScoreSnapshot | null>(null);
+  const [goalBurst, setGoalBurst] = useState<GoalBurstEvent | null>(null);
+  const [goalBurstKey, setGoalBurstKey] = useState(0);
+
+  const clearGoalBurst = useCallback(() => setGoalBurst(null), []);
+
+  const liveOnBoard = fixtures.some((f) => f.phase === "live");
 
   useEffect(() => {
     let cancelled = false;
@@ -54,13 +84,63 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     };
 
     load();
-    // Poll often enough to keep the live clock + score fresh during a match.
-    const interval = window.setInterval(load, 30_000);
+    const interval = window.setInterval(load, liveOnBoard ? 5_000 : 30_000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [liveOnBoard]);
+
+  const liveMatch = findLiveMatch(fixtures);
+
+  useEffect(() => {
+    if (!liveMatch) {
+      liveScoreRef.current = null;
+      return;
+    }
+
+    const home = liveMatch.homeScore ?? 0;
+    const away = liveMatch.awayScore ?? 0;
+    const goalCount = liveMatch.goals.length;
+    const prev = liveScoreRef.current;
+
+    if (!prev || prev.id !== liveMatch.id) {
+      liveScoreRef.current = { id: liveMatch.id, home, away, goalCount };
+      return;
+    }
+
+    const scoreIncreased = home > prev.home || away > prev.away;
+    const goalsIncreased = goalCount > prev.goalCount;
+
+    if (scoreIncreased || goalsIncreased) {
+      const latest = liveMatch.goals[liveMatch.goals.length - 1];
+      const homeScored = home > prev.home;
+      const awayScored = away > prev.away;
+      const side: "home" | "away" =
+        latest?.side ??
+        (homeScored && !awayScored
+          ? "home"
+          : awayScored && !homeScored
+            ? "away"
+            : homeScored
+              ? "home"
+              : "away");
+
+      setGoalBurstKey((key) => key + 1);
+      setGoalBurst({
+        side,
+        player: latest?.player ?? null,
+        ownGoal: latest?.ownGoal ?? false,
+      });
+    }
+
+    liveScoreRef.current = { id: liveMatch.id, home, away, goalCount };
+  }, [
+    liveMatch?.id,
+    liveMatch?.homeScore,
+    liveMatch?.awayScore,
+    liveMatch?.goals.length,
+  ]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -100,6 +180,14 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const nextGame = upcomingList[0] ?? null;
   const comingUp = upcomingList.slice(1);
 
+  const currentMatch = resolveCurrentMatch(fixtures);
+  const showOddsFor = (fixture: MundialFixture): boolean =>
+    Boolean(
+      currentMatch &&
+        fixture.id === currentMatch.id &&
+        fixture.marketOdds,
+    );
+
   const featuredLiveLabel = !featuredLive
     ? null
     : featuredLive.status === "LIVE" || featuredLive.status === "HT"
@@ -127,6 +215,13 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       vaultDot={vaultDot}
       headerTrailing={<ProfileMenu />}
     >
+      {liveMatch ? (
+        <GoalBallBurst
+          key={goalBurstKey}
+          event={goalBurst}
+          onDone={clearGoalBurst}
+        />
+      ) : null}
       <Card glow className={styles.stat}>
         <div className={styles.statBlock}>
           <p className="m-label">Your place</p>
@@ -178,7 +273,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
               <FixtureCard
                 fixture={featuredLive}
                 featured
-                showMarketOdds={Boolean(featuredLive.marketOdds)}
+                showMarketOdds={showOddsFor(featuredLive)}
               />
               {liveRest.length > 0 ? (
                 <ul className={styles.list}>
@@ -199,7 +294,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
                 fixture={nextGame}
                 featured
                 withReply
-                showMarketOdds={Boolean(nextGame.marketOdds)}
+                showMarketOdds={showOddsFor(nextGame)}
               />
             </section>
           ) : null}

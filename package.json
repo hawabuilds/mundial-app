@@ -8,13 +8,20 @@
     "start": "next start",
     "lint": "eslint",
     "test:parser": "npx tsx lib/predictionParser.test.ts",
+    "test:score-proof": "npx tsx lib/txoddsScoreProof.test.ts",
+    "test:match-goals-backfill": "npx tsx lib/backfillMatchGoals.test.ts",
     "test:scoring": "npx tsx lib/scoring.test.ts",
     "test:solana-voucher": "npx tsx lib/solanaPayoutVoucher.test.ts",
     "sync:fixtures": "npx tsx scripts/sync-fixtures.ts",
     "collect:fixtures": "npx tsx scripts/collect-fixtures.ts",
     "gen:solana-keys": "npx tsx scripts/generate-solana-payout-keys.ts",
     "open:solana-epoch": "npx tsx scripts/open-solana-epoch.ts",
-    "migrate:txline": "node scripts/migrate-txline-tables.mjs"
+    "migrate:txline": "node scripts/migrate-txline-tables.mjs",
+    "cron:kickoff": "node scripts/trigger-kickoff.mjs",
+    "backfill:goals": "npx tsx scripts/backfill-goals.ts",
+    "backfill:proof": "npx tsx scripts/backfill-proof.ts",
+    "rescore:match": "npx tsx scripts/rescore-match.ts",
+    "e2e:solana-claim": "npx tsx scripts/e2e-solana-claim.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

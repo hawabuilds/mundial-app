@@ -58,9 +58,7 @@ export function diagnoseSolanaOperatorEnv(): string | null {
     if (!keypair) {
       return "SOLANA_OPERATOR_SECRET_KEY is not set — run: npm run gen:solana-keys";
     }
-    if (!readSolanaPayoutConfig()) {
-      return "Solana payout config missing — set MUNDIAL_REWARDS_PROGRAM_ID and USDC_MINT";
-    }
+    readSolanaPayoutConfig();
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : "Invalid operator key";
@@ -154,17 +152,16 @@ export async function openSolanaEpoch(params: {
   connection?: Connection;
   operator?: Keypair;
 }): Promise<OpenSolanaEpochResult> {
-  const config = readSolanaPayoutConfig();
-  if (!config) {
-    return { status: "error", reason: "Solana payout config is not set" };
-  }
-
-  if (
-    config.programId.toBase58() === "11111111111111111111111111111111"
-  ) {
+  let config;
+  try {
+    config = readSolanaPayoutConfig();
+  } catch (error) {
     return {
-      status: "skipped",
-      reason: "Program not deployed yet — replace MUNDIAL_REWARDS_PROGRAM_ID after anchor deploy",
+      status: "error",
+      reason:
+        error instanceof Error
+          ? error.message
+          : "Solana payout config is not set",
     };
   }
 

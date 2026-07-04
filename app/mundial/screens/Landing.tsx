@@ -6,6 +6,7 @@ import { isInAppBrowser } from "../lib/mobile-browser";
 import { mundialDocsPath, mundialHomePath } from "../lib/mundial-path";
 import Button from "../ui/Button";
 import BrandMark from "../ui/BrandMark";
+import TxLineCredit from "../ui/TxLineCredit";
 import styles from "./Landing.module.css";
 
 function XIcon() {
@@ -81,6 +82,7 @@ export default function Landing() {
       </div>
 
       <footer className={styles.footer}>
+        <TxLineCredit />
         <nav className={styles.footerDock} aria-label="Community links">
           <a
             href={SOCIAL_X_URL}

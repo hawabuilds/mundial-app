@@ -26,8 +26,5 @@ alter table public.predictions
 alter table public.match_goals enable row level security;
 alter table public.match_odds enable row level security;
 
-drop policy if exists "match_goals read" on public.match_goals;
-create policy "match_goals read" on public.match_goals for select using (true);
+-- No public policies — reads/writes via service_role in API routes (see 20260704153000_lock_rls.sql).
 
-drop policy if exists "match_odds read" on public.match_odds;
-create policy "match_odds read" on public.match_odds for select using (true);

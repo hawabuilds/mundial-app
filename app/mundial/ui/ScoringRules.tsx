@@ -25,8 +25,10 @@ export default function ScoringRules() {
         </div>
       </div>
       <p className={styles.bonus}>
-        Get the winner right and you can earn up to {MAX_UPSET_MULTIPLIER} times
-        more when you pick what the market did not expect.
+        Get the result right and your points multiply by the market.
+      </p>
+      <p className={styles.bonus}>
+        Underdog calls earn up to {MAX_UPSET_MULTIPLIER}x.
       </p>
     </section>
   );
