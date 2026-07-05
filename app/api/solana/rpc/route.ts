@@ -1,27 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readServerSolanaRpcUrl } from "@/lib/solanaPublicConfig";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 /**
- * Same-origin proxy for Solana JSON-RPC.
+ * Same-origin proxy for Solana JSON-RPC (devnet only).
  * The public devnet endpoint frequently returns 403 to browser origins; routing
  * through the server avoids CORS/origin blocking and lets us swap in a premium
  * RPC via SOLANA_RPC_URL without exposing it to the client.
  */
-function upstreamRpcUrl(): string {
-  return (
-    process.env.SOLANA_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.trim() ||
-    "https://api.devnet.solana.com"
-  );
-}
-
 export async function POST(request: NextRequest) {
   const body = await request.text();
 
   try {
-    const upstream = await fetch(upstreamRpcUrl(), {
+    const upstream = await fetch(readServerSolanaRpcUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,

@@ -1,4 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
+import { readServerSolanaRpcUrl } from "./solanaPublicConfig";
 
 /** Matches declare_id! placeholder in solana-program until Playground deploy. */
 export const PLACEHOLDER_MUNDIAL_REWARDS_PROGRAM_ID =
@@ -12,7 +13,7 @@ export type SolanaPayoutConfig = {
   programId: PublicKey;
   usdcMint: PublicKey;
   rpcUrl: string;
-  cluster: "devnet" | "mainnet-beta";
+  cluster: "devnet";
 };
 
 function parsePublicKey(raw: string, label: string): PublicKey {
@@ -61,17 +62,12 @@ export function readSolanaPayoutConfig(): SolanaPayoutConfig {
   }
   const usdcMint = parsePublicKey(usdcMintRaw, "USDC_MINT");
 
-  const rpcUrl =
-    process.env.SOLANA_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.trim() ||
-    "https://api.devnet.solana.com";
-
-  const cluster =
-    rpcUrl.includes("devnet") || process.env.SOLANA_CLUSTER === "devnet"
-      ? "devnet"
-      : "mainnet-beta";
-
-  return { programId, usdcMint, rpcUrl, cluster };
+  return {
+    programId,
+    usdcMint,
+    rpcUrl: readServerSolanaRpcUrl(),
+    cluster: "devnet",
+  };
 }
 
 export function diagnoseSolanaPayoutConfig(): string | null {
