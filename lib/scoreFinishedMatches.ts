@@ -434,12 +434,20 @@ export async function autoScoreFinishedMatches(
 
   }
 
-  void retryMissingMatchProofs(active).catch((error) => {
-    console.warn(
-      "[match-proof] Retry pass failed:",
-      error instanceof Error ? error.message : error,
-    );
-  });
+  void retryMissingMatchProofs(active)
+    .then((retry) => {
+      if (retry.upgrade.upgraded > 0 || retry.upgrade.attempted > 0) {
+        console.info(
+          `[match-proof] Upgrade pass: attempted=${retry.upgrade.attempted} upgraded=${retry.upgrade.upgraded} waiting=${retry.upgrade.stillWaiting} expired=${retry.upgrade.skippedExpired}`,
+        );
+      }
+    })
+    .catch((error) => {
+      console.warn(
+        "[match-proof] Retry pass failed:",
+        error instanceof Error ? error.message : error,
+      );
+    });
 
   return results;
 

@@ -16,10 +16,11 @@ import {
   solanaExplorerAddressUrl,
 } from "@/lib/txlineProofDisplay";
 import {
-  proofPopoverCopy,
+  dualProofPopoverIntro,
   statsFromProofPayload,
   type ProofScoreMode,
 } from "@/lib/txScoreProofSemantics";
+import type { ProofSeqSource } from "@/lib/txScoreEventSeq";
 
 let client: SupabaseClient | null = null;
 let adminClient: SupabaseClient | null = null;
@@ -243,7 +244,9 @@ export type StoredGoal = {
   minute: number | null;
   side: "home" | "away";
   player: string | null;
+  playerShort: string | null;
   ownGoal: boolean;
+  penalty: boolean;
 };
 
 /** Stable per-goal key — must not include player (name may arrive on a later poll). */
@@ -256,6 +259,7 @@ function goalQuality(goal: StoredGoal): number {
   if (goal.player) score += 4;
   if (goal.minute != null) score += 2;
   if (goal.ownGoal) score += 1;
+  if (goal.penalty) score += 1;
   return score;
 }
 
@@ -267,7 +271,9 @@ function pickBetterGoal(a: StoredGoal, b: StoredGoal): StoredGoal {
     side: a.side,
     minute: b.minute ?? a.minute,
     ownGoal: b.ownGoal || a.ownGoal,
+    penalty: b.penalty || a.penalty,
     player: b.player ?? a.player,
+    playerShort: b.playerShort ?? a.playerShort,
   };
 }
 
@@ -382,11 +388,19 @@ export async function saveMatchGoals(
     side: goal.side,
     player: goal.player,
     own_goal: goal.ownGoal,
+    is_penalty: goal.penalty,
   }));
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("match_goals")
     .upsert(rows, { onConflict: "fixture_id,goal_key" });
+
+  if (error?.message.includes("is_penalty")) {
+    const legacyRows = rows.map(({ is_penalty: _ignored, ...row }) => row);
+    ({ error } = await supabase
+      .from("match_goals")
+      .upsert(legacyRows, { onConflict: "fixture_id,goal_key" }));
+  }
 
   if (error) throw new Error(error.message);
 }
@@ -414,11 +428,19 @@ export async function upsertMatchGoals(
     side: goal.side,
     player: goal.player,
     own_goal: goal.ownGoal,
+    is_penalty: goal.penalty,
   }));
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("match_goals")
     .upsert(rows, { onConflict: "fixture_id,goal_key" });
+
+  if (error?.message.includes("is_penalty")) {
+    const legacyRows = rows.map(({ is_penalty: _ignored, ...row }) => row);
+    ({ error } = await supabase
+      .from("match_goals")
+      .upsert(legacyRows, { onConflict: "fixture_id,goal_key" }));
+  }
 
   if (error) throw new Error(error.message);
   return { before: existing, after: merged };
@@ -427,19 +449,30 @@ export async function upsertMatchGoals(
 /** All goals accumulated for a fixture, ordered by minute. */
 export async function getMatchGoals(fixtureId: number): Promise<StoredGoal[]> {
   const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
+  const withPenalty = await supabase
     .from("match_goals")
-    .select("minute, side, player, own_goal")
+    .select("minute, side, player, own_goal, is_penalty")
     .eq("fixture_id", fixtureId)
     .order("minute", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  const loaded =
+    withPenalty.error?.message.includes("is_penalty")
+      ? await supabase
+          .from("match_goals")
+          .select("minute, side, player, own_goal")
+          .eq("fixture_id", fixtureId)
+          .order("minute", { ascending: true })
+      : withPenalty;
 
-  const rows = (data ?? []).map((row) => ({
+  if (loaded.error) throw new Error(loaded.error.message);
+
+  const rows = (loaded.data ?? []).map((row) => ({
     minute: row.minute as number | null,
     side: (row.side as "home" | "away") ?? "home",
     player: (row.player as string | null) ?? null,
+    playerShort: null,
     ownGoal: Boolean(row.own_goal),
+    penalty: Boolean((row as { is_penalty?: boolean }).is_penalty),
   }));
 
   return mergeMatchGoals(rows, []);
@@ -506,6 +539,13 @@ export type StoredMatchProof = {
   showVerifiedBadge: boolean;
   proofMode: ProofScoreMode | null;
   terminalStatusId: number | null;
+  officialPayload: unknown | null;
+  regulationPayload: unknown | null;
+  officialSeq: number | null;
+  regulationSeq: number | null;
+  officialStatKeys: number[];
+  regulationStatKeys: number[];
+  seqSource: ProofSeqSource | null;
 };
 
 /** UI-facing summary derived from a stored TxLINE stat-validation proof. */
@@ -522,18 +562,32 @@ export type MatchProofSummary = {
   semanticsMismatch: boolean;
   proofMode: ProofScoreMode | null;
   verificationCopy: string | null;
+  officialStats: Array<{ key: number; value: number; period: number }>;
+  regulationStats: Array<{ key: number; value: number; period: number }>;
+  officialSeq: number | null;
+  regulationSeq: number | null;
+  seqSource: ProofSeqSource | null;
 };
 
+function parseStatKeys(value: unknown): number[] {
+  if (value == null) return [];
+  return String(value)
+    .split(",")
+    .map((key) => Number.parseInt(key.trim(), 10))
+    .filter((key) => Number.isFinite(key));
+}
+
 function mapStoredMatchProofRow(data: Record<string, unknown>): StoredMatchProof {
+  const regulationPayload =
+    data.regulation_payload ?? data.proof_payload ?? null;
+  const officialPayload = data.official_payload ?? null;
+
   return {
     fixtureId: Number(data.fixture_id),
     txFixtureId: Number(data.tx_fixture_id),
-    seq: Number(data.seq),
-    statKeys: String(data.stat_keys)
-      .split(",")
-      .map((key) => Number.parseInt(key.trim(), 10))
-      .filter((key) => Number.isFinite(key)),
-    proofPayload: data.proof_payload,
+    seq: Number(data.regulation_seq ?? data.seq),
+    statKeys: parseStatKeys(data.regulation_stat_keys ?? data.stat_keys),
+    proofPayload: regulationPayload,
     proofReference: (data.proof_reference as string | null) ?? null,
     proofTs: data.proof_ts != null ? Number(data.proof_ts) : null,
     fetchedAt: data.fetched_at as string,
@@ -545,6 +599,23 @@ function mapStoredMatchProofRow(data: Record<string, unknown>): StoredMatchProof
         : null,
     terminalStatusId:
       data.terminal_status_id != null ? Number(data.terminal_status_id) : null,
+    officialPayload,
+    regulationPayload,
+    officialSeq:
+      data.official_seq != null ? Number(data.official_seq) : null,
+    regulationSeq:
+      data.regulation_seq != null
+        ? Number(data.regulation_seq)
+        : Number(data.seq),
+    officialStatKeys: parseStatKeys(data.official_stat_keys),
+    regulationStatKeys: parseStatKeys(
+      data.regulation_stat_keys ?? data.stat_keys,
+    ),
+    seqSource:
+      data.seq_source === "game_finalised" ||
+      data.seq_source === "terminal_fallback"
+        ? data.seq_source
+        : null,
   };
 }
 
@@ -560,14 +631,25 @@ export async function saveMatchProof(input: {
   showVerifiedBadge?: boolean;
   proofMode?: ProofScoreMode | null;
   terminalStatusId?: number | null;
+  officialPayload?: unknown | null;
+  regulationPayload?: unknown | null;
+  officialSeq?: number | null;
+  regulationSeq?: number | null;
+  officialStatKeys?: number[];
+  regulationStatKeys?: number[];
+  seqSource?: ProofSeqSource | null;
 }): Promise<void> {
   const supabase = getSupabaseAdminClient();
+  const regulationPayload = input.regulationPayload ?? input.proofPayload;
+  const regulationSeq = input.regulationSeq ?? input.seq;
+  const regulationStatKeys = input.regulationStatKeys ?? input.statKeys;
+
   const row: Record<string, unknown> = {
     fixture_id: input.fixtureId,
     tx_fixture_id: input.txFixtureId,
-    seq: input.seq,
-    stat_keys: input.statKeys.join(","),
-    proof_payload: input.proofPayload,
+    seq: regulationSeq,
+    stat_keys: regulationStatKeys.join(","),
+    proof_payload: regulationPayload,
     proof_reference: input.proofReference ?? null,
     proof_ts: input.proofTs ?? null,
     fetched_at: new Date().toISOString(),
@@ -575,26 +657,62 @@ export async function saveMatchProof(input: {
     show_verified_badge: input.showVerifiedBadge ?? false,
     proof_mode: input.proofMode ?? null,
     terminal_status_id: input.terminalStatusId ?? null,
+    official_payload: input.officialPayload ?? null,
+    regulation_payload: regulationPayload,
+    official_seq: input.officialSeq ?? null,
+    regulation_seq: regulationSeq,
+    official_stat_keys: input.officialStatKeys?.length
+      ? input.officialStatKeys.join(",")
+      : null,
+    regulation_stat_keys: regulationStatKeys.join(","),
+    seq_source: input.seqSource ?? null,
   };
 
   let { error } = await supabase.from("match_proofs").upsert(row, {
     onConflict: "fixture_id",
   });
 
-  if (
-    error &&
-    (error.message.includes("semantics_mismatch") ||
-      error.message.includes("show_verified_badge") ||
-      error.message.includes("proof_mode") ||
-      error.message.includes("terminal_status_id"))
-  ) {
-    const {
-      semantics_mismatch: _a,
-      show_verified_badge: _b,
-      proof_mode: _c,
-      terminal_status_id: _d,
-      ...legacy
-    } = row;
+  const dualColumnKeys = [
+    "official_payload",
+    "regulation_payload",
+    "official_seq",
+    "regulation_seq",
+    "official_stat_keys",
+    "regulation_stat_keys",
+    "seq_source",
+  ] as const;
+
+  const semanticsColumnKeys = [
+    "semantics_mismatch",
+    "show_verified_badge",
+    "proof_mode",
+    "terminal_status_id",
+  ] as const;
+
+  const isMissingColumn = (message: string, keys: readonly string[]) =>
+    keys.some((key) => message.includes(key));
+
+  if (error && isMissingColumn(error.message, dualColumnKeys)) {
+    const withoutDual = { ...row };
+    for (const key of dualColumnKeys) {
+      delete withoutDual[key];
+    }
+    ({ error } = await supabase.from("match_proofs").upsert(withoutDual, {
+      onConflict: "fixture_id",
+    }));
+  }
+
+  if (error && isMissingColumn(error.message, semanticsColumnKeys)) {
+    const legacy: Record<string, unknown> = {
+      fixture_id: row.fixture_id,
+      tx_fixture_id: row.tx_fixture_id,
+      seq: row.seq,
+      stat_keys: row.stat_keys,
+      proof_payload: row.proof_payload,
+      proof_reference: row.proof_reference,
+      proof_ts: row.proof_ts,
+      fetched_at: row.fetched_at,
+    };
     ({ error } = await supabase.from("match_proofs").upsert(legacy, {
       onConflict: "fixture_id",
     }));
@@ -632,7 +750,9 @@ export async function getMatchProofByTxFixtureId(
 }
 
 export function toMatchProofSummary(stored: StoredMatchProof): MatchProofSummary {
-  const payload = stored.proofPayload as {
+  const regulationPayload = stored.regulationPayload ?? stored.proofPayload;
+  const officialPayload = stored.officialPayload;
+  const payload = regulationPayload as {
     summary?: { updateStats?: { minTimestamp?: number } };
   };
   const minTs = payload.summary?.updateStats?.minTimestamp;
@@ -641,19 +761,29 @@ export function toMatchProofSummary(stored: StoredMatchProof): MatchProofSummary
       ? solanaExplorerAddressUrl(dailyScoresMerkleRootsPda(minTs).toBase58())
       : null;
 
+  const regulationStats = statsFromProofPayload(regulationPayload);
+  const officialStats = officialPayload
+    ? statsFromProofPayload(officialPayload)
+    : [];
+
   return {
     fixtureId: stored.fixtureId,
     txFixtureId: stored.txFixtureId,
-    seq: stored.seq,
+    seq: stored.regulationSeq ?? stored.seq,
     proofTs: stored.proofTs,
     proofReference: stored.proofReference,
-    stats: statsFromProofPayload(stored.proofPayload),
+    stats: regulationStats,
     solanaExplorerUrl,
     fetchedAt: stored.fetchedAt,
     showVerifiedBadge: stored.showVerifiedBadge,
     semanticsMismatch: stored.semanticsMismatch,
     proofMode: stored.proofMode,
-    verificationCopy: stored.proofMode ? proofPopoverCopy(stored.proofMode) : null,
+    verificationCopy: dualProofPopoverIntro(),
+    officialStats,
+    regulationStats,
+    officialSeq: stored.officialSeq,
+    regulationSeq: stored.regulationSeq ?? stored.seq,
+    seqSource: stored.seqSource,
   };
 }
 
@@ -671,6 +801,21 @@ export async function getMatchProofSummary(
       : null);
   if (!resolved) return null;
   return toMatchProofSummary(resolved);
+}
+
+/** Stored proofs that anchored at terminal StatusId and may upgrade when game_finalised appears. */
+export async function listTerminalFallbackMatchProofs(): Promise<StoredMatchProof[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_proofs")
+    .select("*")
+    .eq("seq_source", "terminal_fallback");
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) =>
+    mapStoredMatchProofRow(row as Record<string, unknown>),
+  );
 }
 
 export async function getMatchProofSummariesForTxFixtures(

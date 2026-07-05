@@ -28,6 +28,12 @@ export const SOCCER_PERIOD_MULTIPLIER = {
 /** Observed in devnet stat-validation responses for full-time total goals. */
 export const SOCCER_TOTAL_PERIOD_CODE = 100;
 
+/**
+ * Some stat-validation responses tag FT totals with period 5 (match-segment code)
+ * instead of period 100 (aggregate total). Keys 1/2 still denote participant goals.
+ */
+export const SOCCER_FT_SEGMENT_PERIOD_CODE = 5;
+
 export const REGULATION_GOAL_STAT_KEYS = [
   SOCCER_PERIOD_MULTIPLIER.H1 + SOCCER_GOAL_BASE.PARTICIPANT_1,
   SOCCER_PERIOD_MULTIPLIER.H1 + SOCCER_GOAL_BASE.PARTICIPANT_2,
@@ -73,10 +79,14 @@ export function statValueForTotal(
   participantBase: number,
 ): number | null {
   for (const stat of stats) {
-    if (stat.key === participantBase && stat.period === SOCCER_TOTAL_PERIOD_CODE) {
+    if (stat.key !== participantBase) continue;
+    if (
+      stat.period === SOCCER_TOTAL_PERIOD_CODE ||
+      stat.period === SOCCER_FT_SEGMENT_PERIOD_CODE ||
+      stat.period === 0
+    ) {
       return stat.value;
     }
-    if (stat.key === participantBase && stat.period === 0) return stat.value;
   }
   return null;
 }
@@ -188,7 +198,26 @@ export function evaluateProofSemantics(input: {
 
 export function proofPopoverCopy(proofMode: ProofScoreMode): string {
   if (proofMode === "regulation") {
-    return "Regulation (90-min) goals cryptographically proven via TxLINE on-chain Merkle roots.";
+    return "90-minute goals used for Mundial settlement.";
   }
-  return "Final-score total goals anchored on-chain by TxLINE.";
+  return "Full-time totals from the official finalised record.";
+}
+
+/** One-line intro for the dual-proof popover (section bodies are separate). */
+export function dualProofPopoverIntro(): string {
+  return "Scores anchored on-chain via TxLINE Merkle proofs.";
+}
+
+/** Plain-English footnote when proof seq used terminal whistle fallback. */
+export const PROOF_TERMINAL_FALLBACK_FOOTNOTE =
+  "Proof anchored at final whistle; official finalised record pending.";
+
+/** @deprecated Use dualProofPopoverIntro + section copy + PROOF_TERMINAL_FALLBACK_FOOTNOTE. */
+export function dualProofPopoverCopy(input: {
+  hasOfficial: boolean;
+  hasRegulation: boolean;
+  seqSource: "game_finalised" | "terminal_fallback" | null;
+}): string | null {
+  if (!input.hasOfficial && !input.hasRegulation) return null;
+  return dualProofPopoverIntro();
 }

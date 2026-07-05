@@ -1,23 +1,41 @@
 import type { Fixture } from "@/app/data/fixtures";
-import { fixtureDateTime } from "@/app/data/fixtures";
-import { getMatchProof, getMatchState, getSupabaseAdminClient, saveMatchProof } from "@/app/lib/supabase";
-import { isMatchScored } from "@/app/lib/supabase";
+import { fixtureDateTime, getFixtureById } from "@/app/data/fixtures";
+import {
+  getMatchProof,
+  getMatchState,
+  getSupabaseAdminClient,
+  isMatchScored,
+  listTerminalFallbackMatchProofs,
+  saveMatchProof,
+  type StoredMatchProof,
+} from "@/app/lib/supabase";
 import { ensureMatchGoalsBackfilled } from "@/lib/backfillMatchGoals";
 import {
   evaluateProofSemantics,
+  REGULATION_GOAL_STAT_KEYS,
   statsFromProofPayload,
+  TOTAL_GOAL_STAT_KEYS,
 } from "./txScoreProofSemantics";
 import {
+  resolveProofEventSeqFromSources,
+  type GameFinalisedDiscoverySource,
+  type ResolvedProofEventSeq,
+} from "./txScoreEventSeq";
+import {
   fetchScoreProof,
+  fetchScoreSequence,
   fetchScoresSnapshot,
   isTxoddsConfigured,
   latestScoreEvent,
   resolveTxFixture,
-  terminalScoreEventSeq,
+  type TxFixture,
   type TxScoreEvent,
 } from "./txodds";
 
 const TERMINAL_STATUS_IDS = new Set([5, 10, 13, 100]);
+
+/** Stop retrying terminal_fallback upgrades this long after the proof was first stored. */
+export const TERMINAL_FALLBACK_UPGRADE_MAX_MS = 24 * 60 * 60 * 1000;
 
 function terminalStatusId(events: TxScoreEvent[]): number | null {
   const terminal = events.filter(
@@ -28,6 +46,136 @@ function terminalStatusId(events: TxScoreEvent[]): number | null {
     (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
   );
   return latest.StatusId ?? null;
+}
+
+async function loadScoreEventsForProof(txFixtureId: number): Promise<{
+  snapshot: TxScoreEvent[];
+  historical: TxScoreEvent[];
+}> {
+  const snapshot = await fetchScoresSnapshot(txFixtureId);
+  let historical: TxScoreEvent[] = [];
+  if (resolveProofEventSeqFromSources(snapshot, []).source !== "game_finalised") {
+    historical = await fetchScoreSequence(txFixtureId).catch(() => []);
+  }
+  return { snapshot, historical };
+}
+
+type DualProofFetchResult = {
+  officialResult: Awaited<ReturnType<typeof fetchScoreProof>>;
+  regulationResult: Awaited<ReturnType<typeof fetchScoreProof>>;
+};
+
+async function fetchDualProofsAtSeq(
+  txFixtureId: number,
+  proofSeq: number,
+): Promise<DualProofFetchResult> {
+  const [officialResult, regulationResult] = await Promise.all([
+    fetchScoreProof(txFixtureId, {
+      seq: proofSeq,
+      statKeys: [...TOTAL_GOAL_STAT_KEYS],
+    }),
+    fetchScoreProof(txFixtureId, {
+      seq: proofSeq,
+      statKeys: [...REGULATION_GOAL_STAT_KEYS],
+    }),
+  ]);
+  return { officialResult, regulationResult };
+}
+
+async function persistDualProof(input: {
+  mundialMatchId: number;
+  txFixture: TxFixture;
+  proofSeq: number;
+  seqResolution: ResolvedProofEventSeq;
+  events: TxScoreEvent[];
+  dual: DualProofFetchResult;
+  preserveOnPartialFailure?: StoredMatchProof | null;
+}): Promise<{ stored: boolean; reason?: string }> {
+  const { regulationResult, officialResult } = input.dual;
+
+  if (regulationResult.status !== "ok") {
+    const detail =
+      regulationResult.status === "error"
+        ? regulationResult.message
+        : regulationResult.reason;
+    return { stored: false, reason: detail };
+  }
+
+  const preserve = input.preserveOnPartialFailure;
+  const officialPayload =
+    officialResult.status === "ok"
+      ? officialResult.proof
+      : (preserve?.officialPayload ?? null);
+  const officialSeq =
+    officialResult.status === "ok"
+      ? officialResult.seq
+      : (preserve?.officialSeq ?? input.proofSeq);
+  const officialStatKeys =
+    officialResult.status === "ok"
+      ? officialResult.statKeys
+      : (preserve?.officialStatKeys ?? []);
+
+  if (officialResult.status !== "ok") {
+    console.warn(
+      `[match-proof] Official proof missing for TxLINE ${input.txFixture.FixtureId}: ${
+        officialResult.status === "error"
+          ? officialResult.message
+          : officialResult.reason
+      }`,
+    );
+  }
+
+  const matchState = await getMatchState(input.mundialMatchId).catch(() => null);
+  const settledHome = matchState?.final_home_score;
+  const settledAway = matchState?.final_away_score;
+  const homeIsP1 = input.txFixture.Participant1IsHome;
+  const terminalId = terminalStatusId(input.events);
+
+  let semanticsMismatch = false;
+  let showVerifiedBadge = false;
+
+  if (typeof settledHome === "number" && typeof settledAway === "number") {
+    const evaluation = evaluateProofSemantics({
+      stats: statsFromProofPayload(regulationResult.proof),
+      statKeys: regulationResult.statKeys,
+      settledHome,
+      settledAway,
+      homeIsP1,
+      terminalStatusId: terminalId,
+    });
+    semanticsMismatch = evaluation.semanticsMismatch;
+    showVerifiedBadge = evaluation.showVerifiedBadge;
+
+    if (semanticsMismatch) {
+      console.warn(
+        `[match-proof] Semantics mismatch match ${input.mundialMatchId}: proven ${evaluation.provenHome ?? "?"}-${evaluation.provenAway ?? "?"} vs settled ${settledHome}-${settledAway}`,
+      );
+    }
+  }
+
+  const root = regulationResult.proof.summary.eventStatsSubTreeRoot;
+  await saveMatchProof({
+    fixtureId: input.mundialMatchId,
+    txFixtureId: input.txFixture.FixtureId,
+    seq: regulationResult.seq,
+    statKeys: regulationResult.statKeys,
+    proofPayload: regulationResult.proof,
+    proofReference: root,
+    proofTs: regulationResult.proof.ts,
+    semanticsMismatch,
+    showVerifiedBadge,
+    proofMode: "regulation",
+    terminalStatusId: terminalId,
+    officialPayload,
+    regulationPayload: regulationResult.proof,
+    officialSeq,
+    regulationSeq: regulationResult.seq,
+    officialStatKeys,
+    regulationStatKeys: regulationResult.statKeys,
+    seqSource: input.seqResolution.source,
+  });
+
+  return { stored: true };
 }
 
 /** Fetch TxLINE stat-validation proof and persist — never throws. */
@@ -64,76 +212,43 @@ export async function fetchAndPersistMatchProof(
       return { stored: false, reason: "no TxLINE fixture match" };
     }
 
-    const events = await fetchScoresSnapshot(txFixture.FixtureId);
-    const seq = terminalScoreEventSeq(events);
-    if (seq == null) {
+    const { snapshot, historical } = await loadScoreEventsForProof(txFixture.FixtureId);
+    const seqResolution = resolveProofEventSeqFromSources(snapshot, historical);
+    if (seqResolution.seq == null) {
       console.info(
-        `[match-proof] Terminal scores seq not ready for TxLINE fixture ${txFixture.FixtureId}`,
+        `[match-proof] Scores seq not ready for TxLINE fixture ${txFixture.FixtureId}`,
       );
-      return { stored: false, reason: "terminal scores seq not ready" };
+      return { stored: false, reason: "scores seq not ready" };
     }
 
-    const result = await fetchScoreProof(txFixture.FixtureId, { seq });
-    if (result.status === "not_yet_available") {
-      console.info(
-        `[match-proof] Proof not yet available for TxLINE fixture ${txFixture.FixtureId}: ${result.reason}`,
-      );
-      return { stored: false, reason: result.reason };
-    }
-    if (result.status === "error") {
+    if (seqResolution.source === "terminal_fallback") {
       console.warn(
-        `[match-proof] Proof fetch failed for match ${mundialMatchId}: ${result.message}`,
+        `[match-proof] No game_finalised record for TxLINE ${txFixture.FixtureId}; using terminal StatusId fallback seq ${seqResolution.seq}`,
       );
-      return { stored: false, reason: result.message };
+    } else if (seqResolution.gameFinalisedIn === "historical") {
+      console.info(
+        `[match-proof] game_finalised for TxLINE ${txFixture.FixtureId} found in historical sequence (seq ${seqResolution.seq})`,
+      );
     }
 
-    const matchState = await getMatchState(mundialMatchId).catch(() => null);
-    const settledHome = matchState?.final_home_score;
-    const settledAway = matchState?.final_away_score;
-    const homeIsP1 = txFixture.Participant1IsHome;
-    const terminalId = terminalStatusId(events);
-
-    let semanticsMismatch = false;
-    let showVerifiedBadge = result.proofMode === "total";
-
-    if (typeof settledHome === "number" && typeof settledAway === "number") {
-      const evaluation = evaluateProofSemantics({
-        stats: statsFromProofPayload(result.proof),
-        statKeys: result.statKeys,
-        settledHome,
-        settledAway,
-        homeIsP1,
-        terminalStatusId: terminalId,
-      });
-      semanticsMismatch = evaluation.semanticsMismatch;
-      showVerifiedBadge = evaluation.showVerifiedBadge;
-
-      if (semanticsMismatch) {
-        console.warn(
-          `[match-proof] Semantics mismatch match ${mundialMatchId}: proven ${evaluation.provenHome ?? "?"}-${evaluation.provenAway ?? "?"} vs settled ${settledHome}-${settledAway}`,
-        );
-      }
-    }
-
-    const root = result.proof.summary.eventStatsSubTreeRoot;
-    await saveMatchProof({
-      fixtureId: mundialMatchId,
-      txFixtureId: txFixture.FixtureId,
-      seq: result.seq,
-      statKeys: result.statKeys,
-      proofPayload: result.proof,
-      proofReference: root,
-      proofTs: result.proof.ts,
-      semanticsMismatch,
-      showVerifiedBadge,
-      proofMode: result.proofMode,
-      terminalStatusId: terminalId,
+    const dual = await fetchDualProofsAtSeq(txFixture.FixtureId, seqResolution.seq);
+    const mergedEvents = [...snapshot, ...historical];
+    const result = await persistDualProof({
+      mundialMatchId,
+      txFixture,
+      proofSeq: seqResolution.seq,
+      seqResolution,
+      events: mergedEvents.length > 0 ? mergedEvents : snapshot,
+      dual,
     });
 
-    console.info(
-      `[match-proof] Stored proof for match ${mundialMatchId} (TxLINE ${txFixture.FixtureId}, seq ${result.seq}, mode ${result.proofMode})`,
-    );
-    return { stored: true };
+    if (result.stored) {
+      const stored = await getMatchProof(mundialMatchId).catch(() => null);
+      console.info(
+        `[match-proof] Stored dual proof for match ${mundialMatchId} (TxLINE ${txFixture.FixtureId}, seq ${seqResolution.seq}, source ${seqResolution.source}, badge ${stored?.showVerifiedBadge ?? "?"})`,
+      );
+    }
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(
@@ -144,11 +259,110 @@ export async function fetchAndPersistMatchProof(
   }
 }
 
+export type TerminalFallbackUpgradeResult = {
+  attempted: number;
+  upgraded: number;
+  skippedExpired: number;
+  stillWaiting: number;
+};
+
+/**
+ * Re-anchor terminal_fallback proofs when game_finalised later appears in snapshot or historical feed.
+ */
+export async function upgradeTerminalFallbackProofs(
+  now: Date = new Date(),
+): Promise<TerminalFallbackUpgradeResult> {
+  if (!isTxoddsConfigured()) {
+    return { attempted: 0, upgraded: 0, skippedExpired: 0, stillWaiting: 0 };
+  }
+
+  const proofs = await listTerminalFallbackMatchProofs().catch(() => [] as StoredMatchProof[]);
+  const nowMs = now.getTime();
+  let attempted = 0;
+  let upgraded = 0;
+  let skippedExpired = 0;
+  let stillWaiting = 0;
+
+  for (const proof of proofs) {
+    const ageMs = nowMs - Date.parse(proof.fetchedAt);
+    if (!Number.isFinite(ageMs) || ageMs > TERMINAL_FALLBACK_UPGRADE_MAX_MS) {
+      skippedExpired += 1;
+      continue;
+    }
+
+    attempted += 1;
+
+    const { snapshot, historical } = await loadScoreEventsForProof(proof.txFixtureId);
+    const discovered = resolveProofEventSeqFromSources(snapshot, historical);
+    if (discovered.source !== "game_finalised" || discovered.seq == null) {
+      stillWaiting += 1;
+      continue;
+    }
+
+    const foundIn = discovered.gameFinalisedIn as GameFinalisedDiscoverySource;
+    console.info(
+      `[match-proof] Upgrading terminal_fallback for match ${proof.fixtureId} (TxLINE ${proof.txFixtureId}): game_finalised seq ${discovered.seq} found in ${foundIn}`,
+    );
+
+    const fixture = getFixtureById(proof.fixtureId);
+    if (!fixture) {
+      console.warn(
+        `[match-proof] Upgrade skipped — unknown registry match ${proof.fixtureId}`,
+      );
+      stillWaiting += 1;
+      continue;
+    }
+
+    const kickoffMs = fixtureDateTime(fixture).getTime();
+    const txFixture = await resolveTxFixture(fixture.home, fixture.away, kickoffMs);
+    if (!txFixture) {
+      stillWaiting += 1;
+      continue;
+    }
+
+    const dual = await fetchDualProofsAtSeq(proof.txFixtureId, discovered.seq);
+    const mergedEvents = [...snapshot, ...historical];
+    const result = await persistDualProof({
+      mundialMatchId: proof.fixtureId,
+      txFixture,
+      proofSeq: discovered.seq,
+      seqResolution: discovered,
+      events: mergedEvents.length > 0 ? mergedEvents : snapshot,
+      dual,
+      preserveOnPartialFailure: proof,
+    });
+
+    if (result.stored) {
+      upgraded += 1;
+      console.info(
+        `[match-proof] Upgraded match ${proof.fixtureId} to game_finalised seq ${discovered.seq} (source ${foundIn})`,
+      );
+    } else {
+      console.warn(
+        `[match-proof] Upgrade refetch failed for match ${proof.fixtureId}; kept prior proof (${result.reason ?? "unknown"})`,
+      );
+      stillWaiting += 1;
+    }
+  }
+
+  return { attempted, upgraded, skippedExpired, stillWaiting };
+}
+
 /** Retry proof fetch for scored matches that have no stored proof yet. */
 export async function retryMissingMatchProofs(
   fixtures: Fixture[],
-): Promise<{ attempted: number; stored: number }> {
-  if (!isTxoddsConfigured()) return { attempted: 0, stored: 0 };
+): Promise<{
+  attempted: number;
+  stored: number;
+  upgrade: TerminalFallbackUpgradeResult;
+}> {
+  if (!isTxoddsConfigured()) {
+    return {
+      attempted: 0,
+      stored: 0,
+      upgrade: { attempted: 0, upgraded: 0, skippedExpired: 0, stillWaiting: 0 },
+    };
+  }
 
   let attempted = 0;
   let stored = 0;
@@ -164,7 +378,9 @@ export async function retryMissingMatchProofs(
     if (!before && after) stored += 1;
   }
 
-  return { attempted, stored };
+  const upgrade = await upgradeTerminalFallbackProofs();
+
+  return { attempted, stored, upgrade };
 }
 
 /** Terminal status from scores snapshot (for board UI when match_state absent). */
