@@ -144,7 +144,9 @@ export type MatchGoalInfo = {
   minute: number | null;
   side: "home" | "away";
   player: string | null;
+  playerShort: string | null;
   ownGoal: boolean;
+  penalty: boolean;
 };
 
 export type MatchMarketOdds = {
@@ -167,6 +169,11 @@ export type MatchTxLineProof = {
   semanticsMismatch: boolean;
   proofMode: "regulation" | "total" | null;
   verificationCopy: string | null;
+  officialStats: Array<{ key: number; value: number; period: number }>;
+  regulationStats: Array<{ key: number; value: number; period: number }>;
+  officialSeq: number | null;
+  regulationSeq: number | null;
+  seqSource: "game_finalised" | "terminal_fallback" | null;
 };
 
 export type UpcomingMatch = Fixture & {

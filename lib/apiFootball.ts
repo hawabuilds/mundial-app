@@ -312,7 +312,9 @@ export type MatchGoal = {
   minute: number | null;
   side: "home" | "away";
   player: string | null;
+  playerShort: string | null;
   ownGoal: boolean;
+  penalty: boolean;
 };
 
 function stubTxFixture(fixtureId: number, lookup: MatchLookup, gameState?: number): TxFixture {

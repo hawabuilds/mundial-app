@@ -9,6 +9,7 @@ import ExampleCallPreview from "./ExampleCallPreview";
 import Flag from "./Flag";
 import MarketOddsLine from "./MarketOddsLine";
 import TxLineProofPopover from "./TxLineProofPopover";
+import { goalScorerDisplayName } from "@/lib/playerDisplayName";
 import styles from "./FixtureCard.module.css";
 
 type FixtureCardProps = {
@@ -36,7 +37,9 @@ function fixtureInPlay(fixture: MundialFixture): boolean {
 type GroupedScorer = {
   side: "home" | "away";
   player: string | null;
+  playerShort: string | null;
   ownGoal: boolean;
+  penalty: boolean;
   minutes: number[];
 };
 
@@ -50,19 +53,23 @@ function groupScorersByPlayer(goals: MundialGoal[]): GroupedScorer[] {
       rows.push({
         side: goal.side,
         player: null,
+        playerShort: null,
         ownGoal: goal.ownGoal,
+        penalty: goal.penalty,
         minutes: goal.minute != null ? [goal.minute] : [],
       });
       continue;
     }
 
-    const key = `${goal.player}|${goal.ownGoal ? 1 : 0}`;
+    const key = `${goal.player}|${goal.ownGoal ? 1 : 0}|${goal.penalty ? 1 : 0}`;
     let row = byPlayer.get(key);
     if (!row) {
       row = {
         side: goal.side,
         player: goal.player,
+        playerShort: goal.playerShort,
         ownGoal: goal.ownGoal,
+        penalty: goal.penalty,
         minutes: [],
       };
       byPlayer.set(key, row);
@@ -83,13 +90,8 @@ function formatGoalMinutes(minutes: number[]): string {
   return minutes.map((m) => `${m}\u2019`).join(", ");
 }
 
-/** e.g. "Lionel Messi" → "L. Messi" */
-function formatScorerShortName(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return name;
-  if (parts.length === 1) return parts[0]!;
-  const last = parts[parts.length - 1]!;
-  return `${parts[0]!.charAt(0).toUpperCase()}. ${last}`;
+function scorerDisplayName(row: Pick<GroupedScorer, "player" | "playerShort">): string | null {
+  return goalScorerDisplayName(row);
 }
 
 export default function FixtureCard({
@@ -177,7 +179,8 @@ export default function FixtureCard({
             (goal) =>
               newGoalKey === `${goal.side}-${goal.minute}-${goal.player}` &&
               goal.player === row.player &&
-              goal.ownGoal === row.ownGoal,
+              goal.ownGoal === row.ownGoal &&
+              goal.penalty === row.penalty,
           );
           return (
             <li
@@ -194,7 +197,8 @@ export default function FixtureCard({
                   <>
                     {row.minutes.length > 0 ? " " : null}
                     <span className={styles.scorerName}>
-                      {formatScorerShortName(row.player)}
+                      {scorerDisplayName(row)}
+                      {row.penalty ? " (P)" : ""}
                       {row.ownGoal ? " (OG)" : ""}
                     </span>
                   </>

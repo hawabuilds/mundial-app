@@ -62,6 +62,35 @@ const MOCK_SEQUENCE: TxScoreEvent[] = [
   },
 ];
 
+/** Penalty scored via penalty_outcome — period stats only give minute, not scorer. */
+const MOCK_PENALTY_SEQUENCE: TxScoreEvent[] = [
+  {
+    FixtureId: 18188721,
+    Action: "lineups",
+    Seq: 1,
+    Participant1IsHome: true,
+    Lineups: [
+      { preferredName: "Paraguay", lineups: [] },
+      {
+        preferredName: "France",
+        lineups: [
+          { player: { normativeId: 453928, preferredName: "Mbappe Lottin, Kylian" } },
+        ],
+      },
+    ],
+  },
+  {
+    FixtureId: 18188721,
+    Action: "penalty_outcome",
+    Seq: 693,
+    Participant: 2,
+    Participant1IsHome: true,
+    Clock: { Seconds: 69 * 60 },
+    Data: { Outcome: "Scored", PlayerId: 453928 },
+    Stats: { "3001": 0, "3002": 1 },
+  },
+];
+
 console.log("backfillMatchGoals tests\n");
 
 let passed = 0;
@@ -114,6 +143,16 @@ run("deriveMatchGoalsFromScoreSequence rebuilds 2-1 from mock historical sequenc
   assert.equal(goals[0]?.minute, 23);
   assert.equal(goals[1]?.minute, 55);
   assert.equal(goals[2]?.minute, 78);
+});
+
+run("deriveMatchGoalsFromScoreSequence resolves scorer from penalty_outcome", () => {
+  const goals = deriveMatchGoalsFromScoreSequence(MOCK_PENALTY_SEQUENCE, true, 0, 1);
+  assert.equal(goals.length, 1);
+  assert.equal(goals[0]?.side, "away");
+  assert.equal(goals[0]?.minute, 69);
+  assert.equal(goals[0]?.player, "Kylian Mbappe Lottin");
+  assert.equal(goals[0]?.playerShort, "K. Mbappe");
+  assert.equal(goals[0]?.penalty, true);
 });
 
 run("deriveMatchGoalsFromScoreSequence is idempotent on re-merge keys", () => {

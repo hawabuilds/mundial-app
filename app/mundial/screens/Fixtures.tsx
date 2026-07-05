@@ -7,7 +7,13 @@ import {
   fetchMyLeaderboardStats,
   type UserScoreBreakdown,
 } from "@/app/lib/leaderboard-client";
-import { resolveCurrentMatch, sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { goalScorerDisplayName } from "@/lib/playerDisplayName";
+import {
+  resolveCurrentMatch,
+  sortFixturesByKickoffAsc,
+  toMundialFixture,
+  type MundialFixture,
+} from "../lib/fixtures";
 import Card from "../ui/Card";
 import FixtureCard from "../ui/FixtureCard";
 import GoalBallBurst, { type GoalBurstEvent } from "../ui/GoalBallBurst";
@@ -129,7 +135,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       setGoalBurstKey((key) => key + 1);
       setGoalBurst({
         side,
-        player: latest?.player ?? null,
+        player: latest ? goalScorerDisplayName(latest) : null,
         ownGoal: latest?.ownGoal ?? false,
       });
     }

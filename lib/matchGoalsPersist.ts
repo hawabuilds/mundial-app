@@ -21,7 +21,9 @@ export function mapTxGoalsToMatchGoals(
     minute: goal.minute,
     side: (goal.participant === 1 ? homeIsP1 : !homeIsP1) ? "home" : "away",
     player: goal.player,
+    playerShort: goal.playerShort,
     ownGoal: goal.ownGoal,
+    penalty: goal.penalty,
   }));
 }
 

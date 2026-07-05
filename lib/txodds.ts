@@ -24,11 +24,18 @@ import {
   REGULATION_GOAL_STAT_KEYS,
   TOTAL_GOAL_STAT_KEYS,
 } from "./txScoreProofSemantics";
+import { resolveProofEventSeq } from "./txScoreEventSeq";
 import { getTxoddsOrigin } from "./txoddsOrigin";
 import type { TxScoreStat } from "./txScoreStat";
+import {
+  formatPlayerFullName,
+  formatPlayerShortName,
+} from "./playerDisplayName";
 
 export { getTxoddsOrigin };
 export type { TxScoreStat } from "./txScoreStat";
+export { resolveProofEventSeq, gameFinalisedEventSeq } from "./txScoreEventSeq";
+export type { ProofSeqSource } from "./txScoreEventSeq";
 
 let cachedFileToken: string | null | undefined;
 
@@ -276,15 +283,37 @@ export type TxGoal = {
   minute: number | null;
   participant: 1 | 2;
   player: string | null;
+  playerShort: string | null;
   ownGoal: boolean;
+  penalty: boolean;
 };
 
-/** "Surname, First" -> "First Surname"; leaves single-token names as-is. */
-function formatPlayerName(preferred: string | null | undefined): string | null {
-  if (!preferred) return null;
-  const parts = preferred.split(",").map((s) => s.trim());
-  if (parts.length >= 2 && parts[1]) return `${parts[1]} ${parts[0]}`.trim();
-  return preferred.trim();
+function isOwnGoalType(goalType: unknown): boolean {
+  return /own/i.test(String(goalType ?? ""));
+}
+
+function isPenaltyGoalType(goalType: unknown): boolean {
+  return /pen/i.test(String(goalType ?? ""));
+}
+
+function scorerFromData(
+  data: Record<string, unknown> | undefined,
+  nameById: Map<number, string>,
+): { player: string | null; playerShort: string | null } {
+  if (!data) return { player: null, playerShort: null };
+  const inlineName =
+    typeof data.PreferredName === "string"
+      ? data.PreferredName
+      : typeof data.PlayerName === "string"
+        ? data.PlayerName
+        : null;
+  const pid = typeof data.PlayerId === "number" ? data.PlayerId : null;
+  const preferred = inlineName ?? (pid != null ? nameById.get(pid) : undefined);
+  if (!preferred) return { player: null, playerShort: null };
+  return {
+    player: formatPlayerFullName(preferred),
+    playerShort: formatPlayerShortName(preferred),
+  };
 }
 
 function lineupNameById(events: TxScoreEvent[]): Map<number, string> {
@@ -299,24 +328,6 @@ function lineupNameById(events: TxScoreEvent[]): Map<number, string> {
     }
   }
   return nameById;
-}
-
-function playerFromData(
-  data: Record<string, unknown> | undefined,
-  nameById: Map<number, string>,
-): string | null {
-  if (!data) return null;
-  const inlineName =
-    typeof data.PreferredName === "string"
-      ? data.PreferredName
-      : typeof data.PlayerName === "string"
-        ? data.PlayerName
-        : null;
-  const pid = typeof data.PlayerId === "number" ? data.PlayerId : null;
-  return (
-    formatPlayerName(inlineName) ??
-    (pid != null ? formatPlayerName(nameById.get(pid)) : null)
-  );
 }
 
 function goalMinute(seconds: number | undefined): number | null {
@@ -352,7 +363,14 @@ function goalsFromPeriodStats(events: TxScoreEvent[]): TxGoal[] {
         prev.set(trackKey, v);
 
         for (let i = before; i < v; i += 1) {
-          goals.push({ minute, participant, player: null, ownGoal: false });
+          goals.push({
+            minute,
+            participant,
+            player: null,
+            playerShort: null,
+            ownGoal: false,
+            penalty: false,
+          });
         }
       }
     }
@@ -374,7 +392,9 @@ function mergeGoalLists(periodGoals: TxGoal[], actionGoals: TxGoal[]): TxGoal[] 
       minute: goal.minute ?? prev.minute,
       participant: goal.participant,
       ownGoal: goal.ownGoal || prev.ownGoal,
+      penalty: goal.penalty || prev.penalty,
       player: goal.player ?? prev.player,
+      playerShort: goal.playerShort ?? prev.playerShort,
     });
   }
   return [...byKey.values()];
@@ -393,7 +413,7 @@ export function extractActionGoals(events: TxScoreEvent[]): TxGoal[] {
   return goalsFromActions(events, nameById);
 }
 
-/** Every goal + action_amend row in the snapshot (latest amend wins per clock). */
+/** Every goal, penalty_outcome (scored), and action_amend row (latest amend wins per clock). */
 function goalsFromActions(
   events: TxScoreEvent[],
   nameById: Map<number, string>,
@@ -411,7 +431,9 @@ function goalsFromActions(
       minute: next.minute ?? prev.minute,
       participant: next.participant,
       ownGoal: next.ownGoal || prev.ownGoal,
+      penalty: next.penalty || prev.penalty,
       player: next.player ?? prev.player,
+      playerShort: next.playerShort ?? prev.playerShort,
     });
   };
 
@@ -421,11 +443,29 @@ function goalsFromActions(
     if (e.Action === "goal") {
       const seconds = e.Clock?.Seconds;
       const data = e.Data as Record<string, unknown> | undefined;
+      const scorer = scorerFromData(data, nameById);
       upsert(goalClockKey(participant, seconds), {
         minute: goalMinute(seconds),
         participant,
-        player: playerFromData(data, nameById),
-        ownGoal: /own/i.test(String(data?.GoalType ?? "")),
+        ...scorer,
+        ownGoal: isOwnGoalType(data?.GoalType),
+        penalty: isPenaltyGoalType(data?.GoalType),
+      });
+      continue;
+    }
+
+    if (e.Action === "penalty_outcome") {
+      const data = e.Data as Record<string, unknown> | undefined;
+      const outcome = String(data?.Outcome ?? "").toLowerCase();
+      if (outcome !== "scored") continue;
+      const seconds = e.Clock?.Seconds;
+      const scorer = scorerFromData(data, nameById);
+      upsert(goalClockKey(participant, seconds), {
+        minute: goalMinute(seconds),
+        participant,
+        ...scorer,
+        ownGoal: false,
+        penalty: true,
       });
       continue;
     }
@@ -434,16 +474,37 @@ function goalsFromActions(
     const amend = e.Data as
       | { Action?: string; New?: Record<string, unknown> }
       | undefined;
-    if (amend?.Action !== "goal" || !amend.New) continue;
+    if (!amend?.New) continue;
+
+    if (amend.Action === "penalty_outcome") {
+      const outcome = String(amend.New.Outcome ?? "").toLowerCase();
+      if (outcome !== "scored") continue;
+      const seconds =
+        (amend.New.Clock as { Seconds?: number } | undefined)?.Seconds ??
+        e.Clock?.Seconds;
+      const scorer = scorerFromData(amend.New, nameById);
+      upsert(goalClockKey(participant, seconds), {
+        minute: goalMinute(seconds),
+        participant,
+        ...scorer,
+        ownGoal: false,
+        penalty: true,
+      });
+      continue;
+    }
+
+    if (amend.Action !== "goal") continue;
 
     const seconds =
       (amend.New.Clock as { Seconds?: number } | undefined)?.Seconds ??
       e.Clock?.Seconds;
+    const scorer = scorerFromData(amend.New, nameById);
     upsert(goalClockKey(participant, seconds), {
       minute: goalMinute(seconds),
       participant,
-      player: playerFromData(amend.New, nameById),
-      ownGoal: /own/i.test(String(amend.New.GoalType ?? "")),
+      ...scorer,
+      ownGoal: isOwnGoalType(amend.New.GoalType),
+      penalty: isPenaltyGoalType(amend.New.GoalType),
     });
   }
 
@@ -839,11 +900,12 @@ export async function fetchScoreProof(
 
   if (seq == null) {
     const events = await fetchScoresSnapshot(txFixtureId);
-    seq = terminalScoreEventSeq(events) ?? undefined;
+    const resolved = resolveProofEventSeq(events);
+    seq = resolved.seq ?? undefined;
     if (seq == null) {
       return {
         status: "not_yet_available",
-        reason: "No terminal scores event (FT/AET/PEN) in snapshot yet",
+        reason: "No game_finalised or terminal scores event in snapshot yet",
       };
     }
   }
