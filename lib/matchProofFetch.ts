@@ -48,6 +48,67 @@ function terminalStatusId(events: TxScoreEvent[]): number | null {
   return latest.StatusId ?? null;
 }
 
+type FixtureForProof = Pick<
+  Fixture,
+  "home" | "away" | "date" | "time" | "externalFixtureId"
+>;
+
+function txFixtureFromScoresFeed(
+  txFixtureId: number,
+  fixture: FixtureForProof,
+  events: TxScoreEvent[],
+): TxFixture {
+  const kickoffMs = fixtureDateTime(fixture as Fixture).getTime();
+  const anchor =
+    latestScoreEvent(events) ??
+    events.reduce((best, event) =>
+      (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
+    );
+  const meta = anchor as {
+    Participant1IsHome?: boolean;
+    StartTime?: number;
+    Competition?: string;
+  };
+  const lineups = events.find((event) => event.Lineups?.length);
+  const names =
+    lineups?.Lineups?.map((team) => team.preferredName?.trim()).filter(Boolean) ??
+    [];
+  const p1Home = meta.Participant1IsHome !== false;
+  const p1 = names[0] ?? fixture.home;
+  const p2 = names[1] ?? fixture.away;
+
+  return {
+    Ts: 0,
+    FixtureId: txFixtureId,
+    StartTime: meta.StartTime ?? kickoffMs,
+    Competition: meta.Competition ?? "World Cup",
+    CompetitionId: 0,
+    FixtureGroupId: 0,
+    Participant1Id: 0,
+    Participant1: p1Home ? p1 : p2,
+    Participant2Id: 0,
+    Participant2: p1Home ? p2 : p1,
+    Participant1IsHome: p1Home,
+  };
+}
+
+/** Resolve TxLINE fixture by snapshot lookup, then registry externalFixtureId + scores feed. */
+export async function resolveTxFixtureForMatch(
+  fixture: FixtureForProof,
+): Promise<TxFixture | null> {
+  const kickoffMs = fixtureDateTime(fixture as Fixture).getTime();
+  const fromSnapshot = await resolveTxFixture(fixture.home, fixture.away, kickoffMs);
+  if (fromSnapshot) return fromSnapshot;
+
+  const txFixtureId = fixture.externalFixtureId;
+  if (txFixtureId == null || txFixtureId <= 0) return null;
+
+  const events = await fetchScoresSnapshot(txFixtureId).catch(() => []);
+  if (events.length === 0) return null;
+
+  return txFixtureFromScoresFeed(txFixtureId, fixture, events);
+}
+
 async function loadScoreEventsForProof(txFixtureId: number): Promise<{
   snapshot: TxScoreEvent[];
   historical: TxScoreEvent[];
@@ -181,7 +242,7 @@ async function persistDualProof(input: {
 /** Fetch TxLINE stat-validation proof and persist — never throws. */
 export async function fetchAndPersistMatchProof(
   mundialMatchId: number,
-  fixture: Pick<Fixture, "home" | "away" | "date" | "time">,
+  fixture: FixtureForProof,
   options?: { force?: boolean },
 ): Promise<{ stored: boolean; reason?: string }> {
   try {
@@ -203,8 +264,7 @@ export async function fetchAndPersistMatchProof(
       await supabase.from("match_proofs").delete().eq("fixture_id", mundialMatchId);
     }
 
-    const kickoffMs = fixtureDateTime(fixture as Fixture).getTime();
-    const txFixture = await resolveTxFixture(fixture.home, fixture.away, kickoffMs);
+    const txFixture = await resolveTxFixtureForMatch(fixture);
     if (!txFixture) {
       console.warn(
         `[match-proof] No TxLINE fixture for match ${mundialMatchId} (${fixture.home} vs ${fixture.away})`,
@@ -313,8 +373,13 @@ export async function upgradeTerminalFallbackProofs(
       continue;
     }
 
-    const kickoffMs = fixtureDateTime(fixture).getTime();
-    const txFixture = await resolveTxFixture(fixture.home, fixture.away, kickoffMs);
+    const txFixture =
+      (await resolveTxFixtureForMatch(fixture)) ??
+      txFixtureFromScoresFeed(
+        proof.txFixtureId,
+        fixture,
+        [...snapshot, ...historical].length > 0 ? [...snapshot, ...historical] : snapshot,
+      );
     if (!txFixture) {
       stillWaiting += 1;
       continue;

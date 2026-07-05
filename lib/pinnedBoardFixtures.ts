@@ -10,7 +10,7 @@ import {
  * Fixture IDs that fell off `/fixtures/snapshot` but still update under
  * `/scores/snapshot/{id}`. Metadata is hydrated from the scores feed only.
  */
-export const PINNED_FIXTURE_IDS: number[] = [18175918];
+export const PINNED_FIXTURE_IDS: number[] = [18188721];
 
 export function pinnedFixtureIds(): Set<number> {
   return new Set(PINNED_FIXTURE_IDS);
