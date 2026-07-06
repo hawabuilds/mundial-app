@@ -166,7 +166,6 @@ function isBoardMatchFinished(
   nowMs: number,
 ): boolean {
   if (!rowHasStarted(row, live)) return false;
-  if (isGameStateInPlay(row.fx.GameState)) return false;
   if (live?.status && isFinishedStatus(live.status)) return true;
   if (
     live?.status &&
@@ -176,6 +175,13 @@ function isBoardMatchFinished(
     return false;
   }
   if (isGameStateFinished(row.fx.GameState)) return true;
+  if (
+    isGameStateInPlay(row.fx.GameState) &&
+    nowMs - row.kickoffMs >= BOARD_MATCH_MAX_MIN * 60_000
+  ) {
+    return true;
+  }
+  if (isGameStateInPlay(row.fx.GameState)) return false;
   return nowMs - row.kickoffMs >= BOARD_MATCH_MAX_MIN * 60_000;
 }
 

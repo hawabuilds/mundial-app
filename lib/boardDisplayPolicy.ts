@@ -1,4 +1,5 @@
 import { MAX_KICKOFF_DELAY_HOURS } from "@/lib/effectiveKickoff";
+import { BOARD_MATCH_MAX_MIN } from "@/lib/enrichFixtures";
 import {
   isGameStateFinished,
   isGameStateInPlay,
@@ -29,7 +30,16 @@ export function shouldIncludeRowOnBoard(
   const { kickoffMs, fx } = row;
   const gameState = fx.GameState;
 
-  if (isGameStateInPlay(gameState)) return true;
+  if (isGameStateInPlay(gameState)) {
+    // Stale snapshot GameState (e.g. stuck HT) long after kickoff — drop from board.
+    if (
+      kickoffMs <= nowMs &&
+      nowMs - kickoffMs > BOARD_MATCH_MAX_MIN * 60_000
+    ) {
+      return false;
+    }
+    return true;
+  }
 
   if (isGameStateFinished(gameState)) {
     return nowMs - kickoffMs <= BOARD_RECENT_MAX_AGE_HOURS * 3_600_000;

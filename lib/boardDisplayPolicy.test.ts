@@ -74,3 +74,13 @@ assert.equal(capped.filter((r) => r.phase === "live").length, 1);
 assert.equal(capped.length, 1 + 1 + BOARD_MAX_UPCOMING);
 
 console.log("boardDisplayPolicy tests: ok");
+
+assert.equal(
+  shouldIncludeRowOnBoard(
+    { kickoffMs: now - (210 + 30) * 60_000, fx: { FixtureId: 6, GameState: 3 } },
+    now,
+  ),
+  false,
+  "stale in-play GameState dropped after match window",
+);
+

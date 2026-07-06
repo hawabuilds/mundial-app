@@ -26,7 +26,10 @@ import {
   lastLiveClockSeconds,
   latestLiveScoreEvent,
   latestScoreEvent,
+  latestTerminalStatusId,
   resolveTxFixture,
+  scoresFeedShowsTerminalFinish,
+  secondHalfHasStarted,
   teamNamesMatch,
   type TxFixture,
   type TxScoreEvent,
@@ -216,6 +219,29 @@ function inPlayGoalsLine(
   };
 }
 
+function resolveMatchStatusId(
+  gameState: number | undefined,
+  event: TxScoreEvent | null,
+  allEvents?: TxScoreEvent[],
+): number {
+  if (allEvents?.length) {
+    const terminalId = latestTerminalStatusId(allEvents);
+    if (terminalId != null) return terminalId;
+
+    if (
+      secondHalfHasStarted(allEvents) &&
+      (gameState === 3 || gameState === 8)
+    ) {
+      return event?.StatusId ?? 4;
+    }
+  }
+
+  if (gameState != null && isGameStateInPlay(gameState)) {
+    return gameState;
+  }
+  return event?.StatusId ?? gameState ?? 1;
+}
+
 function buildMatch(
   txFixture: TxFixture,
   lookup: MatchLookup,
@@ -223,10 +249,7 @@ function buildMatch(
   allEvents?: TxScoreEvent[],
 ): FootballDataMatch {
   const gameState = txFixture.GameState;
-  const statusId =
-    gameState != null && isGameStateInPlay(gameState)
-      ? gameState
-      : (event?.StatusId ?? gameState ?? 1);
+  const statusId = resolveMatchStatusId(gameState, event, allEvents);
   const status = mapStatusIdToShort(statusId);
 
   // Orient TxLINE participants onto Mundial's home/away by name.
@@ -353,10 +376,13 @@ export async function fetchApiMatch(
   }
 
   const events = await fetchScoresSnapshot(id);
+  const eventForMatch = scoresFeedShowsTerminalFinish(events)
+    ? latestScoreEvent(events)
+    : latestLiveScoreEvent(events);
   const match = buildMatch(
     txFixture,
     lookup,
-    latestLiveScoreEvent(events),
+    eventForMatch,
     events,
   );
 
@@ -430,10 +456,12 @@ async function fetchMatchWithGoalsForId(
   txFixture?: TxFixture,
 ): Promise<{ match: FootballDataMatch | null; goals: MatchGoal[] }> {
   const events = await fetchScoresSnapshot(fixtureId);
-  const latest = latestLiveScoreEvent(events);
   const fx = await resolveTxFixtureMeta(fixtureId, lookup, txFixture);
+  const eventForMatch = scoresFeedShowsTerminalFinish(events)
+    ? latestScoreEvent(events)
+    : latestLiveScoreEvent(events);
 
-  const match = buildMatch(fx, lookup, latest, events);
+  const match = buildMatch(fx, lookup, eventForMatch, events);
   const homeIsP1 = txFixtureHomeIsP1(fx, lookup);
   const goals: MatchGoal[] = matchGoalsFromEvents(events, homeIsP1, "display");
   const actionGoals = matchGoalsFromEvents(events, homeIsP1, "persist");

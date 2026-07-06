@@ -650,6 +650,45 @@ export function lastLiveClockSeconds(
   return any.length > 0 ? Math.max(...any) : null;
 }
 
+/** True once the feed has a 2H row after halftime (snapshot can lag on HT). */
+export function secondHalfHasStarted(events: TxScoreEvent[]): boolean {
+  const htSeq = events.reduce((max, event) => {
+    if (event.StatusId === 3 || event.Action === "halftime_finalised") {
+      return Math.max(max, event.Seq ?? -1);
+    }
+    return max;
+  }, -1);
+  if (htSeq < 0) return false;
+  return events.some(
+    (event) =>
+      event.StatusId === 4 &&
+      (event.Seq ?? -1) > htSeq &&
+      (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
+  );
+}
+
+/** Match is over on the scores feed (terminal StatusId or game_finalised). */
+export function scoresFeedShowsTerminalFinish(events: TxScoreEvent[]): boolean {
+  return (
+    events.some((event) => event.Action === "game_finalised") ||
+    terminalScoreEventSeq(events) != null
+  );
+}
+
+/** Latest terminal StatusId from the scores feed (FT / AET / PEN / game_finalised). */
+export function latestTerminalStatusId(events: TxScoreEvent[]): number | null {
+  const terminal = events.filter(
+    (event) =>
+      event.Action === "game_finalised" ||
+      (event.StatusId != null && TERMINAL_SCORE_STATUS_IDS.has(event.StatusId)),
+  );
+  if (terminal.length === 0) return null;
+  const latest = terminal.reduce((best, event) =>
+    (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
+  );
+  return latest.StatusId ?? 5;
+}
+
 /** Seq of the latest terminal scores event (FT / AET / PEN) for stat-validation. */
 export function terminalScoreEventSeq(events: TxScoreEvent[]): number | null {
   const terminal = events.filter(

@@ -3,8 +3,11 @@ import {
   classifyScoreProofHttpFailure,
   lastLiveClockSeconds,
   latestLiveScoreEvent,
+  latestTerminalStatusId,
   normalizeScoreProofPayload,
   parseScoreProofResponse,
+  scoresFeedShowsTerminalFinish,
+  secondHalfHasStarted,
   terminalScoreEventSeq,
   type TxScoreEvent,
 } from "./txodds";
@@ -196,3 +199,20 @@ run("lastLiveClockSeconds freezes on last 1H clock at HT", () => {
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;
+
+run("secondHalfHasStarted detects 2H after halftime_finalised", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 473, StatusId: 3, Action: "halftime_finalised" },
+    { FixtureId: 1, Seq: 682, StatusId: 4, Clock: { Seconds: 2800 } },
+  ];
+  assert.equal(secondHalfHasStarted(events), true);
+});
+
+run("scoresFeedShowsTerminalFinish on game_finalised", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 900, StatusId: 100, Action: "game_finalised" },
+  ];
+  assert.equal(scoresFeedShowsTerminalFinish(events), true);
+  assert.equal(latestTerminalStatusId(events), 100);
+});
+
