@@ -347,7 +347,7 @@ const PERIOD_GOAL_STAT_BASES = [1000, 3000, 4000, 5000];
 function goalsFromPeriodStats(events: TxScoreEvent[]): TxGoal[] {
   const sorted = [...events].sort((a, b) => (a.Seq ?? 0) - (b.Seq ?? 0));
   const prev = new Map<string, number>();
-  const goals: TxGoal[] = [];
+  const goalsByTrack = new Map<string, TxGoal[]>();
 
   for (const e of sorted) {
     const minute = goalMinute(e.Clock?.Seconds);
@@ -359,11 +359,19 @@ function goalsFromPeriodStats(events: TxScoreEvent[]): TxGoal[] {
 
         const trackKey = `${base}|${participant}`;
         const before = prev.get(trackKey) ?? 0;
-        if (v <= before) continue;
-        prev.set(trackKey, v);
 
+        if (v < before) {
+          prev.set(trackKey, v);
+          const existing = goalsByTrack.get(trackKey) ?? [];
+          goalsByTrack.set(trackKey, existing.slice(0, v));
+          continue;
+        }
+        if (v <= before) continue;
+
+        prev.set(trackKey, v);
+        const list = goalsByTrack.get(trackKey) ?? [];
         for (let i = before; i < v; i += 1) {
-          goals.push({
+          list.push({
             minute,
             participant,
             player: null,
@@ -372,11 +380,12 @@ function goalsFromPeriodStats(events: TxScoreEvent[]): TxGoal[] {
             penalty: false,
           });
         }
+        goalsByTrack.set(trackKey, list);
       }
     }
   }
 
-  return goals;
+  return [...goalsByTrack.values()].flat();
 }
 
 function mergeGoalLists(periodGoals: TxGoal[], actionGoals: TxGoal[]): TxGoal[] {
@@ -512,15 +521,13 @@ function goalsFromActions(
 }
 
 /**
- * Extract goals (scorer + minute) from a scores snapshot. Player names come from
- * lineups (normativeId), goal rows, and later action_amend patches. Period stat
- * keys (1000/3000/4000/5000 + participant) rebuild goals when play-by-play rows
- * are trimmed; action rows supply minutes and scorers where present.
+ * Extract goals for display. Play-by-play rows are authoritative; period-stat
+ * placeholders only fill gaps when actions lack a scorer/minute.
  */
 export function extractGoals(events: TxScoreEvent[]): TxGoal[] {
   const nameById = lineupNameById(events);
-  const fromPeriod = goalsFromPeriodStats(events);
   const fromActions = goalsFromActions(events, nameById);
+  const fromPeriod = goalsFromPeriodStats(events);
   const merged = mergeGoalLists(fromPeriod, fromActions);
   merged.sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
   return merged;

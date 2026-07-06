@@ -5,7 +5,7 @@ import {
   isMatchGoalsInconsistentWithScore,
 } from "./backfillMatchGoals";
 import type { StoredGoal } from "@/app/lib/supabase";
-import { parseScoreSequenceBody, type TxScoreEvent } from "./txodds";
+import { parseScoreSequenceBody, extractGoals, type TxScoreEvent } from "./txodds";
 
 /** Mock historical sequence: 2-1 FT with three named goals (per TxLINE Scores shape). */
 const MOCK_SEQUENCE: TxScoreEvent[] = [
@@ -173,6 +173,43 @@ run("parseScoreSequenceBody accepts SSE data lines from historical endpoint", ()
   const goals = deriveMatchGoalsFromScoreSequence(events, true, 1, 1);
   assert.equal(goals.length, 2);
   assert.ok(goals.every((goal) => goal.player));
+});
+
+run("extractGoals drops disallowed period-stat phantom after stat decrease", () => {
+  const events: TxScoreEvent[] = [
+    {
+      FixtureId: 18187298,
+      Seq: 1,
+      Participant1IsHome: true,
+      Stats: { "3002": 1 },
+      Clock: { Seconds: 85 * 60 },
+    },
+    {
+      FixtureId: 18187298,
+      Seq: 2,
+      Participant1IsHome: true,
+      Stats: { "3002": 0 },
+      Clock: { Seconds: 86 * 60 },
+    },
+    {
+      FixtureId: 18187298,
+      Seq: 3,
+      Action: "goal",
+      Participant: 2,
+      Participant1IsHome: true,
+      Clock: { Seconds: 89 * 60 },
+      Data: { PreferredName: "Haaland, E." },
+      Stats: { "3002": 1 },
+    },
+  ];
+  const goals = extractGoals(events);
+  assert.equal(goals.length, 1);
+  assert.equal(goals[0]?.minute, 89);
+  assert.ok(goals[0]?.player);
+  assert.equal(goals.filter((goal) => goal.minute === 85).length, 0);
+  const derived = deriveMatchGoalsFromScoreSequence(events, true, 0, 1);
+  assert.equal(derived.length, 1);
+  assert.ok(derived[0]?.player?.includes("Haaland"));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

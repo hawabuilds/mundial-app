@@ -1,3 +1,4 @@
+import type { Fixture } from "@/app/data/fixtures";
 import {
   getMatchState,
   isEffectivelyCollected,
@@ -14,12 +15,22 @@ import {
   filterFixturesForCollection,
   getFixturesDueForCollection,
 } from "@/lib/kickoff";
+import {
+  buildTxStartTimeByFixtureId,
+  resolveTxStartTimeForFixture,
+} from "@/lib/effectiveKickoff";
+import { fetchFixturesSnapshot, isTxoddsConfigured } from "@/lib/txodds";
 import { CRON_MATCH_POST_OPTIONS, resolveMatchPost } from "@/lib/resolveMatchTweet";
 
 export type CollectionPassResult = Record<string, unknown>;
 
 /** Fetch X replies for fixtures due for collection; rescore if score landed first. */
 export async function runDuePredictionCollection(): Promise<CollectionPassResult[]> {
+  const txFixtures = isTxoddsConfigured() ? await fetchFixturesSnapshot() : [];
+  const startByTxId = buildTxStartTimeByFixtureId(txFixtures);
+  const resolveEffectiveKickoffMs = (fixture: Fixture) =>
+    resolveTxStartTimeForFixture(fixture, startByTxId, txFixtures);
+
   const dueFixtures = await filterFixturesForCollection(
     getFixturesDueForCollection(),
     async (matchId) => {
@@ -28,6 +39,8 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
       return at ? new Date(at) : null;
     },
     isEffectivelyCollected,
+    new Date(),
+    resolveEffectiveKickoffMs,
   );
 
   const results: CollectionPassResult[] = [];
@@ -54,7 +67,16 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
         continue;
       }
 
-      const result = await collectPredictionsForFixture(fixture, post.tweetId);
+      const effectiveKickoffMs = resolveTxStartTimeForFixture(
+        fixture,
+        startByTxId,
+        txFixtures,
+      );
+      const result = await collectPredictionsForFixture(
+        fixture,
+        post.tweetId,
+        effectiveKickoffMs ?? undefined,
+      );
       if (shouldMarkMatchCollected(result)) {
         await markMatchCollected(fixture.id);
         const rescore = alreadyScored

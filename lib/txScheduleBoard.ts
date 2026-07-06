@@ -112,9 +112,10 @@ type BoardRow = {
   kickoffUtcMs: number;
 };
 
-function rowHasStarted(row: BoardRow, nowMs: number): boolean {
+function rowHasStarted(row: BoardRow, _nowMs: number): boolean {
   if (isGameStateInPlay(row.fx.GameState)) return true;
-  return row.kickoffMs <= nowMs;
+  if (isGameStateFinished(row.fx.GameState)) return true;
+  return false;
 }
 
 function lookupPriority(a: BoardRow, b: BoardRow): number {
@@ -133,7 +134,6 @@ function shouldFetchBoardLive(row: BoardRow, nowMs: number): boolean {
     return true;
   }
   if (isGameStateInPlay(row.fx.GameState)) return true;
-  // Fetch final scores for FT matches still shown on the board (may be >4h after kickoff).
   if (isGameStateFinished(row.fx.GameState) && row.kickoffMs <= nowMs) {
     return true;
   }
@@ -152,6 +152,7 @@ function isBoardMatchFinished(
   live: LiveMatchData | null,
   nowMs: number,
 ): boolean {
+  if (!rowHasStarted(row, nowMs)) return false;
   if (live?.status && isFinishedStatus(live.status)) return true;
   if (
     live?.status &&

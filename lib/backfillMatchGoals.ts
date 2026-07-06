@@ -9,7 +9,7 @@ import {
 } from "@/app/lib/supabase";
 import { mapTxGoalsToMatchGoals } from "@/lib/matchGoalsPersist";
 import {
-  extractGoals,
+  extractActionGoals,
   fetchScoreSequence,
   fetchScoresSnapshot,
   isTxoddsConfigured,
@@ -47,7 +47,7 @@ export function deriveMatchGoalsFromScoreSequence(
   homeScore: number,
   awayScore: number,
 ): StoredGoal[] {
-  const txGoals = extractGoals(events);
+  const txGoals = extractActionGoals(events);
   const mapped = mapTxGoalsToMatchGoals(txGoals, homeIsP1) as StoredGoal[];
   return finalizeMatchGoals(mapped, homeScore, awayScore);
 }

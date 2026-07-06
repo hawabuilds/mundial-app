@@ -1,6 +1,5 @@
 import type { Fixture } from "@/app/data/fixtures";
-
-import { fixtureDateTime } from "@/app/data/fixtures";
+import { resolveKickoffMs } from "@/lib/effectiveKickoff";
 
 import type { FetchedReply } from "./fetchReplies";
 
@@ -28,18 +27,17 @@ export type EligiblePrediction = {
 
 
 
-/** Predictions must be posted strictly before scheduled kickoff (UTC). */
+/** Predictions must be posted strictly before effective kickoff (UTC). */
 
 export function isReplyBeforeKickoff(
-
   replyCreatedAt: string,
-
   fixture: Fixture,
-
+  effectiveKickoffMs?: number,
 ): boolean {
-
-  return new Date(replyCreatedAt).getTime() < fixtureDateTime(fixture).getTime();
-
+  return (
+    new Date(replyCreatedAt).getTime() <
+    resolveKickoffMs(fixture, effectiveKickoffMs)
+  );
 }
 
 
@@ -55,22 +53,15 @@ function formatHandle(username: string): string {
 /** Valid pre-kickoff predictions from X replies (first reply per author wins). */
 
 export function buildEligiblePreKickoffPredictions(
-
   replies: FetchedReply[],
-
   fixture: Fixture,
-
+  effectiveKickoffMs?: number,
 ): Map<string, EligiblePrediction> {
-
   const eligible = new Map<string, EligiblePrediction>();
 
-
-
   for (const reply of replies) {
-
     if (eligible.has(reply.authorId)) continue;
-
-    if (!isReplyBeforeKickoff(reply.createdAt, fixture)) continue;
+    if (!isReplyBeforeKickoff(reply.createdAt, fixture, effectiveKickoffMs)) continue;
 
 
 
