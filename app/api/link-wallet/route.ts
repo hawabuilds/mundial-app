@@ -1,7 +1,6 @@
 import { auth } from "@/auth";
 import { resolveWalletUserId } from "@/app/lib/resolveCanonicalUserId";
 import { upsertUserWallet } from "@/app/lib/userWallets";
-import { parseWalletAddress } from "@/lib/walletAddress";
 import { parseSolanaAddress } from "@/lib/solanaAddress";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -25,12 +24,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const walletAddress =
-    parseWalletAddress(body.wallet_address) ??
-    parseSolanaAddress(body.wallet_address);
+  const walletAddress = parseSolanaAddress(body.wallet_address);
   if (!walletAddress) {
     return NextResponse.json(
-      { error: "wallet_address must be a valid EVM or Solana address" },
+      { error: "wallet_address must be a valid Solana address" },
       { status: 400 },
     );
   }

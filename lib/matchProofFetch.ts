@@ -7,6 +7,7 @@ import {
   isMatchScored,
   listTerminalFallbackMatchProofs,
   saveMatchProof,
+  updateMatchProofSemantics,
   type StoredMatchProof,
 } from "@/app/lib/supabase";
 import { ensureMatchGoalsBackfilled } from "@/lib/backfillMatchGoals";
@@ -239,6 +240,79 @@ async function persistDualProof(input: {
   return { stored: true };
 }
 
+/**
+ * Recompute show_verified_badge from stored regulation proof + settled match_state.
+ * Fixes proofs persisted before final scores existed, or with stale semantics flags.
+ */
+export async function refreshStoredProofSemantics(
+  mundialMatchId: number,
+  fixture: FixtureForProof,
+  existing?: StoredMatchProof | null,
+): Promise<boolean> {
+  const proof = existing ?? (await getMatchProof(mundialMatchId).catch(() => null));
+  if (!proof || proof.showVerifiedBadge) return false;
+
+  if (!(await isMatchScored(mundialMatchId).catch(() => false))) {
+    return false;
+  }
+
+  const matchState = await getMatchState(mundialMatchId).catch(() => null);
+  const settledHome = matchState?.final_home_score;
+  const settledAway = matchState?.final_away_score;
+  if (typeof settledHome !== "number" || typeof settledAway !== "number") {
+    return false;
+  }
+
+  const txFixture = await resolveTxFixtureForMatch(fixture);
+  if (!txFixture) return false;
+
+  const regulationPayload = proof.regulationPayload ?? proof.proofPayload;
+  const statKeys =
+    proof.regulationStatKeys.length > 0
+      ? proof.regulationStatKeys
+      : proof.statKeys;
+
+  let terminalId = proof.terminalStatusId;
+  if (terminalId == null) {
+    terminalId = await readTerminalStatusId(proof.txFixtureId);
+  }
+
+  const evaluation = evaluateProofSemantics({
+    stats: statsFromProofPayload(regulationPayload),
+    statKeys,
+    settledHome,
+    settledAway,
+    homeIsP1: txFixture.Participant1IsHome,
+    terminalStatusId: terminalId,
+  });
+
+  if (
+    evaluation.showVerifiedBadge === proof.showVerifiedBadge &&
+    evaluation.semanticsMismatch === proof.semanticsMismatch
+  ) {
+    return false;
+  }
+
+  await updateMatchProofSemantics(mundialMatchId, {
+    showVerifiedBadge: evaluation.showVerifiedBadge,
+    semanticsMismatch: evaluation.semanticsMismatch,
+    proofMode: evaluation.proofMode,
+    terminalStatusId: terminalId,
+  });
+
+  if (evaluation.showVerifiedBadge) {
+    console.info(
+      `[match-proof] Refreshed verified badge for match ${mundialMatchId} (proven ${evaluation.provenHome ?? "?"}-${evaluation.provenAway ?? "?"})`,
+    );
+  } else if (evaluation.semanticsMismatch) {
+    console.warn(
+      `[match-proof] Badge still off for match ${mundialMatchId}: proven ${evaluation.provenHome ?? "?"}-${evaluation.provenAway ?? "?"} vs settled ${settledHome}-${settledAway}`,
+    );
+  }
+
+  return evaluation.showVerifiedBadge;
+}
+
 /** Fetch TxLINE stat-validation proof and persist — never throws. */
 export async function fetchAndPersistMatchProof(
   mundialMatchId: number,
@@ -256,6 +330,14 @@ export async function fetchAndPersistMatchProof(
 
     const existing = await getMatchProof(mundialMatchId).catch(() => null);
     if (existing && !options?.force) {
+      const refreshed = await refreshStoredProofSemantics(
+        mundialMatchId,
+        fixture,
+        existing,
+      );
+      if (refreshed) {
+        return { stored: true, reason: "semantics refreshed" };
+      }
       return { stored: false, reason: "proof already stored" };
     }
 
@@ -413,39 +495,51 @@ export async function upgradeTerminalFallbackProofs(
   return { attempted, upgraded, skippedExpired, stillWaiting };
 }
 
-/** Retry proof fetch for scored matches that have no stored proof yet. */
+/** Retry proof fetch / refresh badges for scored matches missing verified proof. */
 export async function retryMissingMatchProofs(
   fixtures: Fixture[],
 ): Promise<{
   attempted: number;
   stored: number;
+  semanticsRefreshed: number;
   upgrade: TerminalFallbackUpgradeResult;
 }> {
   if (!isTxoddsConfigured()) {
     return {
       attempted: 0,
       stored: 0,
+      semanticsRefreshed: 0,
       upgrade: { attempted: 0, upgraded: 0, skippedExpired: 0, stillWaiting: 0 },
     };
   }
 
   let attempted = 0;
   let stored = 0;
+  let semanticsRefreshed = 0;
 
   for (const fixture of fixtures) {
     if (!(await isMatchScored(fixture.id))) continue;
-    if (await getMatchProof(fixture.id).catch(() => null)) continue;
 
-    attempted += 1;
-    const before = await getMatchProof(fixture.id).catch(() => null);
-    await fetchAndPersistMatchProof(fixture.id, fixture);
-    const after = await getMatchProof(fixture.id).catch(() => null);
-    if (!before && after) stored += 1;
+    const proof = await getMatchProof(fixture.id).catch(() => null);
+    if (!proof) {
+      attempted += 1;
+      await fetchAndPersistMatchProof(fixture.id, fixture);
+      const after = await getMatchProof(fixture.id).catch(() => null);
+      if (after) stored += 1;
+      continue;
+    }
+
+    if (!proof.showVerifiedBadge) {
+      attempted += 1;
+      if (await refreshStoredProofSemantics(fixture.id, fixture, proof)) {
+        semanticsRefreshed += 1;
+      }
+    }
   }
 
   const upgrade = await upgradeTerminalFallbackProofs();
 
-  return { attempted, stored, upgrade };
+  return { attempted, stored, semanticsRefreshed, upgrade };
 }
 
 /** Terminal status from scores snapshot (for board UI when match_state absent). */

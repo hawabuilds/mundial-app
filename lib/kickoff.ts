@@ -5,6 +5,10 @@ import {
   isFixtureCancelled,
   type Fixture,
 } from "../app/data/fixtures";
+import {
+  MAX_KICKOFF_DELAY_HOURS,
+  resolveKickoffMs,
+} from "./effectiveKickoff";
 
 /** Post-kickoff window for X reply collection (predictions are pre-kickoff). */
 export const COLLECTION_WINDOW_MINUTES_AFTER_KICKOFF = 90;
@@ -23,10 +27,11 @@ export const MAX_COLLECTION_ATTEMPTS = COLLECTION_RETRY_OFFSETS_MINUTES.length;
 export function isWithinCollectionWindow(
   fixture: Fixture,
   now: Date = new Date(),
+  effectiveKickoffMs?: number,
 ): boolean {
   if (isFixtureCancelled(fixture)) return false;
 
-  const kickoffMs = fixtureDateTime(fixture).getTime();
+  const kickoffMs = resolveKickoffMs(fixture, effectiveKickoffMs);
   const elapsedMin = (now.getTime() - kickoffMs) / 60_000;
   return (
     elapsedMin >= 0 &&
@@ -38,10 +43,11 @@ export function isCollectionRetryDue(
   fixture: Fixture,
   now: Date = new Date(),
   lastCollectedAt: Date | null = null,
+  effectiveKickoffMs?: number,
 ): boolean {
-  if (!isWithinCollectionWindow(fixture, now)) return false;
+  if (!isWithinCollectionWindow(fixture, now, effectiveKickoffMs)) return false;
 
-  const kickoffMs = fixtureDateTime(fixture).getTime();
+  const kickoffMs = resolveKickoffMs(fixture, effectiveKickoffMs);
   const elapsedMin = (now.getTime() - kickoffMs) / 60_000;
   const lastMs = lastCollectedAt?.getTime() ?? 0;
 
@@ -61,15 +67,26 @@ export function shouldCollectPredictions(
   fixture: Fixture,
   now: Date = new Date(),
   lastCollectedAt: Date | null = null,
+  effectiveKickoffMs?: number,
 ): boolean {
-  return isCollectionRetryDue(fixture, now, lastCollectedAt);
+  return isCollectionRetryDue(fixture, now, lastCollectedAt, effectiveKickoffMs);
 }
 
 export function getFixturesDueForCollection(
   now: Date = new Date(),
   fixtures: Fixture[] = getActiveFixtures(FIXTURES),
 ): Fixture[] {
-  return fixtures.filter((fixture) => isWithinCollectionWindow(fixture, now));
+  const nowMs = now.getTime();
+
+  return fixtures.filter((fixture) => {
+    const scheduledMs = fixtureDateTime(fixture).getTime();
+    const elapsedSinceScheduledMin = (nowMs - scheduledMs) / 60_000;
+    if (elapsedSinceScheduledMin < 0) return false;
+    return (
+      elapsedSinceScheduledMin <=
+      COLLECTION_WINDOW_MINUTES_AFTER_KICKOFF + MAX_KICKOFF_DELAY_HOURS * 60
+    );
+  });
 }
 
 export async function filterFixturesForCollection(
@@ -77,14 +94,16 @@ export async function filterFixturesForCollection(
   getLastCollectedAt: (matchId: number) => Promise<Date | null>,
   isCollected: (matchId: number) => Promise<boolean>,
   now: Date = new Date(),
+  resolveEffectiveKickoffMs?: (fixture: Fixture) => number | null | undefined,
 ): Promise<Fixture[]> {
   const due: Fixture[] = [];
 
   for (const fixture of fixtures) {
     if (await isCollected(fixture.id)) continue;
 
+    const effectiveKickoffMs = resolveEffectiveKickoffMs?.(fixture);
     const lastCollectedAt = await getLastCollectedAt(fixture.id);
-    if (shouldCollectPredictions(fixture, now, lastCollectedAt)) {
+    if (shouldCollectPredictions(fixture, now, lastCollectedAt, effectiveKickoffMs ?? undefined)) {
       due.push(fixture);
     }
   }

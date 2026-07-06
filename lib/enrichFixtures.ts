@@ -7,8 +7,8 @@ import {
   isFinishedStatus,
   isStartedOrFinishedStatus,
   type LiveMatchData,
-} from "./apiFootball";
-import { liveFromFixtureResult } from "./apiFootballCache";
+} from "./txMatchSettlement";
+import { liveFromFixtureResult } from "./txMatchSettlementCache";
 
 export type EnrichedFixture = Fixture & {
   live: LiveMatchData | null;

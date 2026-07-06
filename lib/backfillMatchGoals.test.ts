@@ -5,7 +5,7 @@ import {
   isMatchGoalsInconsistentWithScore,
 } from "./backfillMatchGoals";
 import type { StoredGoal } from "@/app/lib/supabase";
-import { parseScoreSequenceBody, type TxScoreEvent } from "./txodds";
+import { parseScoreSequenceBody, extractGoals, type TxScoreEvent } from "./txodds";
 
 /** Mock historical sequence: 2-1 FT with three named goals (per TxLINE Scores shape). */
 const MOCK_SEQUENCE: TxScoreEvent[] = [
@@ -59,6 +59,35 @@ const MOCK_SEQUENCE: TxScoreEvent[] = [
     Data: { PlayerId: 101, PreferredName: "Rodriguez, Luis" },
     Stats: { "1001": 2, "1002": 1, "3001": 2, "3002": 1 },
     StatusId: 5,
+  },
+];
+
+/** Penalty scored via penalty_outcome — period stats only give minute, not scorer. */
+const MOCK_PENALTY_SEQUENCE: TxScoreEvent[] = [
+  {
+    FixtureId: 18188721,
+    Action: "lineups",
+    Seq: 1,
+    Participant1IsHome: true,
+    Lineups: [
+      { preferredName: "Paraguay", lineups: [] },
+      {
+        preferredName: "France",
+        lineups: [
+          { player: { normativeId: 453928, preferredName: "Mbappe Lottin, Kylian" } },
+        ],
+      },
+    ],
+  },
+  {
+    FixtureId: 18188721,
+    Action: "penalty_outcome",
+    Seq: 693,
+    Participant: 2,
+    Participant1IsHome: true,
+    Clock: { Seconds: 69 * 60 },
+    Data: { Outcome: "Scored", PlayerId: 453928 },
+    Stats: { "3001": 0, "3002": 1 },
   },
 ];
 
@@ -116,6 +145,16 @@ run("deriveMatchGoalsFromScoreSequence rebuilds 2-1 from mock historical sequenc
   assert.equal(goals[2]?.minute, 78);
 });
 
+run("deriveMatchGoalsFromScoreSequence resolves scorer from penalty_outcome", () => {
+  const goals = deriveMatchGoalsFromScoreSequence(MOCK_PENALTY_SEQUENCE, true, 0, 1);
+  assert.equal(goals.length, 1);
+  assert.equal(goals[0]?.side, "away");
+  assert.equal(goals[0]?.minute, 69);
+  assert.equal(goals[0]?.player, "Kylian Mbappe Lottin");
+  assert.equal(goals[0]?.playerShort, "K. Mbappe");
+  assert.equal(goals[0]?.penalty, true);
+});
+
 run("deriveMatchGoalsFromScoreSequence is idempotent on re-merge keys", () => {
   const first = deriveMatchGoalsFromScoreSequence(MOCK_SEQUENCE, true, 2, 1);
   const second = deriveMatchGoalsFromScoreSequence(MOCK_SEQUENCE, true, 2, 1);
@@ -134,6 +173,43 @@ run("parseScoreSequenceBody accepts SSE data lines from historical endpoint", ()
   const goals = deriveMatchGoalsFromScoreSequence(events, true, 1, 1);
   assert.equal(goals.length, 2);
   assert.ok(goals.every((goal) => goal.player));
+});
+
+run("extractGoals drops disallowed period-stat phantom after stat decrease", () => {
+  const events: TxScoreEvent[] = [
+    {
+      FixtureId: 18187298,
+      Seq: 1,
+      Participant1IsHome: true,
+      Stats: { "3002": 1 },
+      Clock: { Seconds: 85 * 60 },
+    },
+    {
+      FixtureId: 18187298,
+      Seq: 2,
+      Participant1IsHome: true,
+      Stats: { "3002": 0 },
+      Clock: { Seconds: 86 * 60 },
+    },
+    {
+      FixtureId: 18187298,
+      Seq: 3,
+      Action: "goal",
+      Participant: 2,
+      Participant1IsHome: true,
+      Clock: { Seconds: 89 * 60 },
+      Data: { PreferredName: "Haaland, E." },
+      Stats: { "3002": 1 },
+    },
+  ];
+  const goals = extractGoals(events);
+  assert.equal(goals.length, 1);
+  assert.equal(goals[0]?.minute, 89);
+  assert.ok(goals[0]?.player);
+  assert.equal(goals.filter((goal) => goal.minute === 85).length, 0);
+  const derived = deriveMatchGoalsFromScoreSequence(events, true, 0, 1);
+  assert.equal(derived.length, 1);
+  assert.ok(derived[0]?.player?.includes("Haaland"));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

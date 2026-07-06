@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import { getTxoddsOrigin } from "./txoddsOrigin";
 
-/** Devnet/mainnet TxOracle program IDs (Program Addresses doc). */
+/** Devnet vs production TxOracle program IDs (Program Addresses doc). */
 export function txOracleProgramId(origin?: string): PublicKey {
   const host = (origin ?? getTxoddsOrigin()).toLowerCase();
   const devnet = host.includes("devnet") || host.includes("txline-dev");
@@ -28,9 +28,7 @@ export function dailyScoresMerkleRootsPda(
 
 export function solanaExplorerAddressUrl(
   address: string,
-  origin?: string,
+  _origin?: string,
 ): string {
-  const host = (origin ?? getTxoddsOrigin()).toLowerCase();
-  const cluster = host.includes("devnet") || host.includes("txline-dev") ? "?cluster=devnet" : "";
-  return `https://explorer.solana.com/address/${address}${cluster}`;
+  return `https://explorer.solana.com/address/${address}?cluster=devnet`;
 }

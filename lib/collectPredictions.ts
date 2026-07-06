@@ -47,6 +47,7 @@ export { isReplyBeforeKickoff } from "./predictionEligibility";
 export async function collectPredictionsForFixture(
   fixture: Fixture,
   tweetIdOverride?: string,
+  effectiveKickoffMs?: number,
 ): Promise<CollectResult> {
   const tweetId =
     tweetIdOverride?.trim() ||
@@ -66,7 +67,11 @@ export async function collectPredictionsForFixture(
 
   const replies = await fetchReplies(tweetId);
 
-  const eligible = buildEligiblePreKickoffPredictions(replies, fixture);
+  const eligible = buildEligiblePreKickoffPredictions(
+    replies,
+    fixture,
+    effectiveKickoffMs,
+  );
 
 
 
@@ -94,7 +99,7 @@ export async function collectPredictionsForFixture(
 
 
 
-    if (!isReplyBeforeKickoff(reply.createdAt, fixture)) {
+    if (!isReplyBeforeKickoff(reply.createdAt, fixture, effectiveKickoffMs)) {
 
       skippedAfterKickoff += 1;
 

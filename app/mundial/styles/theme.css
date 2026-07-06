@@ -83,3 +83,11 @@
   );
   --m-max-width: 430px;
 }
+
+#goal-celebration-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  overflow: hidden;
+}

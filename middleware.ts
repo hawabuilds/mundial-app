@@ -57,6 +57,16 @@ export function middleware(request: NextRequest) {
   }
 
   if (!isCopaHost(request)) {
+    const { pathname } = request.nextUrl;
+    if (
+      pathname === "/" &&
+      !isPassthroughPath(pathname) &&
+      !isAuthCallbackPath(pathname)
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/mundial";
+      return NextResponse.redirect(url);
+    }
     return NextResponse.next();
   }
 
@@ -102,6 +112,14 @@ export function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     const sub = pathname === "/links" ? "" : pathname.slice("/links".length);
     url.pathname = `/mundial/links${sub}`;
+    return NextResponse.rewrite(url);
+  }
+
+  if (pathname === "/goal-preview" || pathname.startsWith("/goal-preview/")) {
+    const url = request.nextUrl.clone();
+    const sub =
+      pathname === "/goal-preview" ? "" : pathname.slice("/goal-preview".length);
+    url.pathname = `/mundial/goal-preview${sub}`;
     return NextResponse.rewrite(url);
   }
 

@@ -5,6 +5,7 @@ import type { ClaimableRewardDto } from "@/app/lib/listUserClaimableRewards";
 import { fetchClaimableRewards } from "@/app/lib/claimable-rewards-client";
 import {
   readPublicSolanaCluster,
+  SOLANA_NETWORK_LABEL,
   solanaExplorerClusterParam,
 } from "@/lib/solanaPublicConfig";
 import {
@@ -131,7 +132,7 @@ export default function Vault({ onTabChange }: Props) {
         date: reward.date,
         bnb: 0,
         usdc: reward.usdc ?? Number(reward.amountWei) / 1_000_000,
-        network: SOLANA_CLUSTER === "devnet" ? "Solana Devnet" : "Solana",
+        network: "Solana Devnet",
       });
       await reloadRewards();
     } catch {
@@ -214,9 +215,7 @@ export default function Vault({ onTabChange }: Props) {
           <dl className={styles.statusList}>
             <div className={styles.statusRow}>
               <dt className={styles.key}>Network</dt>
-              <dd className={styles.val}>
-                Solana {SOLANA_CLUSTER === "devnet" ? "Devnet" : "Mainnet"}
-              </dd>
+              <dd className={styles.val}>{SOLANA_NETWORK_LABEL}</dd>
             </div>
             <div className={styles.statusRow}>
               <dt className={styles.key}>Status</dt>

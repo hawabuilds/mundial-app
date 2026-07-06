@@ -41,6 +41,7 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_
 const migrations = [
   "20260704160000_match_proofs.sql",
   "20260704163000_match_proofs_semantics.sql",
+  "20260704170000_match_proofs_dual.sql",
 ];
 
 async function applyViaPostgres(connectionString: string, sql: string) {

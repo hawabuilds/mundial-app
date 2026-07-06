@@ -23,6 +23,9 @@ export default function MundialLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className={`m-app ${syne.variable} ${inter.variable}`}>{children}</div>
+    <div className={`m-app ${syne.variable} ${inter.variable}`}>
+      {children}
+      <div id="goal-celebration-root" aria-hidden />
+    </div>
   );
 }

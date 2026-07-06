@@ -7,10 +7,17 @@ import {
   fetchMyLeaderboardStats,
   type UserScoreBreakdown,
 } from "@/app/lib/leaderboard-client";
-import { resolveCurrentMatch, sortFixturesByKickoffAsc, toMundialFixture, type MundialFixture } from "../lib/fixtures";
+import { goalScorerDisplayName } from "@/lib/playerDisplayName";
+import {
+  resolveCurrentMatch,
+  sortFixturesByKickoffAsc,
+  toMundialFixture,
+  type MundialFixture,
+} from "../lib/fixtures";
 import Card from "../ui/Card";
 import FixtureCard from "../ui/FixtureCard";
-import GoalBallBurst, { type GoalBurstEvent } from "../ui/GoalBallBurst";
+import GoalMomentOverlay from "../ui/GoalMomentOverlay";
+import type { GoalCelebration } from "../ui/goalCelebration";
 import ProfileMenu from "../ui/ProfileMenu";
 import ScoringRules from "../ui/ScoringRules";
 import { AppShell } from "../ui/TabBar";
@@ -59,10 +66,11 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   );
   const [statsLoading, setStatsLoading] = useState(true);
   const liveScoreRef = useRef<LiveScoreSnapshot | null>(null);
-  const [goalBurst, setGoalBurst] = useState<GoalBurstEvent | null>(null);
-  const [goalBurstKey, setGoalBurstKey] = useState(0);
+  const [goalCelebration, setGoalCelebration] = useState<GoalCelebration | null>(
+    null,
+  );
 
-  const clearGoalBurst = useCallback(() => setGoalBurst(null), []);
+  const clearGoalCelebration = useCallback(() => setGoalCelebration(null), []);
 
   const liveOnBoard = fixtures.some((f) => f.phase === "live");
 
@@ -126,11 +134,21 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
               ? "home"
               : "away");
 
-      setGoalBurstKey((key) => key + 1);
-      setGoalBurst({
+      setGoalCelebration({
+        key: Date.now(),
+        matchId: liveMatch.id,
         side,
-        player: latest?.player ?? null,
+        player: latest ? goalScorerDisplayName(latest) : null,
         ownGoal: latest?.ownGoal ?? false,
+        minute: latest?.minute ?? null,
+        home: liveMatch.home,
+        away: liveMatch.away,
+        homeCode: liveMatch.homeCode,
+        awayCode: liveMatch.awayCode,
+        homeScore: home,
+        awayScore: away,
+        prevHomeScore: prev.home,
+        prevAwayScore: prev.away,
       });
     }
 
@@ -190,7 +208,12 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
 
   const featuredLiveLabel = !featuredLive
     ? null
-    : featuredLive.status === "LIVE" || featuredLive.status === "HT"
+    : featuredLive.phase === "live" ||
+        featuredLive.status === "LIVE" ||
+        featuredLive.status === "HT" ||
+        featuredLive.status === "1H" ||
+        featuredLive.status === "2H" ||
+        featuredLive.status === "ET"
       ? "Live now"
       : "Full time";
   const rankLabel = statsLoading ? "—" : rank != null ? `#${rank}` : "—";
@@ -215,11 +238,10 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       vaultDot={vaultDot}
       headerTrailing={<ProfileMenu />}
     >
-      {liveMatch ? (
-        <GoalBallBurst
-          key={goalBurstKey}
-          event={goalBurst}
-          onDone={clearGoalBurst}
+      {goalCelebration ? (
+        <GoalMomentOverlay
+          event={goalCelebration}
+          onDone={clearGoalCelebration}
         />
       ) : null}
       <Card glow className={styles.stat}>
@@ -274,6 +296,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
                 fixture={featuredLive}
                 featured
                 showMarketOdds={showOddsFor(featuredLive)}
+                celebration={goalCelebration}
               />
               {liveRest.length > 0 ? (
                 <ul className={styles.list}>

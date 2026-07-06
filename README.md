@@ -75,7 +75,7 @@ TxLINE publishes Solana-backed validation proofs for scout-verified events. Copa
 - Supabase (Postgres) — users, predictions, locked odds, goal accumulation
 - NextAuth with the X provider for sign-in
 - Solana + USDC for payouts — signed claim vouchers against an operator-opened payout epoch
-- next-intl for translations, CSS Modules for styling
+- CSS Modules for styling
 - Vercel, with cron routes for kickoff collection, scoring, and the daily snapshot
 
 ## Smart contract
@@ -126,6 +126,22 @@ npm run dev
 ```
 
 Copy `.env.example` to `.env.local` and add your keys (X auth, Supabase, `TXODDS_API_TOKEN`, Solana RPC and signer). No secrets are committed.
+
+## Devnet payout demo
+
+Requires `SOLANA_RPC_URL` containing `devnet`, operator/signer keys, and a funded rewards vault.
+
+```bash
+# 1. Open a demo epoch (fixed USDC pot) and lock the top-20 snapshot
+npm run demo:epoch -- --pot 2000
+
+# 2. Claim rank-1 USDC on devnet (prints tx signature + balance change)
+npm run e2e:solana-claim -- <epochId>
+```
+
+`open:solana-epoch` is an ops script (positional args, no devnet guard) for manual on-chain opens.
+
+Also run `npm run test:solana-voucher` and the other `test:*` suites before submitting.
 
 ## Demo video
 

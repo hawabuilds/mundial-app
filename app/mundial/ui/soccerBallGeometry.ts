@@ -1,108 +1,246 @@
 /**
- * Football panel geometry — icon-standard Telstar front view.
- *
- * One central black pentagon + five outer black caps with white hex gaps
- * between them. Reads clearly as a football at any size (unlike six
- * overlapping full pents, which collapse into a dark blob when spinning).
+ * Classic Telstar — full truncated icosahedron (12 black pents, 20 white hexes)
+ * orthographically projected for a readable 2D broadcast ball.
  */
 
-type Point = [number, number];
+type Vec3 = readonly [number, number, number];
+type Face = readonly number[];
 
-const DEG = Math.PI / 180;
-const CENTER: Point = [50, 50];
+const PHI = (1 + Math.sqrt(5)) / 2;
+const E = 3 * PHI;
+const F = 1 + 2 * PHI;
+const G = 2 + PHI;
+const H = 2 * PHI;
 
-function lerp(a: Point, b: Point, t: number): Point {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+const CENTER = 50;
+const RADIUS = 47;
+
+/** Upper-left key light — matches overlay specular. */
+const KEY_LIGHT = normalize([-0.38, 0.52, 0.76]);
+
+function truncatedIcosahedronVertices(): Vec3[] {
+  const a = 0;
+  const b = 1;
+  const c = 2;
+
+  return [
+    [a, b, E],
+    [a, b, -E],
+    [a, -b, E],
+    [a, -b, -E],
+    [b, E, a],
+    [b, -E, a],
+    [-b, E, a],
+    [-b, -E, a],
+    [E, a, b],
+    [-E, a, b],
+    [E, a, -b],
+    [-E, a, -b],
+    [c, F, PHI],
+    [c, F, -PHI],
+    [c, -F, PHI],
+    [-c, F, PHI],
+    [c, -F, -PHI],
+    [-c, F, -PHI],
+    [-c, -F, PHI],
+    [-c, -F, -PHI],
+    [F, PHI, c],
+    [F, -PHI, c],
+    [-F, PHI, c],
+    [F, PHI, -c],
+    [-F, -PHI, c],
+    [F, -PHI, -c],
+    [-F, PHI, -c],
+    [-F, -PHI, -c],
+    [PHI, c, F],
+    [-PHI, c, F],
+    [PHI, c, -F],
+    [PHI, -c, F],
+    [-PHI, c, -F],
+    [-PHI, -c, F],
+    [PHI, -c, -F],
+    [-PHI, -c, -F],
+    [b, G, H],
+    [b, G, -H],
+    [b, -G, H],
+    [-b, G, H],
+    [b, -G, -H],
+    [-b, G, -H],
+    [-b, -G, H],
+    [-b, -G, -H],
+    [G, H, b],
+    [G, -H, b],
+    [-G, H, b],
+    [G, H, -b],
+    [-G, -H, b],
+    [G, -H, -b],
+    [-G, H, -b],
+    [-G, -H, -b],
+    [H, b, G],
+    [-H, b, G],
+    [H, b, -G],
+    [H, -b, G],
+    [-H, b, -G],
+    [-H, -b, G],
+    [H, -b, -G],
+    [-H, -b, -G],
+  ];
 }
 
-function normalize([x, y]: Point): Point {
-  const len = Math.hypot(x, y) || 1;
-  return [x / len, y / len];
+const TRUNCATED_ICOSAHEDRON_FACES: Face[] = [
+  [0, 28, 36, 39, 29],
+  [1, 32, 41, 37, 30],
+  [2, 33, 42, 38, 31],
+  [3, 34, 40, 43, 35],
+  [4, 12, 44, 47, 13],
+  [5, 16, 49, 45, 14],
+  [6, 17, 50, 46, 15],
+  [7, 18, 48, 51, 19],
+  [8, 20, 52, 55, 21],
+  [9, 24, 57, 53, 22],
+  [10, 25, 58, 54, 23],
+  [11, 26, 56, 59, 27],
+  [0, 2, 31, 55, 52, 28],
+  [0, 29, 53, 57, 33, 2],
+  [1, 3, 35, 59, 56, 32],
+  [1, 30, 54, 58, 34, 3],
+  [4, 6, 15, 39, 36, 12],
+  [4, 13, 37, 41, 17, 6],
+  [5, 7, 19, 43, 40, 16],
+  [5, 14, 38, 42, 18, 7],
+  [8, 10, 23, 47, 44, 20],
+  [8, 21, 45, 49, 25, 10],
+  [9, 11, 27, 51, 48, 24],
+  [9, 22, 46, 50, 26, 11],
+  [12, 36, 28, 52, 20, 44],
+  [13, 47, 23, 54, 30, 37],
+  [14, 45, 21, 55, 31, 38],
+  [15, 46, 22, 53, 29, 39],
+  [16, 40, 34, 58, 25, 49],
+  [17, 41, 32, 56, 26, 50],
+  [18, 42, 33, 57, 24, 48],
+  [19, 51, 27, 59, 35, 43],
+];
+
+function normalize([x, y, z]: Vec3): Vec3 {
+  const len = Math.hypot(x, y, z) || 1;
+  return [x / len, y / len, z / len];
 }
 
-function add(a: Point, b: Point): Point {
-  return [a[0] + b[0], a[1] + b[1]];
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-function scale([x, y]: Point, s: number): Point {
-  return [x * s, y * s];
+function faceNormal(vertices: Vec3[], face: Face): Vec3 {
+  const a = vertices[face[0]!]!;
+  const b = vertices[face[1]!]!;
+  const c = vertices[face[2]!]!;
+  const ux = b[0] - a[0];
+  const uy = b[1] - a[1];
+  const uz = b[2] - a[2];
+  const vx = c[0] - a[0];
+  const vy = c[1] - a[1];
+  const vz = c[2] - a[2];
+  return normalize([
+    uy * vz - uz * vy,
+    uz * vx - ux * vz,
+    ux * vy - uy * vx,
+  ]);
 }
 
-function pathFromPoints(points: Point[]): string {
-  return points
-    .map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`)
+function faceCenter(vertices: Vec3[], face: Face): Vec3 {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const index of face) {
+    const v = vertices[index]!;
+    x += v[0];
+    y += v[1];
+    z += v[2];
+  }
+  const n = face.length;
+  return [x / n, y / n, z / n];
+}
+
+function project([x, y, z]: Vec3): readonly [number, number] {
+  const tiltY = 0.12;
+  const tiltX = -0.08;
+  const ry = y * Math.cos(tiltX) - z * Math.sin(tiltX);
+  const rz = y * Math.sin(tiltX) + z * Math.cos(tiltX);
+  const rx = x;
+  const fy = ry * Math.cos(tiltY) - rx * Math.sin(tiltY);
+  const fx = ry * Math.sin(tiltY) + rx * Math.cos(tiltY);
+  return [CENTER + fx * RADIUS, CENTER - fy * RADIUS];
+}
+
+function round(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function pathFromFace(vertices: Vec3[], face: Face): string {
+  return face
+    .map((index, i) => {
+      const [x, y] = project(vertices[index]!);
+      return `${i === 0 ? "M" : "L"}${round(x)} ${round(y)}`;
+    })
     .join(" ")
     .concat(" Z");
 }
 
-function pentagonVertices(
-  center: Point,
-  radius: number,
-  rotation = -Math.PI / 2,
-): Point[] {
-  const [cx, cy] = center;
-  return Array.from({ length: 5 }, (_, i) => {
-    const angle = rotation + (i * 2 * Math.PI) / 5;
-    return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)] as Point;
-  });
+function panelLighting(normal: Vec3, isPentagon: boolean): { fill: string; stroke: string } {
+  const ndotl = Math.max(0.08, dot(normal, KEY_LIGHT));
+  const rim = Math.max(0, dot(normal, normalize([0.2, -0.35, -0.92])));
+
+  if (isPentagon) {
+    const base = 10 + ndotl * 34 + rim * 6;
+    const v = Math.round(Math.min(52, base));
+    return {
+      fill: `rgb(${v}, ${v}, ${v})`,
+      stroke: `rgba(255,255,255,${(0.05 + ndotl * 0.09).toFixed(3)})`,
+    };
+  }
+
+  const base = 218 + ndotl * 37 - rim * 18;
+  const v = Math.round(Math.min(255, Math.max(196, base)));
+  return {
+    fill: `rgb(${v}, ${v}, ${v})`,
+    stroke: `rgba(0,0,0,${(0.1 + (1 - ndotl) * 0.12).toFixed(3)})`,
+  };
 }
 
-/** Point on the ball outline along a ray from centre. */
-function rimPoint(origin: Point, direction: Point, radius: number): Point {
-  return add(origin, scale(normalize(direction), radius));
-}
-
-export type FootballArtwork = {
-  /** Filled black panels */
-  panels: string[];
-  /** Dark seam strokes */
-  seams: string[];
-  /** Light stitch lines on white hex areas */
-  stitches: string[];
+export type FootballPanel = {
+  d: string;
+  fill: string;
+  stroke: string;
+  depth: number;
 };
 
-/**
- * Classic readable football: centre pent + five outer caps + white hex wedges.
- * Tuned for viewBox 0 0 100 100, clip radius 47.
- */
-export function buildFootballArtwork(
-  center: Point = CENTER,
-  pentRadius = 11.2,
-  clipRadius = 47,
-): FootballArtwork {
-  const verts = pentagonVertices(center, pentRadius);
-  const panels: string[] = [pathFromPoints(verts)];
-  const seams: string[] = [pathFromPoints(verts)];
-  const stitches: string[] = [];
+export type FootballArtwork = {
+  panels: readonly FootballPanel[];
+};
 
-  for (let i = 0; i < 5; i += 1) {
-    const v0 = verts[i]!;
-    const v1 = verts[(i + 1) % 5]!;
-    const edgeMid = lerp(v0, v1, 0.5);
-    const outward = normalize([edgeMid[0] - center[0], edgeMid[1] - center[1]]);
+export function buildFootballArtwork(): FootballArtwork {
+  const raw = truncatedIcosahedronVertices();
+  const vertices = raw.map((v) => normalize(v));
 
-    const wingA = add(v0, scale(outward, 14));
-    const wingB = add(v1, scale(outward, 14));
-    const capTip = rimPoint(center, outward, clipRadius * 0.94);
+  const panels: FootballPanel[] = TRUNCATED_ICOSAHEDRON_FACES.map(
+    (face, faceIndex) => {
+      const normal = faceNormal(vertices, face);
+      const center = faceCenter(vertices, face);
+      const isPentagon = face.length === 5;
+      const { fill, stroke } = panelLighting(normal, isPentagon);
 
-    panels.push(pathFromPoints([v0, v1, wingB, capTip, wingA]));
-    seams.push(`M${v0[0].toFixed(2)} ${v0[1].toFixed(2)} L${capTip[0].toFixed(2)} ${capTip[1].toFixed(2)}`);
-    seams.push(`M${v0[0].toFixed(2)} ${v0[1].toFixed(2)} L${v1[0].toFixed(2)} ${v1[1].toFixed(2)}`);
+      return {
+        d: pathFromFace(vertices, face),
+        fill,
+        stroke,
+        depth: center[2] + normal[2] * 0.15,
+      };
+    },
+  );
 
-    const hexApex = add(edgeMid, scale(outward, 22));
-    stitches.push(
-      `M${wingA[0].toFixed(2)} ${wingA[1].toFixed(2)} L${hexApex[0].toFixed(2)} ${hexApex[1].toFixed(2)} L${wingB[0].toFixed(2)} ${wingB[1].toFixed(2)}`,
-    );
-  }
-
-  for (const vertex of verts) {
-    const seamEnd = lerp(center, vertex, 1.28);
-    seams.push(
-      `M${vertex[0].toFixed(2)} ${vertex[1].toFixed(2)} L${seamEnd[0].toFixed(2)} ${seamEnd[1].toFixed(2)}`,
-    );
-  }
-
-  return { panels, seams, stitches };
+  panels.sort((a, b) => a.depth - b.depth);
+  return { panels };
 }
 
-export const FOOTBALL_CLIP_RADIUS = 47;
+export const FOOTBALL_CLIP_RADIUS = RADIUS;

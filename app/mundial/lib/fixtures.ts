@@ -89,14 +89,14 @@ export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
 
   let homeScore = live?.homeScore ?? null;
   let awayScore = live?.awayScore ?? null;
-  if ((homeScore == null || awayScore == null) && phase !== "upcoming") {
+  if (homeScore == null && awayScore == null && phase !== "upcoming" && goals.length > 0) {
     const fromGoals = { home: 0, away: 0 };
     for (const goal of goals) {
       if (goal.side === "home") fromGoals.home += 1;
       else fromGoals.away += 1;
     }
-    if (homeScore == null) homeScore = fromGoals.home;
-    if (awayScore == null) awayScore = fromGoals.away;
+    homeScore = fromGoals.home;
+    awayScore = fromGoals.away;
   }
 
   const status =

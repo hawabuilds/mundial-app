@@ -11,7 +11,7 @@ export type SolanaClaimVoucherResponse = {
   programId: string;
   usdcMint: string;
   rpcUrl: string;
-  cluster: "devnet" | "mainnet-beta";
+  cluster: "devnet";
   programDeployed: boolean;
   accounts: {
     config: string;

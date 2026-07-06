@@ -33,7 +33,7 @@ import {
 
   type LiveMatchData,
 
-} from "./apiFootball";
+} from "./txMatchSettlement";
 
 import { fixtureAutoSettlesFromApi } from "./fixtureAutoSettle";
 
@@ -402,7 +402,7 @@ export async function autoScoreFinishedMatches(
 
       await scoreMatchPredictions(fixture.id, finalScore);
 
-      void fetchAndPersistMatchProof(fixture.id, fixture);
+      await fetchAndPersistMatchProof(fixture.id, fixture);
 
       results.push({
 
@@ -434,20 +434,28 @@ export async function autoScoreFinishedMatches(
 
   }
 
-  void retryMissingMatchProofs(active)
-    .then((retry) => {
-      if (retry.upgrade.upgraded > 0 || retry.upgrade.attempted > 0) {
-        console.info(
-          `[match-proof] Upgrade pass: attempted=${retry.upgrade.attempted} upgraded=${retry.upgrade.upgraded} waiting=${retry.upgrade.stillWaiting} expired=${retry.upgrade.skippedExpired}`,
-        );
-      }
-    })
-    .catch((error) => {
-      console.warn(
-        "[match-proof] Retry pass failed:",
-        error instanceof Error ? error.message : error,
-      );
-    });
+  const retry = await retryMissingMatchProofs(getActiveFixtures()).catch((error) => {
+    console.warn(
+      "[match-proof] Retry pass failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return {
+      attempted: 0,
+      stored: 0,
+      semanticsRefreshed: 0,
+      upgrade: { attempted: 0, upgraded: 0, skippedExpired: 0, stillWaiting: 0 },
+    };
+  });
+  if (
+    retry.upgrade.upgraded > 0 ||
+    retry.upgrade.attempted > 0 ||
+    retry.stored > 0 ||
+    retry.semanticsRefreshed > 0
+  ) {
+    console.info(
+      `[match-proof] Maintenance: attempted=${retry.attempted} stored=${retry.stored} semanticsRefreshed=${retry.semanticsRefreshed} upgradeAttempted=${retry.upgrade.attempted} upgraded=${retry.upgrade.upgraded} waiting=${retry.upgrade.stillWaiting} expired=${retry.upgrade.skippedExpired}`,
+    );
+  }
 
   return results;
 

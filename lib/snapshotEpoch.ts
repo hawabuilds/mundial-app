@@ -3,7 +3,6 @@ import {
   insertLeaderboardSnapshot,
 } from "@/app/lib/leaderboardSnapshots";
 import {
-  ensurePayoutEpochForSnapshot,
   hasFinalizedEpochForUtcDay,
   markPayoutEpochFinalized,
   parsePotWei,
@@ -14,22 +13,16 @@ import {
   getFirstSnapshotEpochId,
   isBeforeFirstSnapshotEpoch,
 } from "@/lib/epochId";
-import { fetchBnbUsdPrice } from "@/lib/bnbUsdPrice";
 import { potUsdCentsFromUsdcBaseUnits } from "@/lib/formatUsdc";
-import { potUsdCentsFromWei } from "@/lib/potUsd";
 import { isTopTwentyRank } from "@/lib/payoutTiers";
 import {
   resolveSolanaOpenEpochId,
   useSequentialSolanaEpochIds,
 } from "@/lib/solanaEpochId";
-import {
-  ensureSolanaPayoutEpochForSnapshot,
-  isSolanaPayoutEnabled,
-} from "@/lib/solanaPayoutEpoch";
+import { ensureSolanaPayoutEpochForSnapshot } from "@/lib/solanaPayoutEpoch";
 import { readSolanaPayoutConfig } from "@/lib/solanaPayoutConfig";
 import { Connection } from "@solana/web3.js";
 import type { OpenSolanaEpochResult } from "@/lib/solanaOpenEpoch";
-import type { EnsureEpochOpenResult } from "@/lib/payoutOpenEpoch";
 
 export type SnapshotEpochResult =
   | { status: "skipped"; reason: string; epochId: string }
@@ -39,21 +32,21 @@ export type SnapshotEpochResult =
       rows: number;
       potWei: string;
       potUsdCents: number;
-      bnbUsdAtSnapshot: number | null;
+      bnbUsdAtSnapshot: null;
       finalizedAt: string;
-      payoutRail: "solana" | "bnb";
+      payoutRail: "solana";
       epochAutoCreated?: boolean;
       potSyncedFromContract?: boolean;
       contractBalanceWei?: string;
       reservedLiabilityWei?: string;
       availablePotWei?: string;
-      epochOpenOnChain?: EnsureEpochOpenResult | OpenSolanaEpochResult;
+      epochOpenOnChain?: OpenSolanaEpochResult;
     };
 
 async function resolveSnapshotEpochId(now: Date): Promise<bigint | null> {
   const calendarEpochId = epochIdForDate(now);
 
-  if (isSolanaPayoutEnabled() && useSequentialSolanaEpochIds()) {
+  if (useSequentialSolanaEpochIds()) {
     const config = readSolanaPayoutConfig();
     const connection = new Connection(config.rpcUrl, "confirmed");
     return resolveSolanaOpenEpochId({ connection, programId: config.programId });
@@ -65,9 +58,21 @@ async function resolveSnapshotEpochId(now: Date): Promise<bigint | null> {
 export async function snapshotEpochLeaderboard(
   now: Date = new Date(),
 ): Promise<SnapshotEpochResult> {
-  const solanaPayout = isSolanaPayoutEnabled();
+  let solanaConfig;
+  try {
+    solanaConfig = readSolanaPayoutConfig();
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : "Solana payout is not configured";
+    return {
+      status: "skipped",
+      reason,
+      epochId: epochIdForDate(now).toString(),
+    };
+  }
+
   const calendarEpochId = epochIdForDate(now);
-  const sequentialEpochs = solanaPayout && useSequentialSolanaEpochIds();
+  const sequentialEpochs = useSequentialSolanaEpochIds();
 
   if (isBeforeFirstSnapshotEpoch(calendarEpochId)) {
     const first = getFirstSnapshotEpochId()!.toString();
@@ -120,9 +125,7 @@ export async function snapshotEpochLeaderboard(
     };
   }
 
-  const ensured = solanaPayout
-    ? await ensureSolanaPayoutEpochForSnapshot(epochId)
-    : await ensurePayoutEpochForSnapshot(epochId);
+  const ensured = await ensureSolanaPayoutEpochForSnapshot(epochId);
 
   if (!ensured.epoch) {
     return {
@@ -135,7 +138,7 @@ export async function snapshotEpochLeaderboard(
   const epoch = ensured.epoch;
   const epochAutoCreated = ensured.created;
   const potSyncedFromContract = ensured.potSyncedFromContract;
-  const potSync = "potSync" in ensured ? ensured.potSync : undefined;
+  const potSync = ensured.potSync;
 
   if (epoch.finalized_at) {
     return {
@@ -155,61 +158,26 @@ export async function snapshotEpochLeaderboard(
   }
 
   const epochOpen = potSync?.epochOpenOnChain;
-  if (solanaPayout) {
-    if (
-      epochOpen &&
-      epochOpen.status === "error" &&
-      process.env.SOLANA_OPERATOR_SECRET_KEY?.trim()
-    ) {
-      return {
-        status: "skipped",
-        reason: `Could not open Solana epoch: ${epochOpen.reason}`,
-        epochId: epochKey,
-      };
-    }
-  } else if (
+  if (
     epochOpen &&
     epochOpen.status === "error" &&
-    process.env.PAYOUT_OPERATOR_PRIVATE_KEY?.trim()
+    process.env.SOLANA_OPERATOR_SECRET_KEY?.trim()
   ) {
     return {
       status: "skipped",
-      reason: `Could not open epoch on payout contract: ${epochOpen.reason}`,
+      reason: `Could not open Solana epoch: ${epochOpen.reason}`,
       epochId: epochKey,
     };
   }
 
   const rows = await insertLeaderboardSnapshot(epochId, topTwenty);
-
-  let potUsdCents: number;
-  let bnbUsdAtSnapshot: number | null = null;
-  if (solanaPayout) {
-    potUsdCents = potUsdCentsFromUsdcBaseUnits(potWei);
-  } else {
-    bnbUsdAtSnapshot = await fetchBnbUsdPrice();
-    potUsdCents = potUsdCentsFromWei(potWei, bnbUsdAtSnapshot);
-  }
+  const potUsdCents = potUsdCentsFromUsdcBaseUnits(potWei);
 
   await markPayoutEpochFinalized(epochId, potUsdCents);
 
-  const balanceField =
-    potSync && "vaultBalance" in potSync
-      ? potSync.vaultBalance
-      : potSync && "contractBalanceWei" in potSync
-        ? potSync.contractBalanceWei
-        : undefined;
-  const reservedField =
-    potSync && "totalReserved" in potSync
-      ? potSync.totalReserved
-      : potSync && "reservedLiabilityWei" in potSync
-        ? potSync.reservedLiabilityWei
-        : undefined;
-  const availableField =
-    potSync && "availablePot" in potSync
-      ? potSync.availablePot
-      : potSync && "availablePotWei" in potSync
-        ? potSync.availablePotWei
-        : undefined;
+  const balanceField = potSync?.vaultBalance;
+  const reservedField = potSync?.totalReserved;
+  const availableField = potSync?.availablePot;
 
   return {
     status: "created",
@@ -217,9 +185,9 @@ export async function snapshotEpochLeaderboard(
     rows,
     potWei: potWei.toString(),
     potUsdCents,
-    bnbUsdAtSnapshot,
+    bnbUsdAtSnapshot: null,
     finalizedAt: new Date().toISOString(),
-    payoutRail: solanaPayout ? "solana" : "bnb",
+    payoutRail: "solana",
     ...(epochAutoCreated ? { epochAutoCreated: true } : {}),
     ...(potSyncedFromContract ? { potSyncedFromContract: true } : {}),
     ...(balanceField

@@ -1,7 +1,7 @@
 import { getFixtureById } from "@/app/data/fixtures";
 import { getMatchProof, toMatchProofSummary } from "@/app/lib/supabase";
 import { isCollectAuthorized } from "@/lib/cronAuth";
-import { fetchAndPersistMatchProof } from "@/lib/matchProofFetch";
+import { fetchAndPersistMatchProof, refreshStoredProofSemantics } from "@/lib/matchProofFetch";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,11 @@ export async function POST(request: NextRequest) {
       continue;
     }
     const outcome = await fetchAndPersistMatchProof(matchId, fixture, { force });
-    const stored = await getMatchProof(matchId).catch(() => null);
+    let stored = await getMatchProof(matchId).catch(() => null);
+    if (stored && !stored.showVerifiedBadge) {
+      await refreshStoredProofSemantics(matchId, fixture, stored);
+      stored = await getMatchProof(matchId).catch(() => null);
+    }
     results.push({
       matchId,
       ...outcome,

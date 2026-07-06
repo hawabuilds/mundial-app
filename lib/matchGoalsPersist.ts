@@ -5,7 +5,7 @@ import {
   saveMatchGoals,
   type StoredGoal,
 } from "@/app/lib/supabase";
-import type { MatchGoal } from "./apiFootball";
+import type { MatchGoal } from "./txMatchSettlement";
 import {
   extractActionGoals,
   extractGoals,
@@ -21,18 +21,18 @@ export function mapTxGoalsToMatchGoals(
     minute: goal.minute,
     side: (goal.participant === 1 ? homeIsP1 : !homeIsP1) ? "home" : "away",
     player: goal.player,
+    playerShort: goal.playerShort,
     ownGoal: goal.ownGoal,
+    penalty: goal.penalty,
   }));
 }
 
 export function matchGoalsFromEvents(
   events: TxScoreEvent[],
   homeIsP1: boolean,
-  mode: "display" | "persist",
+  _mode: "display" | "persist" = "display",
 ): MatchGoal[] {
-  const txGoals =
-    mode === "persist" ? extractActionGoals(events) : extractGoals(events);
-  return mapTxGoalsToMatchGoals(txGoals, homeIsP1);
+  return mapTxGoalsToMatchGoals(extractActionGoals(events), homeIsP1);
 }
 
 /** Play-by-play rows only — period-stat placeholders are not persisted. */
