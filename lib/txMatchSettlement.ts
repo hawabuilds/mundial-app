@@ -181,6 +181,38 @@ function goalsFor(
 
 const TERMINAL_STATUS_IDS = new Set([5, 10, 13, 100]);
 
+/** True for whistle-blown in-play phases (not NS / terminal / cancelled). */
+function isInPlayStatusId(statusId: number): boolean {
+  if (TERMINAL_STATUS_IDS.has(statusId)) return false;
+  switch (statusId) {
+    case 1: // NS
+    case 15: // ABD
+    case 16: // CANC
+    case 17: // coverage cancelled
+    case 18: // SUSP
+    case 19: // PST
+      return false;
+    default:
+      return true;
+  }
+}
+
+function inPlayGoalsLine(
+  home: { total: number | null; regulation: number | null },
+  away: { total: number | null; regulation: number | null },
+): { home: number; away: number } {
+  if (home.total != null && away.total != null) {
+    return { home: home.total, away: away.total };
+  }
+  if (home.regulation != null && away.regulation != null) {
+    return { home: home.regulation, away: away.regulation };
+  }
+  return {
+    home: home.total ?? home.regulation ?? 0,
+    away: away.total ?? away.regulation ?? 0,
+  };
+}
+
 function buildMatch(
   txFixture: TxFixture,
   lookup: MatchLookup,
@@ -199,8 +231,9 @@ function buildMatch(
     const home = homeIsP1 ? p1 : p2;
     const away = homeIsP1 ? p2 : p1;
 
-    const goalsLine =
-      home.total != null && away.total != null
+    const goalsLine = isInPlayStatusId(statusId)
+      ? inPlayGoalsLine(home, away)
+      : home.total != null && away.total != null
         ? { home: home.total, away: away.total }
         : undefined;
 
@@ -216,6 +249,8 @@ function buildMatch(
     }
 
     score = { goals: goalsLine, fullTime: fullTimeLine };
+  } else if (isInPlayStatusId(statusId)) {
+    score = { goals: { home: 0, away: 0 } };
   }
 
   const seconds = event?.Clock?.Seconds;
@@ -238,6 +273,22 @@ function txFixtureHomeIsP1(txFixture: TxFixture, lookup: MatchLookup): boolean {
   return txFixture.Participant1IsHome;
 }
 
+function isInPlayStatusShort(status: string): boolean {
+  return isStartedOrFinishedStatus(status) && !isTerminalMatchStatus(status);
+}
+
+function coerceInPlayScores(
+  homeScore: number | null,
+  awayScore: number | null,
+  status: string,
+): { homeScore: number | null; awayScore: number | null } {
+  if (!isInPlayStatusShort(status)) return { homeScore, awayScore };
+  return {
+    homeScore: homeScore ?? 0,
+    awayScore: awayScore ?? 0,
+  };
+}
+
 export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
   let homeScore: number | null = null;
   let awayScore: number | null = null;
@@ -250,6 +301,11 @@ export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
     const live = extractLiveScores(match.score);
     homeScore = live.homeScore;
     awayScore = live.awayScore;
+    ({ homeScore, awayScore } = coerceInPlayScores(
+      homeScore,
+      awayScore,
+      match.status,
+    ));
   }
 
   return {
@@ -436,8 +492,8 @@ export function liveFromTxGameState(
   return {
     externalFixtureId: fixtureId,
     status,
-    homeScore: null,
-    awayScore: null,
+    homeScore: 0,
+    awayScore: 0,
     elapsed: null,
   };
 }

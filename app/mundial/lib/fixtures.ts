@@ -89,6 +89,23 @@ export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
 
   let homeScore = live?.homeScore ?? null;
   let awayScore = live?.awayScore ?? null;
+
+  const liveStatus =
+    live?.status ??
+    (phase === "live" ? "LIVE" : phase === "recent" ? "FT" : null);
+  const inPlay =
+    phase === "live" ||
+    liveStatus === "LIVE" ||
+    liveStatus === "HT" ||
+    liveStatus === "1H" ||
+    liveStatus === "2H" ||
+    liveStatus === "ET" ||
+    liveStatus === "P";
+  if (inPlay) {
+    if (homeScore == null) homeScore = 0;
+    if (awayScore == null) awayScore = 0;
+  }
+
   if (homeScore == null && awayScore == null && phase !== "upcoming" && goals.length > 0) {
     const fromGoals = { home: 0, away: 0 };
     for (const goal of goals) {
@@ -99,9 +116,7 @@ export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
     awayScore = fromGoals.away;
   }
 
-  const status =
-    live?.status ??
-    (phase === "live" ? "LIVE" : phase === "recent" ? "FT" : null);
+  const status = liveStatus;
 
   const stage = matchStageLabel(fixture.group, {
     matchId: fixture.id,

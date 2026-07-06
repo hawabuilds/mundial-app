@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   resolveFinalScoreFromApiMatch,
+  mapMatchRow,
+  liveFromTxGameState,
   type FootballDataMatch,
 } from "./txMatchSettlement";
 
@@ -85,6 +87,35 @@ assert.deepEqual(
   ),
   { homeScore: 1, awayScore: 1 },
   "AET still settles on fulltime (90+injury)",
+);
+
+assert.deepEqual(
+  mapMatchRow({
+    id: 99,
+    status: "1H",
+    homeTeam: { name: "France" },
+    awayTeam: { name: "Senegal" },
+  }),
+  {
+    externalFixtureId: 99,
+    status: "LIVE",
+    homeScore: 0,
+    awayScore: 0,
+    elapsed: null,
+  },
+  "early 1H with no Stats payload defaults live board to 0-0",
+);
+
+assert.deepEqual(
+  liveFromTxGameState(42, 2),
+  {
+    externalFixtureId: 42,
+    status: "LIVE",
+    homeScore: 0,
+    awayScore: 0,
+    elapsed: null,
+  },
+  "GameState fallback before scores fetch shows 0-0",
 );
 
 console.log("txMatchSettlement.test.ts: ok");

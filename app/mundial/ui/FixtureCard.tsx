@@ -245,7 +245,8 @@ export default function FixtureCard({
   const inPlay = fixtureInPlay(fixture);
   const finished = fixture.status === "FT" || fixture.phase === "recent";
   const showLive = inPlay || finished;
-  const hasScore = fixture.homeScore != null && fixture.awayScore != null;
+  const hasScore =
+    inPlay || (fixture.homeScore != null && fixture.awayScore != null);
   const showOdds = showMarketOdds && fixture.marketOdds;
   const endedAfterRegulation = settledOnRegulationScore(fixture.terminalStatusId);
   const showVerifiedProof =

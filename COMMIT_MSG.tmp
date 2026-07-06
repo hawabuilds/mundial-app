@@ -1,4 +1,0 @@
-Rename Solana program to solana-program/ and document it
-
-Give the on-chain program a clear folder name, update the tsconfig
-exclude, and add a Smart contract section to the README.
