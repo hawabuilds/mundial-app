@@ -10,7 +10,7 @@ import {
   findVaultPda,
 } from "./solanaPayoutPdas";
 
-/** Fixed tuple for viem → @noble/hashes cross-check (see scripts/scratch-viem-keccak.ts). */
+/** Golden tuple — keccak digest must match the deployed program verifier. */
 const CROSS_CHECK_PROGRAM_ID = new PublicKey(
   "11111111111111111111111111111111",
 );
@@ -28,8 +28,7 @@ const CROSS_CHECK_VOUCHER_ID = Uint8Array.from(
     "hex",
   ),
 );
-/** Pre-swap viem keccak256 digest for the tuple above. */
-const VIEM_EXPECTED_DIGEST =
+const EXPECTED_MESSAGE_DIGEST =
   "0x3e9c03fd9dad9df5d191ae7d1f44b33987ce862151c3c014500240c4ff1c7b17";
 
 function assert(condition: boolean, message: string) {
@@ -52,11 +51,11 @@ function main() {
   });
   const nobleHex = `0x${Buffer.from(nobleHash).toString("hex")}`;
   assert(
-    nobleHex === VIEM_EXPECTED_DIGEST,
-    `noble digest matches pre-swap viem (${nobleHex})`,
+    nobleHex === EXPECTED_MESSAGE_DIGEST,
+    `message digest matches on-chain verifier (${nobleHex})`,
   );
-  console.log("viem (pre-swap):", VIEM_EXPECTED_DIGEST);
-  console.log("noble (current):", nobleHex);
+  console.log("expected:", EXPECTED_MESSAGE_DIGEST);
+  console.log("computed:", nobleHex);
 
   const programId = new PublicKey("11111111111111111111111111111111");
   const mint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");

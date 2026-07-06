@@ -127,7 +127,7 @@ npm run dev
 
 Copy `.env.example` to `.env.local` and add your keys (X auth, Supabase, `TXODDS_API_TOKEN`, Solana RPC and signer). No secrets are committed.
 
-## Judge reproduction (devnet)
+## Devnet payout demo
 
 Requires `SOLANA_RPC_URL` containing `devnet`, operator/signer keys, and a funded rewards vault.
 
@@ -139,7 +139,7 @@ npm run demo:epoch -- --pot 2000
 npm run e2e:solana-claim -- <epochId>
 ```
 
-`open:solana-epoch` is an ops-only script (positional args, no devnet guard) for manual on-chain opens outside the judge path.
+`open:solana-epoch` is an ops script (positional args, no devnet guard) for manual on-chain opens.
 
 Also run `npm run test:solana-voucher` and the other `test:*` suites before submitting.
 
