@@ -6,13 +6,13 @@ import {
 import type { FixturePhase } from "@/lib/enrichFixtures";
 
 /** Upcoming fixtures more than this far in the future are hidden. */
-export const BOARD_UPCOMING_LOOKAHEAD_HOURS = 36;
+export const BOARD_UPCOMING_LOOKAHEAD_HOURS = 96;
 
 /** Drop finished cards this long after kickoff (unless still the only FT on screen). */
 export const BOARD_RECENT_MAX_AGE_HOURS = 8;
 
 /** Max upcoming rows after filtering (next games only). */
-export const BOARD_MAX_UPCOMING = 3;
+export const BOARD_MAX_UPCOMING = 10;
 
 /** Max full-time cards on the board at once. */
 export const BOARD_MAX_RECENT = 1;

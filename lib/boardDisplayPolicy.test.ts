@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  BOARD_MAX_UPCOMING,
   BOARD_RECENT_MAX_AGE_HOURS,
   BOARD_UPCOMING_LOOKAHEAD_HOURS,
   capBoardForDisplay,
@@ -59,16 +60,17 @@ assert.equal(
 const capped = capBoardForDisplay([
   { phase: "recent", kickoffUtcMs: 1, txFixtureId: 10 },
   { phase: "recent", kickoffUtcMs: 2, txFixtureId: 11 },
-  { phase: "upcoming", kickoffUtcMs: 100, txFixtureId: 12 },
-  { phase: "upcoming", kickoffUtcMs: 101, txFixtureId: 13 },
-  { phase: "upcoming", kickoffUtcMs: 102, txFixtureId: 14 },
-  { phase: "upcoming", kickoffUtcMs: 103, txFixtureId: 15 },
+  ...Array.from({ length: 12 }, (_, i) => ({
+    phase: "upcoming" as const,
+    kickoffUtcMs: 100 + i,
+    txFixtureId: 20 + i,
+  })),
   { phase: "live", kickoffUtcMs: 50, txFixtureId: 16 },
 ]);
 
 assert.equal(capped.filter((r) => r.phase === "recent").length, 1);
-assert.equal(capped.filter((r) => r.phase === "upcoming").length, 3);
+assert.equal(capped.filter((r) => r.phase === "upcoming").length, BOARD_MAX_UPCOMING);
 assert.equal(capped.filter((r) => r.phase === "live").length, 1);
-assert.equal(capped.length, 5);
+assert.equal(capped.length, 1 + 1 + BOARD_MAX_UPCOMING);
 
 console.log("boardDisplayPolicy tests: ok");
