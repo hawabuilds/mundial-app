@@ -15,8 +15,8 @@ import {
   type LiveMatchData,
   type MatchGoal,
 } from "./apiFootball";
+import { boardMatchHasStarted } from "@/lib/boardMatchPhase";
 import {
-  BOARD_API_MAX_CALLS,
   BOARD_MATCH_MAX_MIN,
   type BoardFixture,
   type FixturePhase,
@@ -116,10 +116,14 @@ type BoardRow = {
   kickoffUtcMs: number;
 };
 
-function rowHasStarted(row: BoardRow, _nowMs: number): boolean {
-  if (isGameStateInPlay(row.fx.GameState)) return true;
-  if (isGameStateFinished(row.fx.GameState)) return true;
-  return false;
+/** Score lookups for every visible match in the kickoff window (live detection). */
+const BOARD_SCORE_FETCH_MAX = 12;
+
+function rowHasStarted(
+  row: BoardRow,
+  live: LiveMatchData | null | undefined,
+): boolean {
+  return boardMatchHasStarted(row.fx.GameState, live);
 }
 
 function lookupPriority(a: BoardRow, b: BoardRow): number {
@@ -156,7 +160,7 @@ function isBoardMatchFinished(
   live: LiveMatchData | null,
   nowMs: number,
 ): boolean {
-  if (!rowHasStarted(row, nowMs)) return false;
+  if (!rowHasStarted(row, live)) return false;
   if (live?.status && isFinishedStatus(live.status)) return true;
   if (
     live?.status &&
@@ -219,12 +223,18 @@ export async function getTxScheduleBoard(
     { live: LiveMatchData | null; goals: MatchGoal[] }
   >();
   let liveLookups = 0;
+  // Prefer kickoff-passed rows so scores feed can flip them to live promptly.
   const lookupCandidates = visibleRows
     .filter((row) => shouldFetchBoardLive(row, nowMs))
-    .sort(lookupPriority);
+    .sort((a, b) => {
+      const aPast = a.kickoffMs <= nowMs ? 1 : 0;
+      const bPast = b.kickoffMs <= nowMs ? 1 : 0;
+      if (bPast !== aPast) return bPast - aPast;
+      return lookupPriority(a, b);
+    });
 
   for (const row of lookupCandidates) {
-    if (liveLookups >= BOARD_API_MAX_CALLS) break;
+    if (liveLookups >= BOARD_SCORE_FETCH_MAX) break;
     liveLookups += 1;
     try {
       const { match, goals: matchGoals } = await fetchMatchWithGoals({
@@ -247,16 +257,20 @@ export async function getTxScheduleBoard(
   const oddsByFixtureId = new Map<number, Match1x2Odds | null>();
 
   const upcomingByKickoff = visibleRows
-    .filter((row) => !rowHasStarted(row, nowMs))
+    .filter((row) => {
+      const fetched = liveData.get(row.fx.FixtureId);
+      const live = resolveLive(row, fetched);
+      return !rowHasStarted(row, live);
+    })
     .sort((a, b) => a.kickoffMs - b.kickoffMs);
 
   // Lock/load pre-kickoff 1X2 for every match visible on the board (live, recent FT,
   // and next upcoming) so the market line persists on FT cards until the next whistle.
   const oddsTargetIds = new Set<number>();
   for (const row of visibleRows) {
-    if (!rowHasStarted(row, nowMs)) continue;
     const fetched = liveData.get(row.fx.FixtureId);
     const live = resolveLive(row, fetched);
+    if (!rowHasStarted(row, live)) continue;
     const finished = isBoardMatchFinished(row, live, nowMs);
     if (!finished || nowMs < nextKickoffAfter(row.kickoffMs)) {
       oddsTargetIds.add(row.fx.FixtureId);
@@ -303,13 +317,14 @@ export async function getTxScheduleBoard(
       kickoffUtcMs,
     };
 
-    if (!rowHasStarted(row, nowMs)) {
+    const fetched = liveData.get(fx.FixtureId);
+    const live: LiveMatchData | null = resolveLive(row, fetched);
+
+    if (!rowHasStarted(row, live)) {
       board.push({ ...base, live: null, phase: "upcoming" });
       continue;
     }
 
-    const fetched = liveData.get(fx.FixtureId);
-    let live: LiveMatchData | null = resolveLive(row, fetched);
     let goals: MatchGoal[] = fetched?.goals ?? [];
 
     const finished = isBoardMatchFinished(row, live, nowMs);

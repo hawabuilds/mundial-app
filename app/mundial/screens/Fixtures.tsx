@@ -196,7 +196,12 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
 
   const featuredLiveLabel = !featuredLive
     ? null
-    : featuredLive.status === "LIVE" || featuredLive.status === "HT"
+    : featuredLive.phase === "live" ||
+        featuredLive.status === "LIVE" ||
+        featuredLive.status === "HT" ||
+        featuredLive.status === "1H" ||
+        featuredLive.status === "2H" ||
+        featuredLive.status === "ET"
       ? "Live now"
       : "Full time";
   const rankLabel = statsLoading ? "—" : rank != null ? `#${rank}` : "—";
