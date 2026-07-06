@@ -1,12 +1,9 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { bnbStr, usd } from "../data/rewards";
 import { sessionUserIdentity } from "../lib/auth-client";
-import { translateTierLabel } from "../lib/i18n-tiers";
 import {
   avatarProxyAbsoluteUrl,
   avatarUsernameProxyAbsoluteUrl,
@@ -23,12 +20,41 @@ export type ShareCardData = {
   network?: string;
 };
 
+const COPY = {
+  ariaLabel: "Celebration",
+  winner: "WINNER",
+  prizeWon: "Prize won",
+  paidOn: (network: string) => `paid on ${network}`,
+  tagline: "mundial · predict & win daily",
+  shareOnX: "Share on X",
+  shareTweetText: "@copamundialapp",
+  preparingImage: "Preparing image…",
+  done: "Done",
+  scoreBrand: "Copa Mundial",
+  usdc: "USDC",
+} as const;
+
 function formatUsdcAmount(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "0.00";
   return value.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function formatDayDate(day: string, date: string): string {
+  return date ? `${day} · ${date}` : day;
+}
+
+function tierDisplayName(tier: string): string {
+  switch (tier) {
+    case "Tier 1":
+    case "Tier 2":
+    case "Tier 3":
+      return tier;
+    default:
+      return tier;
+  }
 }
 
 type ShareFallbackDetail = {
@@ -56,9 +82,6 @@ export default function CelebrationCard({
   onClose,
   onShareFallback,
 }: CelebrationCardProps) {
-  const t = useTranslations("celebrationCard");
-  const tc = useTranslations("common");
-  const tt = useTranslations("tiers");
   const { data: session, status } = useSession();
   const user = sessionUserIdentity(
     status,
@@ -79,11 +102,7 @@ export default function CelebrationCard({
     if (open) setImageReady(false);
   }, [open, data]);
 
-  const dayLabel = data
-    ? data.date
-      ? tc("dayDate", { day: data.day, date: data.date })
-      : data.day
-    : "";
+  const dayLabel = data ? formatDayDate(data.day, data.date) : "";
 
   const cardSrc = useMemo(() => {
     if (!data) return "";
@@ -95,25 +114,22 @@ export default function CelebrationCard({
         : "";
 
     const amount =
-      data.usdc != null ? formatUsdcAmount(data.usdc) : bnbStr(data.bnb);
-    const unit = data.usdc != null ? tc("usdc") : tc("bnb");
-    const sub =
-      data.usdc != null
-        ? t("paidOn", { network: data.network ?? "Solana" })
-        : tc("approxUsd", { amount: usd(data.bnb) });
+      data.usdc != null ? formatUsdcAmount(data.usdc) : formatUsdcAmount(0);
+    const unit = COPY.usdc;
+    const sub = COPY.paidOn(data.network ?? "Solana");
 
     const params = new URLSearchParams({
-      brand: tc("scoreBrand"),
-      winner: t("winner"),
+      brand: COPY.scoreBrand,
+      winner: COPY.winner,
       handle: user.handle,
       initials: user.initials,
-      tier: translateTierLabel(tt, data.tier),
+      tier: tierDisplayName(data.tier),
       day: dayLabel,
-      prize: t("prizeWon"),
+      prize: COPY.prizeWon,
       amount,
       unit,
       sub,
-      tag: t("tagline"),
+      tag: COPY.tagline,
       avatar,
     });
 
@@ -122,9 +138,6 @@ export default function CelebrationCard({
     data,
     dayLabel,
     profileImage,
-    t,
-    tc,
-    tt,
     user.handle,
     user.initials,
     user.username,
@@ -136,7 +149,7 @@ export default function CelebrationCard({
     }
   };
 
-  const shareTweetText = t("shareTweetText");
+  const shareTweetText = COPY.shareTweetText;
 
   const openXIntent = () => {
     const url = new URL("https://twitter.com/intent/tweet");
@@ -208,7 +221,7 @@ export default function CelebrationCard({
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
-      aria-label={t("ariaLabel")}
+      aria-label={COPY.ariaLabel}
     >
       <div className={styles.shareModal}>
         <div className={styles.shareCardViewport}>
@@ -216,7 +229,7 @@ export default function CelebrationCard({
           <img
             className={styles.shareCardPreview}
             src={cardSrc}
-            alt={t("ariaLabel")}
+            alt={COPY.ariaLabel}
             width={1600}
             height={900}
             onLoad={() => setImageReady(true)}
@@ -224,7 +237,7 @@ export default function CelebrationCard({
           />
           {!imageReady && (
             <div className={styles.shareCardLoading} aria-busy="true">
-              {t("preparingImage")}
+              {COPY.preparingImage}
             </div>
           )}
         </div>
@@ -237,14 +250,14 @@ export default function CelebrationCard({
             disabled={sharing}
           >
             <XIcon />
-            {sharing ? t("preparingImage") : t("shareOnX")}
+            {sharing ? COPY.preparingImage : COPY.shareOnX}
           </button>
           <button
             type="button"
             className={`${styles.btn} ${styles.btnGhost}`}
             onClick={onClose}
           >
-            {tc("done")}
+            {COPY.done}
           </button>
         </div>
       </div>

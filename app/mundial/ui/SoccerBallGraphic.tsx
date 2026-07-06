@@ -5,106 +5,96 @@ type SoccerBallGraphicProps = {
   className?: string;
 };
 
-/** Telstar football — centre pent, five outer caps, white hex gaps (icon-readable). */
+/** Classic Telstar — lit truncated icosahedron with leather-style volume. */
 export default function SoccerBallGraphic({
   idPrefix,
   className,
 }: SoccerBallGraphicProps) {
   const clipId = `${idPrefix}-clip`;
-  const sphereId = `${idPrefix}-sphere`;
-  const shadowId = `${idPrefix}-shadow`;
+  const shadeId = `${idPrefix}-shade`;
+  const shadeDeepId = `${idPrefix}-shade-deep`;
   const specId = `${idPrefix}-spec`;
-  const panelShadeId = `${idPrefix}-panel-shade`;
+  const specSoftId = `${idPrefix}-spec-soft`;
   const rimId = `${idPrefix}-rim`;
+  const aoId = `${idPrefix}-ao`;
 
-  const { panels, seams, stitches } = buildFootballArtwork();
-  const clipR = FOOTBALL_CLIP_RADIUS;
+  const { panels } = buildFootballArtwork();
+  const r = FOOTBALL_CLIP_RADIUS;
 
   return (
     <svg
       className={className}
       viewBox="0 0 100 100"
+      shapeRendering="geometricPrecision"
       aria-hidden
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <radialGradient id={sphereId} cx="34%" cy="28%" r="68%" fx="30%" fy="24%">
+        <radialGradient id={shadeId} cx="34%" cy="28%" r="72%">
           <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="38%" stopColor="#f7f7f7" />
-          <stop offset="72%" stopColor="#e3e3e3" />
-          <stop offset="100%" stopColor="#a8a8a8" />
+          <stop offset="42%" stopColor="#f4f4f4" />
+          <stop offset="100%" stopColor="#c8c8c8" />
         </radialGradient>
 
-        <radialGradient id={shadowId} cx="68%" cy="72%" r="52%">
-          <stop offset="0%" stopColor="rgba(0,0,0,0.38)" />
-          <stop offset="55%" stopColor="rgba(0,0,0,0.12)" />
+        <radialGradient id={shadeDeepId} cx="62%" cy="78%" r="58%">
+          <stop offset="0%" stopColor="rgba(0,0,0,0.28)" />
           <stop offset="100%" stopColor="rgba(0,0,0,0)" />
         </radialGradient>
 
-        <radialGradient id={specId} cx="28%" cy="22%" r="38%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-          <stop offset="45%" stopColor="rgba(255,255,255,0.35)" />
+        <radialGradient id={rimId} cx="68%" cy="74%" r="48%">
+          <stop offset="0%" stopColor="rgba(0,0,0,0.36)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+        </radialGradient>
+
+        <radialGradient id={specId} cx="26%" cy="20%" r="22%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.98)" />
+          <stop offset="55%" stopColor="rgba(255,255,255,0.22)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
         </radialGradient>
 
-        <linearGradient id={panelShadeId} x1="20%" y1="10%" x2="80%" y2="90%">
-          <stop offset="0%" stopColor="#242424" />
-          <stop offset="100%" stopColor="#050505" />
-        </linearGradient>
+        <radialGradient id={specSoftId} cx="38%" cy="32%" r="34%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
 
-        <radialGradient id={rimId} cx="50%" cy="50%" r="50%">
-          <stop offset="92%" stopColor="rgba(0,0,0,0)" />
-          <stop offset="97%" stopColor="rgba(0,0,0,0.18)" />
-          <stop offset="100%" stopColor="rgba(0,0,0,0.35)" />
+        <radialGradient id={aoId} cx="50%" cy="88%" r="42%">
+          <stop offset="0%" stopColor="rgba(0,0,0,0.22)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
         </radialGradient>
 
         <clipPath id={clipId}>
-          <circle cx="50" cy="50" r={clipR} />
+          <circle cx="50" cy="50" r={r} />
         </clipPath>
       </defs>
 
-      <circle cx="50" cy="50" r={clipR} fill={`url(#${sphereId})`} />
-      <circle cx="50" cy="50" r={clipR} fill={`url(#${shadowId})`} />
+      <circle cx="50" cy="50" r={r} fill={`url(#${shadeId})`} />
+      <circle cx="50" cy="50" r={r} fill={`url(#${shadeDeepId})`} />
 
       <g clipPath={`url(#${clipId})`}>
-        {panels.map((path, index) => (
-          <path key={`panel-${index}`} d={path} fill={`url(#${panelShadeId})`} />
+        {panels.map((panel, index) => (
+          <path
+            key={index}
+            d={panel.d}
+            fill={panel.fill}
+            stroke={panel.stroke}
+            strokeWidth="0.32"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
         ))}
-
-        <g
-          fill="none"
-          stroke="rgba(255,255,255,0.5)"
-          strokeWidth="0.55"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          {stitches.map((path, index) => (
-            <path key={`stitch-${index}`} d={path} />
-          ))}
-        </g>
-
-        <g
-          fill="none"
-          stroke="#080808"
-          strokeWidth="0.9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          {seams.map((path, index) => (
-            <path key={`seam-${index}`} d={path} />
-          ))}
-        </g>
       </g>
 
-      <circle cx="50" cy="50" r={clipR} fill={`url(#${specId})`} />
-      <circle cx="50" cy="50" r={clipR} fill={`url(#${rimId})`} />
+      <circle cx="50" cy="50" r={r} fill={`url(#${aoId})`} />
+      <circle cx="50" cy="50" r={r} fill={`url(#${rimId})`} />
+      <circle cx="50" cy="50" r={r} fill={`url(#${specSoftId})`} />
+      <circle cx="50" cy="50" r={r} fill={`url(#${specId})`} />
       <circle
         cx="50"
         cy="50"
-        r={clipR}
+        r={r}
         fill="none"
-        stroke="rgba(0,0,0,0.22)"
-        strokeWidth="0.9"
+        stroke="rgba(0,0,0,0.14)"
+        strokeWidth="0.45"
       />
     </svg>
   );

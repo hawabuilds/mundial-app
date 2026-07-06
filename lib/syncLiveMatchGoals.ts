@@ -1,4 +1,4 @@
-import { isGameStateInPlay } from "./apiFootball";
+import { isGameStateInPlay } from "./txMatchSettlement";
 import { matchGoalsFromEvents, persistTxlineGoals } from "./matchGoalsPersist";
 import {
   fetchFixturesSnapshot,

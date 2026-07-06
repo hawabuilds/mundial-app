@@ -1,0 +1,74 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.06), transparent 42%),
+    #050505;
+}
+
+.panel {
+  width: min(100%, 32rem);
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  font-family: var(--m-font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--m-font-display);
+  font-size: 1.75rem;
+  color: #fff;
+}
+
+.copy,
+.note {
+  margin: 0.85rem 0 0;
+  font-family: var(--m-font-body);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.demo {
+  margin-top: 1.25rem;
+}
+
+.actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+}
+
+.button {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: var(--m-font-body);
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.link {
+  color: #fff;
+}

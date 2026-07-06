@@ -1,9 +1,18 @@
-import { sha256, hexToBytes } from "viem";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { writeU64Le } from "@/lib/binaryLe";
+
+function hexToBytes(hex: string): Uint8Array {
+  const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const out = new Uint8Array(normalized.length / 2);
+  for (let i = 0; i < out.length; i += 1) {
+    out[i] = Number.parseInt(normalized.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
 
 export function anchorGlobalDiscriminator(ixName: string): Uint8Array {
   const preimage = new TextEncoder().encode(`global:${ixName}`);
-  return hexToBytes(sha256(preimage)).slice(0, 8);
+  return sha256(preimage).slice(0, 8);
 }
 
 export function encodeClaimInstructionData(

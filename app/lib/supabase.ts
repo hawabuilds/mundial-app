@@ -721,6 +721,34 @@ export async function saveMatchProof(input: {
   if (error) throw new Error(error.message);
 }
 
+/** Re-evaluate verified badge after match_state final scores are available. */
+export async function updateMatchProofSemantics(
+  fixtureId: number,
+  input: {
+    showVerifiedBadge: boolean;
+    semanticsMismatch: boolean;
+    proofMode?: ProofScoreMode | null;
+    terminalStatusId?: number | null;
+  },
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const payload: Record<string, unknown> = {
+    show_verified_badge: input.showVerifiedBadge,
+    semantics_mismatch: input.semanticsMismatch,
+  };
+  if (input.proofMode != null) payload.proof_mode = input.proofMode;
+  if (input.terminalStatusId != null) {
+    payload.terminal_status_id = input.terminalStatusId;
+  }
+
+  const { error } = await supabase
+    .from("match_proofs")
+    .update(payload)
+    .eq("fixture_id", fixtureId);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function getMatchProof(fixtureId: number): Promise<StoredMatchProof | null> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase

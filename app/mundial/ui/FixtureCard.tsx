@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MundialFixture, MundialGoal } from "../lib/fixtures";
 import { settledOnRegulationScore } from "../lib/fixtures";
 import { useLocalKickoff } from "../lib/kickoff";
@@ -10,6 +10,12 @@ import Flag from "./Flag";
 import MarketOddsLine from "./MarketOddsLine";
 import TxLineProofPopover from "./TxLineProofPopover";
 import { goalScorerDisplayName } from "@/lib/playerDisplayName";
+import type { GoalCelebration } from "./goalCelebration";
+import {
+  GOAL_CARD_MOMENT_MS,
+  GOAL_SCORE_REVEAL_MS,
+  goalCelebrationTimingStyle,
+} from "./goalCelebration";
 import styles from "./FixtureCard.module.css";
 
 type FixtureCardProps = {
@@ -19,6 +25,8 @@ type FixtureCardProps = {
   withReply?: boolean;
   /** Show TxLINE market odds (must be set explicitly for the current match only). */
   showMarketOdds?: boolean;
+  /** Active premium goal moment — featured card only. */
+  celebration?: GoalCelebration | null;
 };
 
 function fixtureInPlay(fixture: MundialFixture): boolean {
@@ -43,7 +51,6 @@ type GroupedScorer = {
   minutes: number[];
 };
 
-/** One row per scorer; multiple goals by the same player share a line. */
 function groupScorersByPlayer(goals: MundialGoal[]): GroupedScorer[] {
   const rows: GroupedScorer[] = [];
   const byPlayer = new Map<string, GroupedScorer>();
@@ -94,11 +101,33 @@ function scorerDisplayName(row: Pick<GroupedScorer, "player" | "playerShort">): 
   return goalScorerDisplayName(row);
 }
 
+function isCelebrationGoal(goal: MundialGoal, event: GoalCelebration): boolean {
+  if (goal.side !== event.side) return false;
+  if (event.minute != null && goal.minute !== event.minute) return false;
+  if (event.player) {
+    return (
+      goal.player === event.player ||
+      goalScorerDisplayName(goal) === event.player
+    );
+  }
+  return true;
+}
+
+function goalsDuringCelebration(
+  goals: MundialGoal[],
+  event: GoalCelebration | null,
+  hidePending: boolean,
+): MundialGoal[] {
+  if (!event || !hidePending) return goals;
+  return goals.filter((goal) => !isCelebrationGoal(goal, event));
+}
+
 export default function FixtureCard({
   fixture,
   featured = false,
   withReply = false,
   showMarketOdds = false,
+  celebration = null,
 }: FixtureCardProps) {
   const { line: kickoffLine } = useLocalKickoff(
     fixture.date,
@@ -108,8 +137,20 @@ export default function FixtureCard({
   const prevGoalCount = useRef(fixture.goals.length);
   const prevHomeScore = useRef(fixture.homeScore ?? 0);
   const prevAwayScore = useRef(fixture.awayScore ?? 0);
+  const hadCelebrationRef = useRef(false);
+
   const [newGoalKey, setNewGoalKey] = useState<string | null>(null);
   const [scorePop, setScorePop] = useState(false);
+  const [scoreRevealed, setScoreRevealed] = useState(false);
+  const [scoringSide, setScoringSide] = useState<"home" | "away" | null>(null);
+  const [cardMoment, setCardMoment] = useState(false);
+
+  const activeCelebration =
+    featured &&
+    celebration != null &&
+    celebration.matchId === fixture.id
+      ? celebration
+      : null;
 
   useEffect(() => {
     const homeScore = fixture.homeScore ?? 0;
@@ -125,12 +166,27 @@ export default function FixtureCard({
       return;
     }
 
+    if (activeCelebration) {
+      prevGoalCount.current = fixture.goals.length;
+      prevHomeScore.current = homeScore;
+      prevAwayScore.current = awayScore;
+      return;
+    }
+
     const latest = fixture.goals[fixture.goals.length - 1];
     if (latest) {
       const key = `${latest.side}-${latest.minute}-${latest.player}`;
       setNewGoalKey(key);
+      setScoringSide(latest.side);
+    } else if (homeScore > prevHomeScore.current) {
+      setScoringSide("home");
+    } else if (awayScore > prevAwayScore.current) {
+      setScoringSide("away");
     }
     setScorePop(true);
+    if (featured) {
+      setCardMoment(true);
+    }
 
     prevGoalCount.current = fixture.goals.length;
     prevHomeScore.current = homeScore;
@@ -139,13 +195,52 @@ export default function FixtureCard({
     fixture.goals,
     fixture.homeScore,
     fixture.awayScore,
+    featured,
+    activeCelebration?.key,
   ]);
 
   useEffect(() => {
-    if (!scorePop) return;
+    if (!activeCelebration) {
+      setScoreRevealed(false);
+      if (hadCelebrationRef.current) {
+        hadCelebrationRef.current = false;
+      }
+      return;
+    }
+
+    hadCelebrationRef.current = true;
+    setCardMoment(true);
+    setScoringSide(activeCelebration.side);
+    setScorePop(false);
+    setScoreRevealed(false);
+    setNewGoalKey(null);
+
+    const revealTimer = window.setTimeout(() => {
+      const latest = fixture.goals[fixture.goals.length - 1];
+      if (latest) {
+        setNewGoalKey(`${latest.side}-${latest.minute}-${latest.player}`);
+      }
+      setScoreRevealed(true);
+      setScorePop(true);
+    }, GOAL_SCORE_REVEAL_MS);
+
+    return () => window.clearTimeout(revealTimer);
+  }, [activeCelebration?.key, activeCelebration, fixture.goals]);
+
+  useEffect(() => {
+    if (!scorePop || cardMoment) return;
     const timer = window.setTimeout(() => setScorePop(false), 900);
     return () => window.clearTimeout(timer);
-  }, [scorePop]);
+  }, [scorePop, cardMoment]);
+
+  useEffect(() => {
+    if (!cardMoment || activeCelebration) return;
+    const timer = window.setTimeout(
+      () => setCardMoment(false),
+      scorePop ? 750 : GOAL_CARD_MOMENT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [cardMoment, activeCelebration?.key, scorePop]);
 
   const inPlay = fixtureInPlay(fixture);
   const finished = fixture.status === "FT" || fixture.phase === "recent";
@@ -155,6 +250,22 @@ export default function FixtureCard({
   const endedAfterRegulation = settledOnRegulationScore(fixture.terminalStatusId);
   const showVerifiedProof =
     finished && fixture.txlineProof?.showVerifiedBadge === true;
+
+  const holdScore = activeCelebration != null && !scoreRevealed;
+  const displayHomeScore = holdScore
+    ? activeCelebration.prevHomeScore
+    : (fixture.homeScore ?? 0);
+  const displayAwayScore = holdScore
+    ? activeCelebration.prevAwayScore
+    : (fixture.awayScore ?? 0);
+
+  const visibleGoals = goalsDuringCelebration(
+    fixture.goals,
+    activeCelebration,
+    holdScore,
+  );
+  const homeGoals = visibleGoals.filter((g) => g.side === "home");
+  const awayGoals = visibleGoals.filter((g) => g.side === "away");
 
   const pillText =
     fixture.status === "HT"
@@ -166,9 +277,6 @@ export default function FixtureCard({
         : fixture.elapsed != null
           ? `LIVE ${fixture.elapsed}'`
           : "LIVE";
-
-  const homeGoals = fixture.goals.filter((g) => g.side === "home");
-  const awayGoals = fixture.goals.filter((g) => g.side === "away");
 
   const renderScorers = (goals: typeof fixture.goals) =>
     showLive && goals.length > 0 ? (
@@ -210,8 +318,19 @@ export default function FixtureCard({
       </ul>
     ) : null;
 
+  const sideClass = (side: "home" | "away") => {
+    const scored = scoringSide === side && scorePop;
+    return `${styles.side}${scored ? ` ${styles.sideScored}` : ""}`;
+  };
+
   return (
-    <Card glow={featured} className={featured ? styles.featured : styles.compact}>
+    <Card
+      glow={featured}
+      style={cardMoment ? goalCelebrationTimingStyle() : undefined}
+      className={`${featured ? styles.featured : styles.compact}${
+        cardMoment ? ` ${styles.cardGoalMoment}` : ""
+      }${scoreRevealed && scorePop ? ` ${styles.scoreReveal}` : ""}`}
+    >
       <div className={styles.meta}>
         {fixture.stage ? (
           <span className={styles.metaGroup}>{fixture.stage}</span>
@@ -239,23 +358,41 @@ export default function FixtureCard({
       </div>
 
       <div className={`${styles.matchup} ${showLive ? styles.matchupLive : ""}`}>
-        <div className={styles.side}>
+        <div className={sideClass("home")}>
           <Flag code={fixture.homeCode} size={featured ? "lg" : "md"} />
           <span className={styles.team}>{fixture.home}</span>
           {renderScorers(homeGoals)}
         </div>
         {showLive && hasScore ? (
-          <span
-            className={`${styles.score}${scorePop ? ` ${styles.scorePop}` : ""}`}
+          <div
+            className={`${styles.scoreWrap}${scorePop ? ` ${styles.scorePop}` : ""}${
+              featured && cardMoment ? ` ${styles.scoreFeatured}` : ""
+            }`}
           >
-            {fixture.homeScore}
-            <span className={styles.scoreDash}>–</span>
-            {fixture.awayScore}
-          </span>
+            <span
+              className={`${styles.score}${featured ? ` ${styles.scoreLarge}` : ""}`}
+            >
+              <span
+                className={`${styles.scoreDigit}${
+                  scoringSide === "home" && scorePop ? ` ${styles.scoreDigitPop}` : ""
+                }`}
+              >
+                {displayHomeScore}
+              </span>
+              <span className={styles.scoreDash}>–</span>
+              <span
+                className={`${styles.scoreDigit}${
+                  scoringSide === "away" && scorePop ? ` ${styles.scoreDigitPop}` : ""
+                }`}
+              >
+                {displayAwayScore}
+              </span>
+            </span>
+          </div>
         ) : (
           <span className={styles.vs}>vs</span>
         )}
-        <div className={styles.side}>
+        <div className={sideClass("away")}>
           <Flag code={fixture.awayCode} size={featured ? "lg" : "md"} />
           <span className={styles.team}>{fixture.away}</span>
           {renderScorers(awayGoals)}

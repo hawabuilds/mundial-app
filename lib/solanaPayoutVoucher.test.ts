@@ -10,6 +10,28 @@ import {
   findVaultPda,
 } from "./solanaPayoutPdas";
 
+/** Fixed tuple for viem → @noble/hashes cross-check (see scripts/scratch-viem-keccak.ts). */
+const CROSS_CHECK_PROGRAM_ID = new PublicKey(
+  "11111111111111111111111111111111",
+);
+const CROSS_CHECK_MINT = new PublicKey(
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+);
+const CROSS_CHECK_RECIPIENT = new PublicKey(
+  "7EqQdEUCbTQAJTLG87vcrMJv2aWKY8r8A7uf1u9d9xKz",
+);
+const CROSS_CHECK_EPOCH_ID = 20260613n;
+const CROSS_CHECK_AMOUNT = 1_500_000n;
+const CROSS_CHECK_VOUCHER_ID = Uint8Array.from(
+  Buffer.from(
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "hex",
+  ),
+);
+/** Pre-swap viem keccak256 digest for the tuple above. */
+const VIEM_EXPECTED_DIGEST =
+  "0x3e9c03fd9dad9df5d191ae7d1f44b33987ce862151c3c014500240c4ff1c7b17";
+
 function assert(condition: boolean, message: string) {
   if (!condition) {
     console.error(`FAIL: ${message}`);
@@ -20,6 +42,22 @@ function assert(condition: boolean, message: string) {
 }
 
 function main() {
+  const nobleHash = computeSolanaVoucherMessageHash({
+    programId: CROSS_CHECK_PROGRAM_ID,
+    mint: CROSS_CHECK_MINT,
+    epochId: CROSS_CHECK_EPOCH_ID,
+    recipientToken: CROSS_CHECK_RECIPIENT,
+    amount: CROSS_CHECK_AMOUNT,
+    voucherId: CROSS_CHECK_VOUCHER_ID,
+  });
+  const nobleHex = `0x${Buffer.from(nobleHash).toString("hex")}`;
+  assert(
+    nobleHex === VIEM_EXPECTED_DIGEST,
+    `noble digest matches pre-swap viem (${nobleHex})`,
+  );
+  console.log("viem (pre-swap):", VIEM_EXPECTED_DIGEST);
+  console.log("noble (current):", nobleHex);
+
   const programId = new PublicKey("11111111111111111111111111111111");
   const mint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
   const recipientToken = Keypair.generate().publicKey;

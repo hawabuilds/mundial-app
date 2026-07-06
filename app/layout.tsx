@@ -17,16 +17,10 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   const host = (await headers()).get("host") ?? "";
-  if (isCopaMundialHost(host)) {
-    return {
-      title: "Copa Mundial",
-      description:
-        "Predict match scores on X. Climb the leaderboard. Win USDC on Solana.",
-    };
-  }
   return {
-    title: "Mundial",
-    description: "Predict match scores. Climb the leaderboard. Win BNB.",
+    title: "Copa Mundial",
+    description:
+      "Predict match scores on X. Climb the leaderboard. Win USDC on Solana.",
   };
 }
 

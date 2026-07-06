@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
-const FULL_WIDTH_ROUTES = ["/docs", "/mundial"];
+const FULL_WIDTH_ROUTES = ["/docs", "/mundial", "/goal-preview"];
 
 export function AppChrome({
   children,
@@ -14,7 +14,10 @@ export function AppChrome({
 }) {
   const pathname = usePathname();
   const fullWidth =
-    (copaMundialHost && pathname === "/") ||
+    (copaMundialHost &&
+      (pathname === "/" ||
+        pathname === "/goal-preview" ||
+        pathname.startsWith("/goal-preview/"))) ||
     FULL_WIDTH_ROUTES.some(
       (route) => pathname === route || pathname.startsWith(`${route}/`),
     );

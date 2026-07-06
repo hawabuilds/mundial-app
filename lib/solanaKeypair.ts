@@ -1,9 +1,7 @@
-import type { Hex } from "viem";
-
 const BASE58_ALPHABET =
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
-function hexToBytes(hex: Hex): Uint8Array {
+function hexToBytes(hex: string): Uint8Array {
   const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
   const out = new Uint8Array(normalized.length / 2);
   for (let i = 0; i < out.length; i += 1) {
@@ -71,7 +69,7 @@ export function parseSolanaSecretKey(raw: string | undefined): Uint8Array | null
 
   const hex = value.startsWith("0x") ? value.slice(2) : value;
   if (/^[0-9a-fA-F]{128}$/.test(hex)) {
-    return hexToBytes(`0x${hex}` as Hex);
+    return hexToBytes(`0x${hex}`);
   }
 
   throw new Error(

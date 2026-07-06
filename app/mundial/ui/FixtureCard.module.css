@@ -93,7 +93,7 @@
   align-items: start;
 }
 
-.matchupLive .score {
+.matchupLive .scoreWrap {
   margin-top: 6px;
 }
 
@@ -284,6 +284,115 @@
   }
 }
 
+.cardGoalMoment {
+  animation: cardGoalGlow var(--goal-moment, 3600ms) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transition: opacity 200ms ease;
+}
+
+@keyframes cardGoalGlow {
+  0%,
+  31% {
+    transform: scale(1);
+    border-color: var(--m-border);
+    box-shadow: var(--m-shadow-sm);
+  }
+  33% {
+    transform: scale(1.016);
+    border-color: var(--m-accent-border);
+    box-shadow:
+      0 0 0 1px rgba(47, 123, 255, 0.28),
+      0 18px 44px rgba(47, 123, 255, 0.16);
+  }
+  52% {
+    transform: scale(1.008);
+    border-color: rgba(47, 123, 255, 0.42);
+    box-shadow:
+      0 0 0 1px rgba(47, 123, 255, 0.16),
+      0 14px 36px rgba(47, 123, 255, 0.1);
+  }
+  100% {
+    transform: scale(1);
+    border-color: var(--m-accent-border);
+    box-shadow: var(--m-shadow-glow-sm);
+  }
+}
+
+.sideScored .team {
+  color: #fff;
+  text-shadow: 0 0 14px rgba(47, 123, 255, 0.22);
+}
+
+.scoreWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.scoreFeatured {
+  animation: scoreWrapLift 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cardGoalMoment .scoreFeatured {
+  animation: scoreWrapLiftSynced var(--goal-moment, 3600ms) cubic-bezier(0.22, 1, 0.36, 1)
+    forwards;
+}
+
+@keyframes scoreWrapLift {
+  0% {
+    transform: translateY(0);
+  }
+  20% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes scoreWrapLiftSynced {
+  0%,
+  31% {
+    transform: translateY(0);
+  }
+  33% {
+    transform: translateY(-4px);
+  }
+  52% {
+    transform: translateY(-1px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.goalPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-family: var(--m-font-body);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #04140f;
+  background: linear-gradient(135deg, #9ef0d0 0%, #7cf4c8 100%);
+  animation: goalPillIn 0.55s cubic-bezier(0.22, 1.24, 0.36, 1);
+}
+
+@keyframes goalPillIn {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .score {
   display: inline-flex;
   align-items: center;
@@ -296,34 +405,68 @@
   font-variant-numeric: tabular-nums;
 }
 
-.featured .score {
+.scoreLarge {
   font-size: 1.5rem;
 }
 
-.scoreDash {
-  color: var(--m-faint);
-  font-weight: 600;
+.scoreDigit {
+  display: inline-block;
+  min-width: 0.65em;
+  text-align: center;
 }
 
-.scorePop {
-  animation: scorePop 0.85s cubic-bezier(0.18, 0.89, 0.32, 1);
+.scorePop .scoreDigitPop {
+  animation: scoreDigitPop 0.9s cubic-bezier(0.18, 0.89, 0.32, 1);
 }
 
-@keyframes scorePop {
+.cardGoalMoment .scorePop .scoreDigitPop {
+  animation: none;
+}
+
+.scoreReveal .scorePop .scoreDigitPop {
+  animation: scoreDigitPopCelebration 0.55s cubic-bezier(0.22, 1.36, 0.36, 1) both;
+}
+
+@keyframes scoreDigitPop {
   0% {
     transform: scale(1);
     color: var(--m-white);
   }
-  35% {
-    transform: scale(1.22);
-    color: var(--m-accent);
-    text-shadow: 0 0 18px rgba(124, 244, 200, 0.55);
+  32% {
+    transform: scale(1.28);
+    color: var(--m-accent-hover);
+    text-shadow: 0 0 16px var(--m-accent-glow);
   }
   100% {
     transform: scale(1);
     color: var(--m-white);
     text-shadow: none;
   }
+}
+
+@keyframes scoreDigitPopCelebration {
+  0% {
+    transform: scale(0.9);
+    color: var(--m-white);
+    text-shadow: none;
+  }
+  24% {
+    transform: scale(1.36);
+    color: var(--m-accent-hover);
+    text-shadow:
+      0 0 22px var(--m-accent-glow),
+      0 0 10px rgba(47, 123, 255, 0.35);
+  }
+  100% {
+    transform: scale(1);
+    color: var(--m-white);
+    text-shadow: none;
+  }
+}
+
+.scoreDash {
+  color: var(--m-faint);
+  font-weight: 600;
 }
 
 .scorers {
@@ -369,9 +512,38 @@
   animation: goalFlash 1.6s ease-out;
 }
 
+.cardGoalMoment .scorerFlash {
+  animation: none;
+}
+
+.scoreReveal .scorerFlash {
+  animation: goalFlashCelebration 0.75s ease-out both;
+}
+
+@keyframes goalFlashCelebration {
+  0% {
+    opacity: 0;
+    transform: translateY(5px);
+    color: var(--m-accent-hover);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(0);
+    color: var(--m-accent);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    color: var(--m-muted);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .scorePop,
-  .scorerFlash {
+  .scorePop .scoreDigitPop,
+  .scorerFlash,
+  .cardGoalMoment,
+  .scoreFeatured,
+  .goalPill {
     animation: none;
   }
 }

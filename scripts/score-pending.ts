@@ -7,7 +7,7 @@ import {
   fetchApiMatch,
   mapMatchRow,
   resolveFinalScoreFromApiMatch,
-} from "../lib/apiFootball";
+} from "../lib/txMatchSettlement";
 import {
   autoScoreFinishedMatches,
   getFixturesPendingAutoScore,

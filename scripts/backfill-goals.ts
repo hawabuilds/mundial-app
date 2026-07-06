@@ -11,13 +11,19 @@ import {
 import { getMatchGoals } from "../app/lib/supabase";
 
 function formatGoalRows(
-  rows: { minute: number | null; side: string; player: string | null; ownGoal: boolean }[],
+  rows: {
+    minute: number | null;
+    side: string;
+    player: string | null;
+    ownGoal: boolean;
+    penalty: boolean;
+  }[],
 ): string {
   if (rows.length === 0) return "  (none)";
   return rows
     .map(
       (goal) =>
-        `  ${goal.side} ${goal.minute ?? "?"}' ${goal.player ?? "(unknown)"}${goal.ownGoal ? " (OG)" : ""}`,
+        `  ${goal.side} ${goal.minute ?? "?"}' ${goal.player ?? "(unknown)"}${goal.penalty ? " (P)" : ""}${goal.ownGoal ? " (OG)" : ""}`,
     )
     .join("\n");
 }
@@ -29,8 +35,8 @@ function printResult(result: {
   homeScore?: number;
   awayScore?: number;
   sequenceEvents?: number;
-  before: { minute: number | null; side: string; player: string | null; ownGoal: boolean }[];
-  after: { minute: number | null; side: string; player: string | null; ownGoal: boolean }[];
+  before: { minute: number | null; side: string; player: string | null; ownGoal: boolean; penalty: boolean }[];
+  after: { minute: number | null; side: string; player: string | null; ownGoal: boolean; penalty: boolean }[];
 }) {
   console.log(`Status: ${result.status}`);
   if (result.txFixtureId != null) console.log(`TxLINE fixture: ${result.txFixtureId}`);

@@ -1,0 +1,410 @@
+.overlay {
+  --moment-duration: var(--goal-moment, 3600ms);
+  --focal-y: 36%;
+  --ease-slam: cubic-bezier(0.18, 1.34, 0.32, 1);
+  --ease-ball: cubic-bezier(0.07, 0.82, 0.16, 1);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 130% 95% at 50% var(--focal-y),
+    rgba(0, 0, 0, 0.04) 0%,
+    rgba(0, 0, 0, 0.52) 48%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
+  animation: backdropPulse var(--moment-duration) ease-out forwards;
+}
+
+.backdropFloor {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 52%,
+    rgba(0, 0, 0, 0.18) 72%,
+    rgba(0, 0, 0, 0.38) 100%
+  );
+  animation: backdropFloor var(--moment-duration) ease-out forwards;
+}
+
+@keyframes backdropPulse {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.58;
+  }
+  26% {
+    opacity: 0.84;
+  }
+  33% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 0.92;
+  }
+  78% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes backdropFloor {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  33%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.stage {
+  position: absolute;
+  left: 50%;
+  top: var(--focal-y);
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+.shakeLayer {
+  animation: stageShake var(--moment-duration) ease-out forwards;
+}
+
+@keyframes stageShake {
+  0%,
+  31%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  32% {
+    transform: translate3d(-3px, 1px, 0);
+  }
+  33% {
+    transform: translate3d(3px, -2px, 0);
+  }
+  34% {
+    transform: translate3d(-1px, 1px, 0);
+  }
+  36% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.heroSlot {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  overflow: visible;
+}
+
+.impactFlash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 300px;
+  height: 300px;
+  margin: -150px 0 0 -150px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(255, 255, 255, 0.14) 26%,
+    transparent 58%
+  );
+  opacity: 0;
+  mix-blend-mode: screen;
+  animation: impactFlash var(--moment-duration) ease-out forwards;
+}
+
+.impactRing {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 128px;
+  height: 128px;
+  margin: -64px 0 0 -64px;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  opacity: 0;
+  animation: impactRing var(--moment-duration) ease-out forwards;
+}
+
+@keyframes impactFlash {
+  0%,
+  31% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  33% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  38% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes impactRing {
+  0%,
+  31% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  33% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  42% {
+    opacity: 0;
+    transform: scale(2.35);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.ballTunnel {
+  position: absolute;
+  inset: -56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 880px;
+  perspective-origin: 50% 54%;
+  transform-style: preserve-3d;
+  overflow: visible;
+}
+
+.ballWrap {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+  transform-origin: center center;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.55));
+  animation: ballRush var(--moment-duration) var(--ease-ball) forwards;
+}
+
+.home .ballWrap {
+  --entry-x: -11vw;
+  --entry-tilt: -10deg;
+}
+
+.away .ballWrap {
+  --entry-x: 11vw;
+  --entry-tilt: 10deg;
+}
+
+@keyframes ballRush {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--entry-x, 0), 12vh, -680px)
+      rotateX(24deg)
+      rotateZ(calc(var(--entry-tilt, 0deg) - 480deg));
+  }
+  6% {
+    opacity: 1;
+  }
+  28% {
+    transform: translate3d(calc(var(--entry-x, 0) * 0.18), 2vh, -160px)
+      rotateX(8deg)
+      rotateZ(calc(var(--entry-tilt, 0deg) - 96deg));
+  }
+  33% {
+    transform: translate3d(0, 0, 0) rotateX(0deg) rotateZ(0deg);
+  }
+  37% {
+    opacity: 1;
+    transform: translate3d(0, -3px, 48px) rotateX(-3deg) rotateZ(8deg);
+  }
+  41% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 220px) rotateX(-8deg) rotateZ(14deg)
+      scale(1.06);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.ballGraphic {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.headline {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: goalSlam var(--moment-duration) var(--ease-slam) forwards;
+}
+
+@keyframes goalSlam {
+  0%,
+  34% {
+    opacity: 0;
+    transform: scale(0.54);
+    filter: blur(11px);
+  }
+  37% {
+    opacity: 1;
+    transform: scale(1.17);
+    filter: blur(0);
+  }
+  41% {
+    transform: scale(0.98);
+  }
+  45% {
+    transform: scale(1);
+  }
+  58% {
+    transform: scale(1.014);
+  }
+  68% {
+    transform: scale(1);
+  }
+  78% {
+    transform: scale(1.008);
+  }
+  84% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.015);
+    filter: blur(3px);
+  }
+}
+
+.goalWord {
+  margin: 0;
+  font-family: var(--m-font-display);
+  font-size: clamp(3.5rem, 17vw, 5.5rem);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: 0.035em;
+  text-indent: 0.035em;
+  text-transform: uppercase;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-stroke: 0.5px rgba(255, 255, 255, 0.06);
+  text-shadow:
+    0 0 40px rgba(255, 255, 255, 0.14),
+    0 10px 40px rgba(0, 0, 0, 0.58);
+  animation: goalWordBloom var(--moment-duration) ease-out forwards;
+}
+
+@keyframes goalWordBloom {
+  0%,
+  34% {
+    text-shadow:
+      0 0 0 rgba(255, 255, 255, 0),
+      0 10px 40px rgba(0, 0, 0, 0.58);
+  }
+  37% {
+    text-shadow:
+      0 0 56px rgba(255, 255, 255, 0.5),
+      0 0 24px rgba(47, 123, 255, 0.28),
+      0 10px 40px rgba(0, 0, 0, 0.58);
+  }
+  52%,
+  100% {
+    text-shadow:
+      0 0 40px rgba(255, 255, 255, 0.14),
+      0 10px 40px rgba(0, 0, 0, 0.58);
+  }
+}
+
+@media (max-width: 480px) {
+  .overlay {
+    --focal-y: 34%;
+  }
+
+  .heroSlot {
+    width: 116px;
+    height: 116px;
+  }
+
+  .ballWrap {
+    width: 116px;
+    height: 116px;
+  }
+
+  .impactFlash {
+    width: 260px;
+    height: 260px;
+    margin: -130px 0 0 -130px;
+  }
+
+  .impactRing {
+    width: 108px;
+    height: 108px;
+    margin: -54px 0 0 -54px;
+  }
+
+  .goalWord {
+    font-size: clamp(3rem, 15vw, 4.25rem);
+    letter-spacing: 0.028em;
+    text-indent: 0.028em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .backdropFloor,
+  .shakeLayer,
+  .impactFlash,
+  .impactRing,
+  .headline,
+  .goalWord,
+  .ballWrap {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .backdrop {
+    opacity: 0.45;
+  }
+
+  .backdropFloor {
+    opacity: 0;
+  }
+
+  .headline {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  .ballWrap {
+    opacity: 0;
+  }
+
+  .impactFlash,
+  .impactRing {
+    opacity: 0;
+  }
+}

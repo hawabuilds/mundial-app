@@ -1,7 +1,7 @@
+import { keccak_256 } from "@noble/hashes/sha3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { keccak256, type Hex } from "viem";
-import { computeVoucherId } from "@/lib/payoutVoucher";
+import { computeVoucherId } from "@/lib/voucherId";
 import { parseSolanaSecretKey } from "@/lib/solanaKeypair";
 import {
   readSolanaPayoutConfig,
@@ -56,11 +56,11 @@ export function computeSolanaVoucherMessageHash(
     offset += part.length;
   }
 
-  const hex = keccak256(packed) as Hex;
-  return hexToBytes(hex);
+  const hash = keccak_256(packed);
+  return hash;
 }
 
-function hexToBytes(hex: Hex): Uint8Array {
+function hexToBytes(hex: string): Uint8Array {
   const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
   const out = new Uint8Array(normalized.length / 2);
   for (let i = 0; i < out.length; i += 1) {

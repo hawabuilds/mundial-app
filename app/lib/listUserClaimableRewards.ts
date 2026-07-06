@@ -2,17 +2,9 @@ import { parsePotWei } from "@/app/lib/payoutEpochs";
 import { getSupabaseAdminClient } from "@/app/lib/supabase";
 import { formatEpochDayLabels } from "@/lib/epochId";
 import { formatUsdcFromBaseUnits } from "@/lib/formatUsdc";
-import {
-  isVoucherClaimedOnChain,
-  readPublicPayoutConfig,
-} from "@/lib/payoutContract";
 import { payoutAmountWei, rankToTierLabel } from "@/lib/payoutTiers";
-import { computeVoucherId } from "@/lib/payoutVoucher";
 import { resolveSnapshotWinner } from "@/lib/resolveSnapshotWinner";
 import { isSolanaVoucherClaimed } from "@/lib/solanaClaimMarker";
-import {
-  isSolanaPayoutEnabled,
-} from "@/lib/solanaPayoutEpoch";
 import { readSolanaPayoutConfig } from "@/lib/solanaPayoutConfig";
 import { Connection } from "@solana/web3.js";
 
@@ -44,11 +36,8 @@ export type ClaimableRewardDto = {
   tier: string;
   pts: number;
   amountWei: string;
-  /** BNB wei amount when using the legacy BNB rail. */
   bnb: number;
-  /** USDC base units (6 decimals) when using the Solana rail. */
   usdc: number | null;
-  /** Human-readable prize string for the Vault UI. */
   prizeLabel: string;
   claimed: boolean;
   day: string;
@@ -72,13 +61,8 @@ export async function listUserClaimableRewards(
 
   if (!epochs?.length) return [];
 
-  const solanaEnabled = isSolanaPayoutEnabled();
-  const solanaConfig = solanaEnabled ? readSolanaPayoutConfig() : null;
-  const solanaConnection =
-    solanaConfig !== null
-      ? new Connection(solanaConfig.rpcUrl, "confirmed")
-      : null;
-  const bnbConfig = solanaEnabled ? null : readPublicPayoutConfig();
+  const solanaConfig = readSolanaPayoutConfig();
+  const solanaConnection = new Connection(solanaConfig.rpcUrl, "confirmed");
   const rewards: ClaimableRewardDto[] = [];
 
   for (const epoch of epochs) {
@@ -92,41 +76,24 @@ export async function listUserClaimableRewards(
     const amountWei = payoutAmountWei(potWei, snapshot.rank);
     if (!amountWei || amountWei <= 0n) continue;
 
-    let claimed = false;
-    if (solanaEnabled && solanaConfig && solanaConnection) {
-      const onChainClaimed = await withTimeout(
-        isSolanaVoucherClaimed(
-          solanaConnection,
-          solanaConfig.programId,
-          epochId,
-          snapshot.user_id,
-        ),
-        ON_CHAIN_READ_TIMEOUT_MS,
-      );
-      claimed = onChainClaimed ?? false;
-    } else if (bnbConfig) {
-      const voucherId = computeVoucherId(epochId, snapshot.user_id);
-      const onChainClaimed = await withTimeout(
-        isVoucherClaimedOnChain(bnbConfig, voucherId),
-        ON_CHAIN_READ_TIMEOUT_MS,
-      );
-      claimed = onChainClaimed ?? false;
-    }
+    const onChainClaimed = await withTimeout(
+      isSolanaVoucherClaimed(
+        solanaConnection,
+        solanaConfig.programId,
+        epochId,
+        snapshot.user_id,
+      ),
+      ON_CHAIN_READ_TIMEOUT_MS,
+    );
+    const claimed = onChainClaimed ?? false;
 
     const { day, date } = formatEpochDayLabels(
       epochId,
       epoch.finalized_at as string,
     );
 
-    const usdc = solanaEnabled
-      ? Number(amountWei) / 10 ** USDC_DECIMALS
-      : null;
-    const bnb = solanaEnabled ? 0 : Number(amountWei) / 1e18;
-    const prizeLabel = solanaEnabled
-      ? `${formatUsdcFromBaseUnits(amountWei, { maxFractionDigits: 2 })} USDC`
-      : bnb > 0
-        ? `${bnb.toFixed(4)} pool share`
-        : rankToTierLabel(snapshot.rank);
+    const usdc = Number(amountWei) / 10 ** USDC_DECIMALS;
+    const prizeLabel = `${formatUsdcFromBaseUnits(amountWei, { maxFractionDigits: 2 })} USDC`;
 
     rewards.push({
       id: String(epoch.epoch_id),
@@ -135,7 +102,7 @@ export async function listUserClaimableRewards(
       tier: rankToTierLabel(snapshot.rank),
       pts: snapshot.total_points,
       amountWei: amountWei.toString(),
-      bnb,
+      bnb: 0,
       usdc,
       prizeLabel,
       claimed,

@@ -14,7 +14,7 @@ import {
   mapMatchRow,
   type LiveMatchData,
   type MatchGoal,
-} from "./apiFootball";
+} from "./txMatchSettlement";
 import { boardMatchHasStarted } from "@/lib/boardMatchPhase";
 import {
   BOARD_MATCH_MAX_MIN,
@@ -40,7 +40,12 @@ import {
   getMatchProofSummariesForTxFixtures,
   type MatchProofSummary,
 } from "@/app/lib/supabase";
-import { readTerminalStatusId } from "@/lib/matchProofFetch";
+import {
+  fetchAndPersistMatchProof,
+  readTerminalStatusId,
+  refreshStoredProofSemantics,
+} from "@/lib/matchProofFetch";
+import { getMatchProof } from "@/app/lib/supabase";
 import {
   capBoardForDisplay,
   filterBoardRows,
@@ -366,12 +371,42 @@ export async function getTxScheduleBoard(
 
   const capped = capBoardForDisplay(board);
 
-  const recentTxIds = capped
-    .filter((row) => row.phase === "recent")
-    .map((row) => row.txFixtureId);
-  const proofByTxId = await getMatchProofSummariesForTxFixtures(recentTxIds).catch(
-    () => new Map<number, MatchProofSummary>(),
+  const recentForProof = capped.filter((row) => row.phase === "recent");
+  await Promise.all(
+    recentForProof.map(async (row) => {
+      const fixture = {
+        home: row.home,
+        away: row.away,
+        date: row.date,
+        time: row.time,
+        externalFixtureId: row.externalFixtureId ?? row.txFixtureId,
+      };
+      try {
+        const existing = await getMatchProof(row.id).catch(() => null);
+        if (!existing) {
+          await fetchAndPersistMatchProof(row.id, fixture);
+        } else if (!existing.showVerifiedBadge) {
+          await refreshStoredProofSemantics(row.id, fixture, existing);
+        }
+      } catch (error) {
+        console.warn(
+          `[match-proof] Board hydrate failed for match ${row.id}:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }),
   );
+
+  const recentTxIds = recentForProof.map((row) => row.txFixtureId);
+  let proofByTxId = new Map<number, MatchProofSummary>();
+  try {
+    proofByTxId = await getMatchProofSummariesForTxFixtures(recentTxIds);
+  } catch (error) {
+    console.warn(
+      "[match-proof] Failed to load stored proofs for board:",
+      error instanceof Error ? error.message : error,
+    );
+  }
 
   const recentRows = capped.filter((row) => row.phase === "recent");
   const terminalByTxId = new Map<number, number | null>();

@@ -1,10 +1,10 @@
-import type { LiveMatchData } from "@/lib/apiFootball";
+import type { LiveMatchData } from "@/lib/txMatchSettlement";
 import {
   isFinishedStatus,
   isGameStateFinished,
   isGameStateInPlay,
   isStartedOrFinishedStatus,
-} from "@/lib/apiFootball";
+} from "@/lib/txMatchSettlement";
 
 /** True when TxLINE fixtures snapshot or scores feed says the match has kicked off. */
 export function boardMatchHasStarted(

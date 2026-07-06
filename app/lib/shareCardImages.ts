@@ -1,4 +1,4 @@
-/** Fetch an image and return a data URL safe for html-to-image capture. */
+/** Fetch an image and return a data URL for share-card capture. */
 export async function fetchImageAsDataUrl(src: string): Promise<string | null> {
   try {
     const res = await fetch(src, { mode: "cors", credentials: "same-origin" });

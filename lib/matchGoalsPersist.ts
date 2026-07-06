@@ -5,7 +5,7 @@ import {
   saveMatchGoals,
   type StoredGoal,
 } from "@/app/lib/supabase";
-import type { MatchGoal } from "./apiFootball";
+import type { MatchGoal } from "./txMatchSettlement";
 import {
   extractActionGoals,
   extractGoals,

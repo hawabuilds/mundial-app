@@ -2,7 +2,7 @@ import { MAX_KICKOFF_DELAY_HOURS } from "@/lib/effectiveKickoff";
 import {
   isGameStateFinished,
   isGameStateInPlay,
-} from "@/lib/apiFootball";
+} from "@/lib/txMatchSettlement";
 import type { FixturePhase } from "@/lib/enrichFixtures";
 
 /** Upcoming fixtures more than this far in the future are hidden. */
