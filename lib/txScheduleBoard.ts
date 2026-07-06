@@ -41,6 +41,10 @@ import {
   type MatchProofSummary,
 } from "@/app/lib/supabase";
 import { readTerminalStatusId } from "@/lib/matchProofFetch";
+import {
+  capBoardForDisplay,
+  filterBoardRows,
+} from "@/lib/boardDisplayPolicy";
 
 /** Board fixture carrying venue/competition line, live goals, and locked 1X2 odds. */
 export type ScheduleBoardFixture = BoardFixture & {
@@ -201,7 +205,9 @@ export async function getTxScheduleBoard(
 
   rows.sort((a, b) => a.kickoffMs - b.kickoffMs);
 
-  const kickoffs = rows.map((row) => row.kickoffMs).sort((a, b) => a - b);
+  const visibleRows = filterBoardRows(rows, nowMs);
+
+  const kickoffs = visibleRows.map((row) => row.kickoffMs).sort((a, b) => a - b);
   const nextKickoffAfter = (ms: number): number => {
     for (const k of kickoffs) if (k > ms) return k;
     return Number.POSITIVE_INFINITY;
@@ -213,7 +219,7 @@ export async function getTxScheduleBoard(
     { live: LiveMatchData | null; goals: MatchGoal[] }
   >();
   let liveLookups = 0;
-  const lookupCandidates = rows
+  const lookupCandidates = visibleRows
     .filter((row) => shouldFetchBoardLive(row, nowMs))
     .sort(lookupPriority);
 
@@ -240,14 +246,14 @@ export async function getTxScheduleBoard(
   const board: ScheduleBoardFixture[] = [];
   const oddsByFixtureId = new Map<number, Match1x2Odds | null>();
 
-  const upcomingByKickoff = rows
+  const upcomingByKickoff = visibleRows
     .filter((row) => !rowHasStarted(row, nowMs))
     .sort((a, b) => a.kickoffMs - b.kickoffMs);
 
   // Lock/load pre-kickoff 1X2 for every match visible on the board (live, recent FT,
   // and next upcoming) so the market line persists on FT cards until the next whistle.
   const oddsTargetIds = new Set<number>();
-  for (const row of rows) {
+  for (const row of visibleRows) {
     if (!rowHasStarted(row, nowMs)) continue;
     const fetched = liveData.get(row.fx.FixtureId);
     const live = resolveLive(row, fetched);
@@ -261,7 +267,7 @@ export async function getTxScheduleBoard(
   }
 
   for (const fixtureId of oddsTargetIds) {
-    const row = rows.find((r) => r.fx.FixtureId === fixtureId);
+    const row = visibleRows.find((r) => r.fx.FixtureId === fixtureId);
     if (!row) continue;
     oddsByFixtureId.set(
       fixtureId,
@@ -277,7 +283,7 @@ export async function getTxScheduleBoard(
     );
   }
 
-  for (const row of rows) {
+  for (const row of visibleRows) {
     const { fx, fixture, kickoffMs, kickoffUtcMs } = row;
     const venueLine = boardVenueLine(
       fixture.home,
@@ -343,14 +349,16 @@ export async function getTxScheduleBoard(
     return b.kickoffUtcMs - a.kickoffUtcMs;
   });
 
-  const recentTxIds = board
+  const capped = capBoardForDisplay(board);
+
+  const recentTxIds = capped
     .filter((row) => row.phase === "recent")
     .map((row) => row.txFixtureId);
   const proofByTxId = await getMatchProofSummariesForTxFixtures(recentTxIds).catch(
     () => new Map<number, MatchProofSummary>(),
   );
 
-  const recentRows = board.filter((row) => row.phase === "recent");
+  const recentRows = capped.filter((row) => row.phase === "recent");
   const terminalByTxId = new Map<number, number | null>();
   await Promise.all(
     recentRows.map(async (row) => {
@@ -361,7 +369,7 @@ export async function getTxScheduleBoard(
     }),
   );
 
-  return board.map((row) => ({
+  return capped.map((row) => ({
     ...row,
     txlineProof:
       row.phase === "recent"

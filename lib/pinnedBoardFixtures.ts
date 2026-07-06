@@ -4,6 +4,7 @@ import {
   fetchScoresSnapshot,
   latestScoreEvent,
   type TxFixture,
+  type TxScoreEvent,
 } from "./txodds";
 
 /**
@@ -16,6 +17,11 @@ export function pinnedFixtureIds(): Set<number> {
   return new Set(PINNED_FIXTURE_IDS);
 }
 
+function gameStateFromScoreEvent(event: TxScoreEvent | null): number | undefined {
+  if (event?.StatusId != null) return event.StatusId;
+  return undefined;
+}
+
 function pinnedToBoardRow(input: {
   fixtureId: number;
   home: string;
@@ -23,6 +29,7 @@ function pinnedToBoardRow(input: {
   startTimeMs: number;
   competition?: string;
   fixtureGroupId?: number;
+  gameState?: number;
 }): {
   fx: TxFixture;
   fixture: Fixture;
@@ -43,6 +50,7 @@ function pinnedToBoardRow(input: {
     Participant2: input.away,
     FixtureId: input.fixtureId,
     Participant1IsHome: true,
+    GameState: input.gameState,
   };
   const fixture: Fixture = {
     id:
@@ -100,5 +108,6 @@ export async function hydratePinnedRowFromScores(
     startTimeMs: startTime,
     competition: withMeta.Competition ?? "World Cup",
     fixtureGroupId: withMeta.FixtureGroupId,
+    gameState: gameStateFromScoreEvent(anchor),
   });
 }
