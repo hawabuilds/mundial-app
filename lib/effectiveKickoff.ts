@@ -1,6 +1,7 @@
 import { fixtureDateTime, type Fixture } from "@/app/data/fixtures";
 import { normalizeStartTimeMs } from "@/lib/formatKickoff";
-import { teamNamesMatch, type TxFixture } from "@/lib/txodds";
+import { teamNamesMatch } from "@/lib/teamNames";
+import type { TxFixture } from "@/lib/txodds";
 
 /** How long after the scheduled slot we still wait for a delayed TxLINE StartTime. */
 export const MAX_KICKOFF_DELAY_HOURS = 3;
