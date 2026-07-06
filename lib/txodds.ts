@@ -599,6 +599,57 @@ export function latestScoreEvent(events: TxScoreEvent[]): TxScoreEvent | null {
 
 const TERMINAL_SCORE_STATUS_IDS = new Set([5, 10, 13, 100]);
 
+/** Feed noise that must not drive the live board (hydration-break reconnects, etc.). */
+const LIVE_DISPLAY_IGNORE_ACTIONS = new Set([
+  "disconnected",
+  "game_finalised",
+  "venue",
+  "weather",
+]);
+
+/**
+ * Latest score-bearing event for live UI — ignores terminal rows and reconnect
+ * noise that can arrive with inflated Seq during in-play hydration breaks.
+ */
+export function latestLiveScoreEvent(events: TxScoreEvent[]): TxScoreEvent | null {
+  if (events.length === 0) return null;
+  const candidates = events.filter(
+    (event) =>
+      event.StatusId != null &&
+      !TERMINAL_SCORE_STATUS_IDS.has(event.StatusId) &&
+      (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
+  );
+  if (candidates.length === 0) return latestScoreEvent(events);
+  return candidates.reduce((best, event) =>
+    (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
+  );
+}
+
+/** Last running clock for the live pill — at HT freeze on the last 1H clock. */
+export function lastLiveClockSeconds(
+  events: TxScoreEvent[],
+  gameState?: number,
+): number | null {
+  const withClock = (statusIds: number[]) =>
+    events
+      .filter(
+        (event) =>
+          event.StatusId != null &&
+          statusIds.includes(event.StatusId) &&
+          typeof event.Clock?.Seconds === "number" &&
+          (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
+      )
+      .map((event) => event.Clock!.Seconds!);
+
+  if (gameState === 3 || gameState === 8) {
+    const h1 = withClock([2]);
+    if (h1.length > 0) return Math.max(...h1);
+  }
+
+  const any = withClock([2, 3, 4, 7, 9, 14]);
+  return any.length > 0 ? Math.max(...any) : null;
+}
+
 /** Seq of the latest terminal scores event (FT / AET / PEN) for stat-validation. */
 export function terminalScoreEventSeq(events: TxScoreEvent[]): number | null {
   const terminal = events.filter(

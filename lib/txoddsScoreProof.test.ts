@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   classifyScoreProofHttpFailure,
+  lastLiveClockSeconds,
+  latestLiveScoreEvent,
   normalizeScoreProofPayload,
   parseScoreProofResponse,
   terminalScoreEventSeq,
@@ -169,6 +171,27 @@ run("terminalScoreEventSeq picks latest FT event", () => {
 run("terminalScoreEventSeq returns null before full time", () => {
   const events: TxScoreEvent[] = [{ FixtureId: 1, Seq: 3, StatusId: 2 }];
   assert.equal(terminalScoreEventSeq(events), null);
+});
+
+run("latestLiveScoreEvent ignores hydration-break reconnect noise", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 100, StatusId: 2, Clock: { Seconds: 2700 }, Stats: { "1": 1, "2": 0 } },
+    { FixtureId: 1, Seq: 200, StatusId: 4, Clock: { Seconds: 2800 }, Stats: { "1": 2, "2": 1 } },
+    { FixtureId: 1, Seq: 999, StatusId: 100, Action: "game_finalised", Stats: { "1": 2, "2": 1 } },
+    { FixtureId: 1, Seq: 1000, StatusId: 100, Action: "disconnected", Stats: { "1": 2, "2": 1 } },
+  ];
+  const latest = latestLiveScoreEvent(events);
+  assert.equal(latest?.Seq, 200);
+  assert.equal(latest?.StatusId, 4);
+});
+
+run("lastLiveClockSeconds freezes on last 1H clock at HT", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 10, StatusId: 2, Clock: { Seconds: 2760 } },
+    { FixtureId: 1, Seq: 20, StatusId: 3 },
+    { FixtureId: 1, Seq: 30, StatusId: 4, Clock: { Seconds: 9999 } },
+  ];
+  assert.equal(lastLiveClockSeconds(events, 3), 2760);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

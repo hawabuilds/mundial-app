@@ -118,4 +118,17 @@ assert.deepEqual(
   "GameState fallback before scores fetch shows 0-0",
 );
 
+assert.equal(
+  mapMatchRow({
+    id: 1,
+    status: "HT",
+    minute: 46,
+    homeTeam: { name: "Mexico" },
+    awayTeam: { name: "England" },
+    score: { goals: { home: 2, away: 3 } },
+  }).status,
+  "HT",
+  "HT status preserved on live row",
+);
+
 console.log("txMatchSettlement.test.ts: ok");

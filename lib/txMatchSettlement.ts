@@ -20,8 +20,11 @@ import {
 } from "@/lib/matchScoreSettlement";
 
 import {
+  fetchFixturesSnapshot,
   fetchScoresSnapshot,
   isTxoddsConfigured,
+  lastLiveClockSeconds,
+  latestLiveScoreEvent,
   latestScoreEvent,
   resolveTxFixture,
   teamNamesMatch,
@@ -217,8 +220,13 @@ function buildMatch(
   txFixture: TxFixture,
   lookup: MatchLookup,
   event: TxScoreEvent | null,
+  allEvents?: TxScoreEvent[],
 ): FootballDataMatch {
-  const statusId = event?.StatusId ?? txFixture.GameState ?? 1;
+  const gameState = txFixture.GameState;
+  const statusId =
+    gameState != null && isGameStateInPlay(gameState)
+      ? gameState
+      : (event?.StatusId ?? gameState ?? 1);
   const status = mapStatusIdToShort(statusId);
 
   // Orient TxLINE participants onto Mundial's home/away by name.
@@ -253,7 +261,9 @@ function buildMatch(
     score = { goals: { home: 0, away: 0 } };
   }
 
-  const seconds = event?.Clock?.Seconds;
+  const seconds =
+    event?.Clock?.Seconds ??
+    (allEvents ? lastLiveClockSeconds(allEvents, gameState) : null);
   const minute = typeof seconds === "number" ? Math.floor(seconds / 60) : null;
 
   return {
@@ -343,7 +353,12 @@ export async function fetchApiMatch(
   }
 
   const events = await fetchScoresSnapshot(id);
-  const match = buildMatch(txFixture, lookup, latestScoreEvent(events));
+  const match = buildMatch(
+    txFixture,
+    lookup,
+    latestLiveScoreEvent(events),
+    events,
+  );
 
   const ttlMs = isTerminalMatchStatus(match.status)
     ? FIXTURE_CACHE_TTL_MS
@@ -388,18 +403,37 @@ function stubTxFixture(fixtureId: number, lookup: MatchLookup, gameState?: numbe
   };
 }
 
+async function resolveTxFixtureMeta(
+  fixtureId: number,
+  lookup: MatchLookup,
+  txFixture?: TxFixture,
+): Promise<TxFixture> {
+  if (txFixture?.GameState != null) return txFixture;
+
+  const fromSnapshot = (await fetchFixturesSnapshot()).find(
+    (row) => row.FixtureId === fixtureId,
+  );
+  if (txFixture) {
+    return { ...txFixture, GameState: fromSnapshot?.GameState ?? txFixture.GameState };
+  }
+
+  return stubTxFixture(
+    fixtureId,
+    lookup,
+    fromSnapshot?.GameState,
+  );
+}
+
 async function fetchMatchWithGoalsForId(
   fixtureId: number,
   lookup: MatchLookup,
   txFixture?: TxFixture,
 ): Promise<{ match: FootballDataMatch | null; goals: MatchGoal[] }> {
   const events = await fetchScoresSnapshot(fixtureId);
-  const latest = latestScoreEvent(events);
-  const fx =
-    txFixture ??
-    stubTxFixture(fixtureId, lookup, latest?.StatusId ?? undefined);
+  const latest = latestLiveScoreEvent(events);
+  const fx = await resolveTxFixtureMeta(fixtureId, lookup, txFixture);
 
-  const match = buildMatch(fx, lookup, latest);
+  const match = buildMatch(fx, lookup, latest, events);
   const homeIsP1 = txFixtureHomeIsP1(fx, lookup);
   const goals: MatchGoal[] = matchGoalsFromEvents(events, homeIsP1, "display");
   const actionGoals = matchGoalsFromEvents(events, homeIsP1, "persist");
