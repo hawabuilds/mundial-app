@@ -253,6 +253,8 @@ export type TxScoreEvent = {
     GoalType?: string;
     PreferredName?: string;
     PlayerName?: string;
+    /** Feed comments, e.g. hydration breaks: "Water-drinking break". */
+    Text?: string;
     [key: string]: unknown;
   };
   /** Present on the "lineups" event: per-team squad with player names. */
@@ -607,6 +609,21 @@ const LIVE_DISPLAY_IGNORE_ACTIONS = new Set([
   "weather",
 ]);
 
+/** TxLINE soccer feed: Action=comment, Data.Text — not a Stats key. */
+export const HYDRATION_BREAK_COMMENT_TEXT = "Water-drinking break";
+
+export function isHydrationBreakComment(event: TxScoreEvent): boolean {
+  return (
+    event.Action === "comment" &&
+    String(event.Data?.Text ?? "").trim() === HYDRATION_BREAK_COMMENT_TEXT
+  );
+}
+
+function isLiveDisplayNoise(event: TxScoreEvent): boolean {
+  if (event.Action && LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)) return true;
+  return isHydrationBreakComment(event);
+}
+
 /**
  * Latest score-bearing event for live UI — ignores terminal rows and reconnect
  * noise that can arrive with inflated Seq during in-play hydration breaks.
@@ -617,7 +634,7 @@ export function latestLiveScoreEvent(events: TxScoreEvent[]): TxScoreEvent | nul
     (event) =>
       event.StatusId != null &&
       !TERMINAL_SCORE_STATUS_IDS.has(event.StatusId) &&
-      (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
+      !isLiveDisplayNoise(event),
   );
   if (candidates.length === 0) return latestScoreEvent(events);
   return candidates.reduce((best, event) =>
@@ -636,7 +653,7 @@ export function lastLiveClockSeconds(
         event.StatusId != null &&
         (!statusIds || statusIds.includes(event.StatusId)) &&
         typeof event.Clock?.Seconds === "number" &&
-        (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
+        !isLiveDisplayNoise(event),
     );
 
   const latestClock = (pool: TxScoreEvent[]): number | null => {
@@ -660,21 +677,6 @@ export function lastLiveClockSeconds(
   return latestClock(withClock([2, 3, 4, 7, 9, 14]));
 }
 
-function resolveLiveClockSeconds(
-  event: TxScoreEvent | null,
-  allEvents: TxScoreEvent[] | undefined,
-  statusId: number,
-): number | null {
-  if (!allEvents?.length) {
-    return event?.Clock?.Seconds ?? null;
-  }
-  const fromFeed = lastLiveClockSeconds(allEvents, statusId);
-  const fromEvent = event?.Clock?.Seconds ?? null;
-  if (fromFeed == null) return fromEvent;
-  if (fromEvent == null) return fromFeed;
-  // Hydration-break replays can briefly surface an older row — never regress.
-  return Math.max(fromFeed, fromEvent);
-}
 
 /** True once the feed has a 2H row after halftime (snapshot can lag on HT). */
 export function secondHalfHasStarted(events: TxScoreEvent[]): boolean {
@@ -689,7 +691,7 @@ export function secondHalfHasStarted(events: TxScoreEvent[]): boolean {
     (event) =>
       event.StatusId === 4 &&
       (event.Seq ?? -1) > htSeq &&
-      (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
+      !isLiveDisplayNoise(event),
   );
 }
 

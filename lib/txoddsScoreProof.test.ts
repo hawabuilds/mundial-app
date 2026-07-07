@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   classifyScoreProofHttpFailure,
+  isHydrationBreakComment,
   lastLiveClockSeconds,
   latestLiveScoreEvent,
   latestTerminalStatusId,
@@ -186,6 +187,33 @@ run("latestLiveScoreEvent ignores hydration-break reconnect noise", () => {
   const latest = latestLiveScoreEvent(events);
   assert.equal(latest?.Seq, 200);
   assert.equal(latest?.StatusId, 4);
+});
+
+run("latestLiveScoreEvent ignores Water-drinking break comment", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 200, StatusId: 4, Clock: { Seconds: 2800 }, Stats: { "1": 2, "2": 1 } },
+    {
+      FixtureId: 1,
+      Seq: 500,
+      StatusId: 3,
+      Action: "comment",
+      Data: { Text: "Water-drinking break" },
+    },
+  ];
+  const latest = latestLiveScoreEvent(events);
+  assert.equal(latest?.Seq, 200);
+  assert.equal(latest?.StatusId, 4);
+});
+
+run("isHydrationBreakComment matches comment action", () => {
+  assert.equal(
+    isHydrationBreakComment({ FixtureId: 1, Action: "comment", Data: { Text: "Water-drinking break" } }),
+    true,
+  );
+  assert.equal(
+    isHydrationBreakComment({ FixtureId: 1, Action: "comment", Data: { Text: "Half time" } }),
+    false,
+  );
 });
 
 run("lastLiveClockSeconds freezes on last 1H clock at HT", () => {
