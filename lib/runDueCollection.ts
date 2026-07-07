@@ -6,6 +6,7 @@ import {
   markMatchCollected,
   rescoreCollectedMatch,
 } from "@/app/lib/supabase";
+import { checkCollectionEligibility } from "@/lib/collectionEligibility";
 import { collectPredictionsForFixture } from "@/lib/collectPredictions";
 import {
   healStaleCollectionState,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/effectiveKickoff";
 import { fetchFixturesSnapshot, isTxoddsConfigured } from "@/lib/txodds";
 import { CRON_MATCH_POST_OPTIONS, resolveMatchPost } from "@/lib/resolveMatchTweet";
+import { getCollectionFixtureSlate } from "@/lib/syncNewFixturesFromTxline";
 
 export type CollectionPassResult = Record<string, unknown>;
 
@@ -32,7 +34,7 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
     resolveTxStartTimeForFixture(fixture, startByTxId, txFixtures);
 
   const dueFixtures = await filterFixturesForCollection(
-    getFixturesDueForCollection(),
+    getFixturesDueForCollection(new Date(), await getCollectionFixtureSlate()),
     async (matchId) => {
       const state = await getMatchState(matchId);
       const at = state?.predictions_collected_at;
@@ -47,6 +49,16 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
 
   for (const fixture of dueFixtures) {
     try {
+      const eligibility = await checkCollectionEligibility(fixture);
+      if (!eligibility.ok) {
+        results.push({
+          matchId: fixture.id,
+          status: "skipped",
+          reason: eligibility.reason,
+        });
+        continue;
+      }
+
       if (await healStaleCollectionState(fixture)) {
         results.push({
           matchId: fixture.id,
@@ -61,8 +73,8 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
       if (!post) {
         results.push({
           matchId: fixture.id,
-          status: "error",
-          error: `No match post found for fixture ${fixture.id}`,
+          status: "skipped",
+          reason: `No match post found for fixture ${fixture.id}`,
         });
         continue;
       }

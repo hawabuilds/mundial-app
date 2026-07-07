@@ -21,6 +21,7 @@ import {
   type ProofScoreMode,
 } from "@/lib/txScoreProofSemantics";
 import type { ProofSeqSource } from "@/lib/txScoreEventSeq";
+import { FIXTURE_STATUS_READY } from "@/lib/fixtureLifecycle";
 
 let client: SupabaseClient | null = null;
 let adminClient: SupabaseClient | null = null;
@@ -85,6 +86,9 @@ export type MatchStateRow = {
   home_team: string | null;
   away_team: string | null;
   kickoff_at: string | null;
+  tx_fixture_id: number | null;
+  fixture_status: string | null;
+  competition: string | null;
 };
 
 export async function savePrediction(row: PredictionRow): Promise<void> {
@@ -206,6 +210,7 @@ export async function saveMatchTweetId(
   const payload = {
     match_tweet_id: tweetId,
     match_fixture_key: fixtureKey ?? null,
+    fixture_status: FIXTURE_STATUS_READY,
   };
 
   if (existing) {

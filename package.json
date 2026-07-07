@@ -16,6 +16,8 @@
     "test:scoring": "npx tsx lib/scoring.test.ts",
     "test:solana-voucher": "npx tsx lib/solanaPayoutVoucher.test.ts",
     "test:tx-match-settlement": "npx tsx lib/txMatchSettlement.test.ts",
+    "test:txline-fixture-sync": "npx tsx lib/txlineFixtureSync.test.ts",
+    "test:collection-eligibility": "npx tsx lib/collectionEligibility.test.ts",
     "sync:fixtures": "npx tsx scripts/sync-fixtures.ts",
     "collect:fixtures": "npx tsx scripts/collect-fixtures.ts",
     "gen:solana-keys": "npx tsx scripts/generate-solana-payout-keys.ts",
