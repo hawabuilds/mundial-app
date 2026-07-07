@@ -18,6 +18,10 @@ import {
   fetchAndPersistMatchProof,
   retryMissingMatchProofs,
 } from "@/lib/matchProofFetch";
+import {
+  ensureMatchGoalsBackfilled,
+  retryIncompleteMatchGoalsBackfills,
+} from "@/lib/backfillMatchGoals";
 
 import {
 
@@ -402,6 +406,8 @@ export async function autoScoreFinishedMatches(
 
       await scoreMatchPredictions(fixture.id, finalScore);
 
+      await ensureMatchGoalsBackfilled(fixture.id, fixture);
+
       await fetchAndPersistMatchProof(fixture.id, fixture);
 
       results.push({
@@ -454,6 +460,21 @@ export async function autoScoreFinishedMatches(
   ) {
     console.info(
       `[match-proof] Maintenance: attempted=${retry.attempted} stored=${retry.stored} semanticsRefreshed=${retry.semanticsRefreshed} upgradeAttempted=${retry.upgrade.attempted} upgraded=${retry.upgrade.upgraded} waiting=${retry.upgrade.stillWaiting} expired=${retry.upgrade.skippedExpired}`,
+    );
+  }
+
+  const scorerRetry = await retryIncompleteMatchGoalsBackfills(
+    getActiveFixtures(),
+  ).catch((error) => {
+    console.warn(
+      "[match-goals] Scorer retry pass failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return { attempted: 0, backfilled: 0, skipped: 0, errors: 0, details: [] };
+  });
+  if (scorerRetry.attempted > 0) {
+    console.info(
+      `[match-goals] Scorer retry: attempted=${scorerRetry.attempted} backfilled=${scorerRetry.backfilled} skipped=${scorerRetry.skipped} errors=${scorerRetry.errors}`,
     );
   }
 

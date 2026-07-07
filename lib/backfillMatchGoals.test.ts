@@ -124,6 +124,29 @@ run("isMatchGoalsInconsistentWithScore detects missing scorers", () => {
   assert.equal(isMatchGoalsInconsistentWithScore(goals, 2, 1), true);
 });
 
+run("isMatchGoalsInconsistentWithScore detects missing minutes", () => {
+  const goals: StoredGoal[] = [
+    { minute: null, side: "away", player: "Salah", ownGoal: false },
+  ];
+  assert.equal(isMatchGoalsInconsistentWithScore(goals, 0, 1), true);
+});
+
+run("deriveMatchGoalsFromScoreSequence fills minute from period stats when actions lack names", () => {
+  const events: TxScoreEvent[] = [
+    {
+      FixtureId: 18202701,
+      Seq: 10,
+      Participant1IsHome: true,
+      Clock: { Seconds: 58 * 60 },
+      Stats: { "1002": 1 },
+    },
+  ];
+  const goals = deriveMatchGoalsFromScoreSequence(events, true, 0, 1);
+  assert.equal(goals.length, 1);
+  assert.equal(goals[0]?.side, "away");
+  assert.equal(goals[0]?.minute, 58);
+});
+
 run("isMatchGoalsInconsistentWithScore passes when complete", () => {
   const goals: StoredGoal[] = [
     { minute: 23, side: "home", player: "Luis Rodriguez", ownGoal: false },

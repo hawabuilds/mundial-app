@@ -30,9 +30,13 @@ export function mapTxGoalsToMatchGoals(
 export function matchGoalsFromEvents(
   events: TxScoreEvent[],
   homeIsP1: boolean,
-  _mode: "display" | "persist" = "display",
+  mode: "display" | "persist" = "display",
 ): MatchGoal[] {
-  return mapTxGoalsToMatchGoals(extractActionGoals(events), homeIsP1);
+  const txGoals =
+    mode === "persist"
+      ? extractActionGoals(events)
+      : extractGoals(events);
+  return mapTxGoalsToMatchGoals(txGoals, homeIsP1);
 }
 
 /** Play-by-play rows only — period-stat placeholders are not persisted. */

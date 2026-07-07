@@ -1,3 +1,5 @@
+import { BOARD_MATCH_MAX_MIN } from "@/lib/enrichFixtures";
+import { normalizeStartTimeMs } from "@/lib/formatKickoff";
 import { isGameStateInPlay } from "./txMatchSettlement";
 import { matchGoalsFromEvents, persistTxlineGoals } from "./matchGoalsPersist";
 import {
@@ -17,21 +19,30 @@ function homeIsParticipant1(fx: TxFixture | undefined): boolean {
   return fx?.Participant1IsHome !== false;
 }
 
+function fixtureInLiveGoalWindow(fx: TxFixture, nowMs: number): boolean {
+  if (isGameStateInPlay(fx.GameState)) return true;
+  const kickoffMs = normalizeStartTimeMs(fx.StartTime);
+  if (kickoffMs > nowMs) return false;
+  return nowMs - kickoffMs < BOARD_MATCH_MAX_MIN * 60_000;
+}
+
 /**
  * Poll in-play TxLINE fixtures and accumulate play-by-play goals so full-time
  * display keeps scorers/minutes after the feed trims historical goal rows.
+ * Also covers kickoff-passed rows when GameState lags at NS during feed outages.
  */
 export async function syncLiveMatchGoals(): Promise<SyncLiveGoalsResult> {
   const result: SyncLiveGoalsResult = { checked: 0, persisted: 0, errors: [] };
   if (!isTxoddsConfigured()) return result;
 
+  const nowMs = Date.now();
   const fixtures = await fetchFixturesSnapshot();
   const fixtureById = new Map(fixtures.map((fx) => [fx.FixtureId, fx]));
-  const inPlayIds = fixtures
-    .filter((fx) => isGameStateInPlay(fx.GameState))
+  const targetIds = fixtures
+    .filter((fx) => fixtureInLiveGoalWindow(fx, nowMs))
     .map((fx) => fx.FixtureId);
 
-  for (const fixtureId of inPlayIds) {
+  for (const fixtureId of targetIds) {
     result.checked += 1;
     try {
       const events = await fetchScoresSnapshot(fixtureId);

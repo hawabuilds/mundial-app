@@ -506,13 +506,20 @@ function goalsFromActions(
 
     if (amend.Action !== "goal") continue;
 
+    const amendParticipant =
+      amend.New.Participant === 2
+        ? 2
+        : amend.New.Participant === 1
+          ? 1
+          : participant;
+
     const seconds =
       (amend.New.Clock as { Seconds?: number } | undefined)?.Seconds ??
       e.Clock?.Seconds;
     const scorer = scorerFromData(amend.New, nameById);
-    upsert(goalClockKey(participant, seconds), {
+    upsert(goalClockKey(amendParticipant, seconds), {
       minute: goalMinute(seconds),
-      participant,
+      participant: amendParticipant,
       ...scorer,
       ownGoal: isOwnGoalType(amend.New.GoalType),
       penalty: isPenaltyGoalType(amend.New.GoalType),

@@ -75,9 +75,8 @@ async function main() {
 
     if (dryRun) {
       const before = await getMatchGoals(txFixtureId).catch(() => []);
-      const { fetchScoreSequence, fetchScoresSnapshot } = await import("../lib/txodds");
-      let events = await fetchScoreSequence(txFixtureId);
-      if (events.length === 0) events = await fetchScoresSnapshot(txFixtureId);
+      const { loadScoreEventsForBackfill } = await import("../lib/backfillMatchGoals");
+      const events = await loadScoreEventsForBackfill(txFixtureId);
       const after = deriveMatchGoalsFromScoreSequence(events, true, homeScore, awayScore);
       printResult({
         status: isMatchGoalsInconsistentWithScore(before, homeScore, awayScore)

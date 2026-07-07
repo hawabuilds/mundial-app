@@ -9,13 +9,16 @@ import {
 } from "@/app/lib/supabase";
 import { mapTxGoalsToMatchGoals } from "@/lib/matchGoalsPersist";
 import {
-  extractActionGoals,
+  extractGoals,
   fetchScoreSequence,
   fetchScoresSnapshot,
   isTxoddsConfigured,
   resolveTxFixture,
   type TxScoreEvent,
 } from "@/lib/txodds";
+
+/** Re-check settled fixtures for missing scorer detail for up to 24h after settlement. */
+export const SCORER_BACKFILL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export function countGoalsBySide(goals: StoredGoal[]): { home: number; away: number } {
   return {
@@ -24,7 +27,7 @@ export function countGoalsBySide(goals: StoredGoal[]): { home: number; away: num
   };
 }
 
-/** True when stored rows don't cover the settled score or lack scorer names. */
+/** True when stored rows don't cover the settled score or lack scorer name/minute. */
 export function isMatchGoalsInconsistentWithScore(
   goals: StoredGoal[],
   homeScore: number,
@@ -36,18 +39,44 @@ export function isMatchGoalsInconsistentWithScore(
   const total = homeScore + awayScore;
   if (total === 0) return false;
 
-  const named = goals.filter((goal) => goal.player).length;
-  return named < total;
+  return goals.some((goal) => !goal.player || goal.minute == null);
 }
 
-/** Build the complete goal list from a TxLINE historical score sequence. */
+/** Merge historical replay + trimmed snapshot (lineups may only exist in one source). */
+export function mergeScoreEventsForBackfill(
+  historical: TxScoreEvent[],
+  snapshot: TxScoreEvent[],
+): TxScoreEvent[] {
+  const bySeq = new Map<number, TxScoreEvent>();
+  for (const event of [...historical, ...snapshot]) {
+    const seq = event.Seq ?? -1;
+    const prev = bySeq.get(seq);
+    if (
+      !prev ||
+      (event.Lineups?.length ?? 0) > (prev.Lineups?.length ?? 0)
+    ) {
+      bySeq.set(seq, event);
+    }
+  }
+  return [...bySeq.values()].sort((a, b) => (a.Seq ?? 0) - (b.Seq ?? 0));
+}
+
+export async function loadScoreEventsForBackfill(
+  txFixtureId: number,
+): Promise<TxScoreEvent[]> {
+  const historical = await fetchScoreSequence(txFixtureId).catch(() => []);
+  const snapshot = await fetchScoresSnapshot(txFixtureId);
+  return mergeScoreEventsForBackfill(historical, snapshot);
+}
+
+/** Build the complete goal list from a TxLINE score sequence (historical + snapshot). */
 export function deriveMatchGoalsFromScoreSequence(
   events: TxScoreEvent[],
   homeIsP1: boolean,
   homeScore: number,
   awayScore: number,
 ): StoredGoal[] {
-  const txGoals = extractActionGoals(events);
+  const txGoals = extractGoals(events);
   const mapped = mapTxGoalsToMatchGoals(txGoals, homeIsP1) as StoredGoal[];
   return finalizeMatchGoals(mapped, homeScore, awayScore);
 }
@@ -118,10 +147,7 @@ export async function backfillMatchGoalsByTxFixture(input: {
       };
     }
 
-    let events = await fetchScoreSequence(txFixtureId);
-    if (events.length === 0) {
-      events = await fetchScoresSnapshot(txFixtureId);
-    }
+    const events = await loadScoreEventsForBackfill(txFixtureId);
     if (events.length === 0) {
       return {
         status: "error",
@@ -136,6 +162,13 @@ export async function backfillMatchGoalsByTxFixture(input: {
       homeScore,
       awayScore,
     );
+    if (derived.length === 0) {
+      return {
+        status: "error",
+        matchId: matchId ?? 0,
+        error: `Score sequence has no recoverable goals for TxLINE fixture ${txFixtureId}`,
+      };
+    }
     const { after } = await upsertMatchGoals(txFixtureId, derived);
 
     return {
@@ -269,6 +302,100 @@ export async function backfillMatchGoals(matchId: number): Promise<BackfillMatch
       error: error instanceof Error ? error.message : "Backfill failed",
     };
   }
+}
+
+export type ScorerBackfillRetryResult = {
+  attempted: number;
+  backfilled: number;
+  skipped: number;
+  errors: number;
+  details: Array<{
+    matchId: number;
+    status: "backfilled" | "skipped" | "error";
+    reason?: string;
+  }>;
+};
+
+/**
+ * Self-healing pass: re-backfill settled fixtures with incomplete scorer rows
+ * until historical replay fills names/minutes (capped at 24h after settlement).
+ */
+export async function retryIncompleteMatchGoalsBackfills(
+  fixtures: Fixture[],
+): Promise<ScorerBackfillRetryResult> {
+  const summary: ScorerBackfillRetryResult = {
+    attempted: 0,
+    backfilled: 0,
+    skipped: 0,
+    errors: 0,
+    details: [],
+  };
+
+  if (!isTxoddsConfigured()) return summary;
+
+  for (const fixture of fixtures) {
+    try {
+      if (!(await isMatchScored(fixture.id).catch(() => false))) continue;
+
+      const state = await getMatchState(fixture.id);
+      const homeScore = state?.final_home_score;
+      const awayScore = state?.final_away_score;
+      if (typeof homeScore !== "number" || typeof awayScore !== "number") {
+        continue;
+      }
+
+      const scoredAtMs = state?.scored_at
+        ? Date.parse(state.scored_at)
+        : Number.NaN;
+      if (
+        !Number.isFinite(scoredAtMs) ||
+        Date.now() - scoredAtMs > SCORER_BACKFILL_MAX_AGE_MS
+      ) {
+        continue;
+      }
+
+      const txFixtureId = fixture.externalFixtureId;
+      if (txFixtureId == null || txFixtureId <= 0) continue;
+
+      const stored = await getMatchGoals(txFixtureId).catch(() => [] as StoredGoal[]);
+      if (!isMatchGoalsInconsistentWithScore(stored, homeScore, awayScore)) {
+        continue;
+      }
+
+      summary.attempted += 1;
+      const result = await backfillMatchGoals(fixture.id);
+      if (result.status === "backfilled") {
+        summary.backfilled += 1;
+        summary.details.push({ matchId: fixture.id, status: "backfilled" });
+        console.info(
+          `[match-goals] Retry backfilled match ${fixture.id}: ${result.before.length} → ${result.after.length} rows`,
+        );
+      } else if (result.status === "skipped") {
+        summary.skipped += 1;
+        summary.details.push({
+          matchId: fixture.id,
+          status: "skipped",
+          reason: result.reason,
+        });
+      } else {
+        summary.errors += 1;
+        summary.details.push({
+          matchId: fixture.id,
+          status: "error",
+          reason: result.error,
+        });
+      }
+    } catch (error) {
+      summary.errors += 1;
+      summary.details.push({
+        matchId: fixture.id,
+        status: "error",
+        reason: error instanceof Error ? error.message : "retry failed",
+      });
+    }
+  }
+
+  return summary;
 }
 
 /** After settlement: backfill when match_goals gaps would leave scorers missing. */
