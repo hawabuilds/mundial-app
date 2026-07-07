@@ -232,6 +232,10 @@ export default function FixtureCard({
     if (!activeCelebration) {
       if (hadCelebrationRef.current) {
         hadCelebrationRef.current = false;
+        setScorePop(false);
+        setScoreRevealed(false);
+        setNewGoalKey(null);
+        setCardMoment(false);
       }
       return;
     }
@@ -244,20 +248,17 @@ export default function FixtureCard({
     setNewGoalKey(null);
 
     const revealTimer = window.setTimeout(() => {
-      const latest = fixture.goals[fixture.goals.length - 1];
-      const minute = activeCelebration.minute ?? latest?.minute ?? null;
-      const player =
-        activeCelebration.player ??
-        (latest ? goalScorerDisplayName(latest) : null);
+      const minute = activeCelebration.minute;
+      const player = activeCelebration.player;
       setNewGoalKey(
-        `${activeCelebration.side}-${minute}-${player ?? latest?.player ?? "goal"}`,
+        `${activeCelebration.side}-${minute ?? "goal"}-${player ?? "goal"}`,
       );
       setScoreRevealed(true);
       setScorePop(true);
     }, GOAL_SCORE_REVEAL_MS);
 
     return () => window.clearTimeout(revealTimer);
-  }, [activeCelebration?.key, activeCelebration, fixture.goals]);
+  }, [activeCelebration?.key, activeCelebration]);
 
   useEffect(() => {
     if (!activeCelebration || !scoreRevealed) return;

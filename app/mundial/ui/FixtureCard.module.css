@@ -310,6 +310,12 @@
       0 0 0 1px rgba(47, 123, 255, 0.16),
       0 14px 36px rgba(47, 123, 255, 0.1);
   }
+  68%,
+  76% {
+    transform: scale(1);
+    border-color: var(--m-border);
+    box-shadow: var(--m-shadow-sm);
+  }
   100% {
     transform: scale(1);
     border-color: var(--m-accent-border);
@@ -421,6 +427,10 @@
 
 .cardGoalMoment .scorePop .scoreDigitPop {
   animation: none;
+}
+
+.cardGoalMoment.scoreReveal .scorePop .scoreDigitPop {
+  animation: scoreDigitPopCelebration 0.55s cubic-bezier(0.22, 1.36, 0.36, 1) both;
 }
 
 .scoreReveal .scorePop .scoreDigitPop {
