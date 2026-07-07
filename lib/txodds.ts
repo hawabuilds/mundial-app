@@ -647,34 +647,47 @@ export function lastLiveClockSeconds(
   events: TxScoreEvent[],
   statusId?: number,
 ): number | null {
-  const withClock = (statusIds?: number[]) =>
+  const withClock = (statusIds?: number[], minSeq = -1) =>
     events.filter(
       (event) =>
         event.StatusId != null &&
         (!statusIds || statusIds.includes(event.StatusId)) &&
         typeof event.Clock?.Seconds === "number" &&
+        (event.Seq ?? -1) > minSeq &&
         !isLiveDisplayNoise(event),
     );
 
-  const latestClock = (pool: TxScoreEvent[]): number | null => {
+  const maxClock = (pool: TxScoreEvent[]): number | null => {
     if (pool.length === 0) return null;
-    const latest = pool.reduce((best, event) =>
-      (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
-    );
-    return latest.Clock!.Seconds ?? null;
+    return Math.max(...pool.map((event) => event.Clock!.Seconds!));
   };
+
+  const halftimeSeq = events.reduce((max, event) => {
+    if (event.StatusId === 3 || event.Action === "halftime_finalised") {
+      return Math.max(max, event.Seq ?? -1);
+    }
+    return max;
+  }, -1);
 
   const atHalftime =
     (statusId === 3 || statusId === 8) && !secondHalfHasStarted(events);
 
   if (atHalftime) {
-    const h1 = withClock([2]);
-    if (h1.length > 0) {
-      return Math.max(...h1.map((event) => event.Clock!.Seconds!));
-    }
+    return maxClock(withClock([2]));
   }
 
-  return latestClock(withClock([2, 3, 4, 7, 9, 14]));
+  if (secondHalfHasStarted(events)) {
+    // After HT, never let stale 1H replays (often high Seq) pull the clock back.
+    const secondHalf = maxClock(
+      withClock([4, 7, 9, 14], halftimeSeq >= 0 ? halftimeSeq : -1),
+    );
+    if (secondHalf != null) return secondHalf;
+    return maxClock(withClock([4, 7, 9, 14]));
+  }
+
+  const firstHalf = maxClock(withClock([2, 14]));
+  if (firstHalf != null) return firstHalf;
+  return maxClock(withClock([2, 3, 4, 7, 9, 14]));
 }
 
 

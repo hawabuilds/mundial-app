@@ -233,6 +233,26 @@ run("lastLiveClockSeconds uses latest 2H clock when snapshot HT lags", () => {
   assert.equal(lastLiveClockSeconds(events, 4), 4020);
 });
 
+run("lastLiveClockSeconds ignores stale high-Seq 1H clock during 2H", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 10, StatusId: 2, Clock: { Seconds: 2700 } },
+    { FixtureId: 1, Seq: 20, StatusId: 3, Action: "halftime_finalised" },
+    { FixtureId: 1, Seq: 30, StatusId: 4, Clock: { Seconds: 4020 } },
+    { FixtureId: 1, Seq: 900, StatusId: 2, Clock: { Seconds: 2760 } },
+  ];
+  assert.equal(lastLiveClockSeconds(events, 4), 4020);
+});
+
+run("lastLiveClockSeconds uses max 2H clock not highest Seq", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 10, StatusId: 2, Clock: { Seconds: 2700 } },
+    { FixtureId: 1, Seq: 20, StatusId: 3, Action: "halftime_finalised" },
+    { FixtureId: 1, Seq: 30, StatusId: 4, Clock: { Seconds: 4020 } },
+    { FixtureId: 1, Seq: 500, StatusId: 4, Clock: { Seconds: 2760 } },
+  ];
+  assert.equal(lastLiveClockSeconds(events, 4), 4020);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;
 
