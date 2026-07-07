@@ -625,29 +625,55 @@ export function latestLiveScoreEvent(events: TxScoreEvent[]): TxScoreEvent | nul
   );
 }
 
-/** Last running clock for the live pill — at HT freeze on the last 1H clock. */
+/** Last running clock for the live pill — freeze on 1H only at real HT. */
 export function lastLiveClockSeconds(
   events: TxScoreEvent[],
-  gameState?: number,
+  statusId?: number,
 ): number | null {
-  const withClock = (statusIds: number[]) =>
-    events
-      .filter(
-        (event) =>
-          event.StatusId != null &&
-          statusIds.includes(event.StatusId) &&
-          typeof event.Clock?.Seconds === "number" &&
-          (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
-      )
-      .map((event) => event.Clock!.Seconds!);
+  const withClock = (statusIds?: number[]) =>
+    events.filter(
+      (event) =>
+        event.StatusId != null &&
+        (!statusIds || statusIds.includes(event.StatusId)) &&
+        typeof event.Clock?.Seconds === "number" &&
+        (!event.Action || !LIVE_DISPLAY_IGNORE_ACTIONS.has(event.Action)),
+    );
 
-  if (gameState === 3 || gameState === 8) {
+  const latestClock = (pool: TxScoreEvent[]): number | null => {
+    if (pool.length === 0) return null;
+    const latest = pool.reduce((best, event) =>
+      (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
+    );
+    return latest.Clock!.Seconds ?? null;
+  };
+
+  const atHalftime =
+    (statusId === 3 || statusId === 8) && !secondHalfHasStarted(events);
+
+  if (atHalftime) {
     const h1 = withClock([2]);
-    if (h1.length > 0) return Math.max(...h1);
+    if (h1.length > 0) {
+      return Math.max(...h1.map((event) => event.Clock!.Seconds!));
+    }
   }
 
-  const any = withClock([2, 3, 4, 7, 9, 14]);
-  return any.length > 0 ? Math.max(...any) : null;
+  return latestClock(withClock([2, 3, 4, 7, 9, 14]));
+}
+
+function resolveLiveClockSeconds(
+  event: TxScoreEvent | null,
+  allEvents: TxScoreEvent[] | undefined,
+  statusId: number,
+): number | null {
+  if (!allEvents?.length) {
+    return event?.Clock?.Seconds ?? null;
+  }
+  const fromFeed = lastLiveClockSeconds(allEvents, statusId);
+  const fromEvent = event?.Clock?.Seconds ?? null;
+  if (fromFeed == null) return fromEvent;
+  if (fromEvent == null) return fromFeed;
+  // Hydration-break replays can briefly surface an older row — never regress.
+  return Math.max(fromFeed, fromEvent);
 }
 
 /** True once the feed has a 2H row after halftime (snapshot can lag on HT). */

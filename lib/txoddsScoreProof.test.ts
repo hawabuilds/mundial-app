@@ -192,9 +192,17 @@ run("lastLiveClockSeconds freezes on last 1H clock at HT", () => {
   const events: TxScoreEvent[] = [
     { FixtureId: 1, Seq: 10, StatusId: 2, Clock: { Seconds: 2760 } },
     { FixtureId: 1, Seq: 20, StatusId: 3 },
-    { FixtureId: 1, Seq: 30, StatusId: 4, Clock: { Seconds: 9999 } },
   ];
   assert.equal(lastLiveClockSeconds(events, 3), 2760);
+});
+
+run("lastLiveClockSeconds uses latest 2H clock when snapshot HT lags", () => {
+  const events: TxScoreEvent[] = [
+    { FixtureId: 1, Seq: 10, StatusId: 2, Clock: { Seconds: 2760 } },
+    { FixtureId: 1, Seq: 20, StatusId: 3, Action: "halftime_finalised" },
+    { FixtureId: 1, Seq: 30, StatusId: 4, Clock: { Seconds: 4020 } },
+  ];
+  assert.equal(lastLiveClockSeconds(events, 4), 4020);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

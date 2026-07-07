@@ -242,6 +242,21 @@ function resolveMatchStatusId(
   return event?.StatusId ?? gameState ?? 1;
 }
 
+function resolveLiveClockSeconds(
+  event: TxScoreEvent | null,
+  allEvents: TxScoreEvent[] | undefined,
+  statusId: number,
+): number | null {
+  if (!allEvents?.length) {
+    return event?.Clock?.Seconds ?? null;
+  }
+  const fromFeed = lastLiveClockSeconds(allEvents, statusId);
+  const fromEvent = event?.Clock?.Seconds ?? null;
+  if (fromFeed == null) return fromEvent;
+  if (fromEvent == null) return fromFeed;
+  return Math.max(fromFeed, fromEvent);
+}
+
 function buildMatch(
   txFixture: TxFixture,
   lookup: MatchLookup,
@@ -284,9 +299,7 @@ function buildMatch(
     score = { goals: { home: 0, away: 0 } };
   }
 
-  const seconds =
-    event?.Clock?.Seconds ??
-    (allEvents ? lastLiveClockSeconds(allEvents, gameState) : null);
+  const seconds = resolveLiveClockSeconds(event, allEvents, statusId);
   const minute = typeof seconds === "number" ? Math.floor(seconds / 60) : null;
 
   return {
