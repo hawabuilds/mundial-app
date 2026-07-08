@@ -4,42 +4,40 @@ import FixtureCard from "../ui/FixtureCard";
 import type { MundialFixture } from "../lib/fixtures";
 import styles from "../goal-preview/GoalPreview.module.css";
 
-/** Argentina 3–2 Egypt (AET) — production proof for TxFixtureId 18202701. */
+/** Regulation FT demo — goals only in 90 minutes, matches settlement footnote. */
 const DEMO_FIXTURE: MundialFixture = {
-  id: 80,
-  home: "Argentina",
-  away: "Egypt",
-  homeCode: "AR",
-  awayCode: "EG",
-  date: "2026-07-07",
-  time: "16:00",
+  id: 72,
+  home: "France",
+  away: "Morocco",
+  homeCode: "FR",
+  awayCode: "MA",
+  date: "2026-07-05",
+  time: "20:00",
   stage: "Round of 16",
-  venueLine: "AT&T Stadium",
+  venueLine: "MetLife Stadium",
   status: "FT",
   statusLabel: "FT",
-  homeScore: 3,
-  awayScore: 2,
+  homeScore: 2,
+  awayScore: 1,
   elapsed: null,
   phase: "recent",
   goals: [
-    { side: "away", player: "Salah", playerShort: "Salah", minute: 23, ownGoal: false, penalty: false },
-    { side: "home", player: "Messi", playerShort: "Messi", minute: 45, ownGoal: false, penalty: true },
-    { side: "home", player: "Álvarez", playerShort: "Álvarez", minute: 78, ownGoal: false, penalty: false },
-    { side: "home", player: "Lautaro", playerShort: "Lautaro", minute: 112, ownGoal: false, penalty: false },
-    { side: "away", player: "Trezeguet", playerShort: "Trezeguet", minute: 115, ownGoal: false, penalty: false },
+    { side: "away", player: "En-Nesyri", playerShort: "En-Nesyri", minute: 34, ownGoal: false, penalty: false },
+    { side: "home", player: "Griezmann", playerShort: "Griezmann", minute: 58, ownGoal: false, penalty: false },
+    { side: "home", player: "Mbappé", playerShort: "Mbappé", minute: 88, ownGoal: false, penalty: false },
   ],
-  marketOdds: { homePct: 72, drawPct: 18, awayPct: 10 },
-  terminalStatusId: 10,
+  marketOdds: { homePct: 58, drawPct: 24, awayPct: 18 },
+  terminalStatusId: 5,
   txlineProof: {
-    fixtureId: 80,
-    txFixtureId: 18202701,
-    seq: 1045,
+    fixtureId: 72,
+    txFixtureId: 18198201,
+    seq: 980,
     proofTs: null,
-    proofReference: "0x8f3a…c21d",
+    proofReference: "0x4a1c…9f02",
     stats: [
-      { key: 1001, value: 0, period: 100 },
-      { key: 1002, value: 1, period: 100 },
-      { key: 3001, value: 3, period: 100 },
+      { key: 1001, value: 1, period: 100 },
+      { key: 1002, value: 0, period: 100 },
+      { key: 3001, value: 1, period: 100 },
       { key: 3002, value: 1, period: 100 },
     ],
     solanaExplorerUrl: null,
@@ -50,17 +48,17 @@ const DEMO_FIXTURE: MundialFixture = {
     verificationCopy:
       "Regulation proof matches the settled score used for prediction scoring.",
     officialStats: [
-      { key: 1, value: 3, period: 100 },
-      { key: 2, value: 2, period: 100 },
+      { key: 1, value: 2, period: 100 },
+      { key: 2, value: 1, period: 100 },
     ],
     regulationStats: [
-      { key: 1001, value: 0, period: 100 },
-      { key: 1002, value: 1, period: 100 },
-      { key: 3001, value: 3, period: 100 },
+      { key: 1001, value: 1, period: 100 },
+      { key: 1002, value: 0, period: 100 },
+      { key: 3001, value: 1, period: 100 },
       { key: 3002, value: 1, period: 100 },
     ],
-    officialSeq: 1045,
-    regulationSeq: 1045,
+    officialSeq: 980,
+    regulationSeq: 980,
     seqSource: "game_finalised",
   },
 };
@@ -72,9 +70,8 @@ export default function ProofPreviewPage() {
         <p className={styles.eyebrow}>UI preview</p>
         <h1 className={styles.title}>TxLINE verified badge</h1>
         <p className={styles.copy}>
-          FT card after settlement — regulation proof matches{" "}
-          <code>match_state</code> (Argentina 3–2 Egypt AET, TxFixtureId{" "}
-          <code>18202701</code>).
+          FT card after regulation settlement — proof matches{" "}
+          <code>match_state</code> (France 2–1 Morocco, 90 minutes).
         </p>
         <div className={styles.demo}>
           <FixtureCard fixture={DEMO_FIXTURE} featured />

@@ -6,11 +6,11 @@ Score-prediction game on X (Twitter): reply with a scoreline before kickoff, ear
 
 **Live:** [copamundial.app](https://copamundial.app) · **Track:** Superteam × TxODDS — Consumer & Fan Experiences
 
-![Copa Mundial — live fixture card with penalty shootout UI](docs/screenshots/cover.png)
+![Live fixtures board at copamundial.app](docs/screenshots/cover.png)
 
 ## Live usage (production)
 
-Queried **2026-07-08** against production Supabase and the public leaderboard API.
+Queried **2026-07-08** against production Supabase (`whuyptdtrwkzxeunouoo`) and the public leaderboard API.
 
 | Metric | Value |
 |--------|------:|
@@ -20,6 +20,7 @@ Queried **2026-07-08** against production Supabase and the public leaderboard AP
 | Dual proofs in `match_proofs` | 8 (all verified badge) |
 | Goal rows in `match_goals` | 40 |
 | Payout epochs opened (devnet) | 4 |
+| USDC claims logged (`solana_claims`) | see `npx tsx scripts/query-live-usage.ts` |
 | Total points awarded | 872 |
 
 Public leaderboard: `GET /api/leaderboard` → **107** ranked players (top score 33 pts as of query date).
@@ -139,7 +140,7 @@ Event **seq** selection prefers the `game_finalised` record from the scores feed
 
 The **TxLINE verified** badge on an FT card is shown only when the regulation proof exactly matches the settled score in `match_state`. Any mismatch suppresses the badge (`evaluateProofSemantics` in `lib/txScoreProofSemantics.ts`).
 
-![TxLINE verified badge on a settled FT fixture card](docs/screenshots/verified-badge.png)
+![TxLINE verified badge — regulation FT fixture (proof-preview sandbox)](docs/screenshots/verified-badge.png)
 
 **On-chain verification** is reproducible via `scripts/verify-proof.ts`: fetches both proofs, then simulates TxOracle `validate_stat` + `equalTo` against the devnet `daily_scores_roots` Merkle root (`lib/txlineValidateStat.ts`, IDL in `txodds/txoracle-devnet.json`). This is a judge/ops CLI path — not triggered from the fan UI at runtime.
 
@@ -181,6 +182,7 @@ Apply migrations in order on a fresh Supabase project (Dashboard → SQL Editor)
 | 8 | `supabase/migrations/20260704224500_match_goals_penalty.sql` | Penalty flag on goal rows |
 | 9 | `supabase/migrations/20260707100000_match_state_tx_fixture.sql` | Tx fixture id + fixture sync columns |
 | 10 | `supabase/migrations/20260708010000_match_penalty_kicks.sql` | Penalty kick accumulator |
+| 11 | `supabase/migrations/20260708130000_solana_claims.sql` | Devnet USDC claim audit log |
 
 Steps 5–7 can also run via `npx tsx scripts/apply-match-proofs-migrations.ts` when `DATABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is set.
 
