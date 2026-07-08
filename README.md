@@ -20,7 +20,7 @@ Queried **2026-07-08** against production Supabase (`whuyptdtrwkzxeunouoo`) and 
 | Dual proofs in `match_proofs` | 8 (all verified badge) |
 | Goal rows in `match_goals` | 40 |
 | Payout epochs opened (devnet) | 4 |
-| USDC claims logged (`solana_claims`) | see `npx tsx scripts/query-live-usage.ts` |
+| USDC claims logged (`solana_claims`) | 4 |
 | Total points awarded | 872 |
 
 Public leaderboard: `GET /api/leaderboard` → **107** ranked players (top score 33 pts as of query date).
