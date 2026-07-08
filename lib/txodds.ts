@@ -262,6 +262,12 @@ export type TxScoreEvent = {
   Lineups?: TxLineupTeam[];
   /** (period*1000)+base_key -> value. Base 1/2 = P1/P2 total goals. */
   Stats?: Record<string, number>;
+  /** Per-player cumulative stats keyed by normativeId. */
+  PlayerStats?: Record<
+    "Participant1" | "Participant2",
+    Record<string, Record<string, number>>
+  >;
+  Confirmed?: boolean;
   Score?: {
     Participant1?: TxPeriodScores;
     Participant2?: TxPeriodScores;

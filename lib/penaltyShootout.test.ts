@@ -140,6 +140,55 @@ run("penShootoutTallyFromStats reads TxLINE 6001/6002 stats", () => {
   assert.deepEqual(penShootoutTallyFromStats(events, true), { home: 4, away: 3 });
 });
 
+run("extractPenaltyShootout resolves missed kicker from PlayerStats delta", () => {
+  const events: TxScoreEvent[] = [
+    {
+      FixtureId: 1,
+      Seq: 110,
+      StatusId: 12,
+      Action: "lineups",
+      Participant1IsHome: true,
+      Lineups: [
+        { preferredName: "Colombia", lineups: [] },
+        {
+          preferredName: "Switzerland",
+          lineups: [
+            { player: { normativeId: 280622, preferredName: "Akanji, Manuel" } },
+          ],
+        },
+      ],
+    },
+    {
+      FixtureId: 1,
+      Seq: 111,
+      StatusId: 12,
+      Action: "penalty_shootout_team",
+      Participant: 1,
+      Participant1IsHome: true,
+      PlayerStats: { Participant1: {} },
+    },
+    {
+      FixtureId: 1,
+      Seq: 112,
+      StatusId: 12,
+      Action: "penalty_outcome",
+      Participant: 1,
+      Participant1IsHome: true,
+      Data: { Outcome: "Missed" },
+      PlayerStats: {
+        Participant1: {
+          "280622": { penaltyAttempts: 1 },
+        },
+      },
+    },
+  ];
+  const shootout = extractPenaltyShootout(events, true, 12);
+  assert.ok(shootout);
+  assert.equal(shootout.kicks.length, 1);
+  assert.equal(shootout.kicks[0]?.outcome, "missed");
+  assert.equal(shootout.kicks[0]?.player, "Manuel Akanji");
+});
+
 run("extractPenaltyShootout collapses replayed penalty_outcome rows", () => {
   const events: TxScoreEvent[] = [
     {

@@ -62,6 +62,25 @@ function lineupNameById(events: TxScoreEvent[]): Map<number, string> {
   return map;
 }
 
+type PlayerStatRow = Record<string, number>;
+
+function participantPlayerStats(
+  event: TxScoreEvent,
+  participant: 1 | 2,
+): PlayerStatRow | undefined {
+  const key = participant === 2 ? "Participant2" : "Participant1";
+  return event.PlayerStats?.[key];
+}
+
+function namesFromPreferred(
+  preferred: string,
+): { player: string | null; playerShort: string | null } {
+  return {
+    player: formatPlayerFullName(preferred),
+    playerShort: formatPlayerShortName(preferred),
+  };
+}
+
 function playerFromData(
   data: Record<string, unknown> | undefined,
   nameById: Map<number, string>,
@@ -76,9 +95,44 @@ function playerFromData(
   const pid = typeof data.PlayerId === "number" ? data.PlayerId : null;
   const preferred = inline ?? (pid != null ? nameById.get(pid) : undefined);
   if (!preferred) return { player: null, playerShort: null };
+  return namesFromPreferred(preferred);
+}
+
+/** Miss/save takers sometimes only appear in PlayerStats (attempts up, goals flat). */
+function playerFromPenaltyStatsDelta(
+  baseline: PlayerStatRow | undefined,
+  current: PlayerStatRow | undefined,
+  knownScorerIds: ReadonlySet<number>,
+  nameById: Map<number, string>,
+): { player: string | null; playerShort: string | null } {
+  if (!current) return { player: null, playerShort: null };
+
+  for (const [pidStr, stats] of Object.entries(current)) {
+    const pid = Number(pidStr);
+    if (!Number.isFinite(pid) || knownScorerIds.has(pid)) continue;
+
+    const prev = baseline?.[pidStr] ?? {};
+    const attempts = stats.penaltyAttempts ?? 0;
+    const prevAttempts = prev.penaltyAttempts ?? 0;
+    const goals = stats.penaltyGoals ?? 0;
+    const prevGoals = prev.penaltyGoals ?? 0;
+
+    if (attempts > prevAttempts && goals <= prevGoals) {
+      const preferred = nameById.get(pid);
+      if (preferred) return namesFromPreferred(preferred);
+    }
+  }
+
+  return { player: null, playerShort: null };
+}
+
+function mergePlayerFields(
+  primary: { player: string | null; playerShort: string | null },
+  fallback: { player: string | null; playerShort: string | null },
+): { player: string | null; playerShort: string | null } {
   return {
-    player: formatPlayerFullName(preferred),
-    playerShort: formatPlayerShortName(preferred),
+    player: primary.player ?? fallback.player,
+    playerShort: primary.playerShort ?? fallback.playerShort,
   };
 }
 
@@ -125,6 +179,11 @@ function collectShootoutKicks(
   const sorted = [...events].sort((a, b) => (a.Seq ?? 0) - (b.Seq ?? 0));
   const nameById = lineupNameById(sorted);
   const kicks: RawShootoutKick[] = [];
+  const penStatsBaseline: Partial<Record<1 | 2, PlayerStatRow>> = {};
+  const knownScorerIds: Record<1 | 2, Set<number>> = {
+    1: new Set(),
+    2: new Set(),
+  };
 
   const upsertKick = (kick: RawShootoutKick) => {
     const existingIdx = kicks.findIndex(
@@ -154,20 +213,62 @@ function collectShootoutKicks(
     }
   };
 
+  const rememberScorer = (
+    participant: 1 | 2,
+    data: Record<string, unknown> | undefined,
+  ) => {
+    const pid = typeof data?.PlayerId === "number" ? data.PlayerId : null;
+    if (pid != null) knownScorerIds[participant].add(pid);
+  };
+
+  const resolveKickPlayer = (
+    participant: 1 | 2,
+    data: Record<string, unknown> | undefined,
+    event: TxScoreEvent,
+    outcome: PenaltyKickOutcome,
+  ) => {
+    const fromData = playerFromData(data, nameById);
+    if (fromData.player) return fromData;
+
+    if (outcome === "missed" || outcome === "saved") {
+      return playerFromPenaltyStatsDelta(
+        penStatsBaseline[participant],
+        participantPlayerStats(event, participant),
+        knownScorerIds[participant],
+        nameById,
+      );
+    }
+
+    return fromData;
+  };
+
   for (const event of sorted) {
     if ((event.Seq ?? 0) < startSeq) continue;
+
+    if (event.Action === "penalty_shootout_team") {
+      const participant: 1 | 2 = event.Participant === 2 ? 2 : 1;
+      penStatsBaseline[participant] = participantPlayerStats(event, participant) ?? {};
+      continue;
+    }
 
     if (event.Action === "penalty_outcome") {
       const data = event.Data as Record<string, unknown> | undefined;
       const participant: 1 | 2 = event.Participant === 2 ? 2 : 1;
-      const { player, playerShort } = playerFromData(data, nameById);
+      const outcome = parsePenaltyKickOutcome(data?.Outcome);
+      const { player, playerShort } = resolveKickPlayer(
+        participant,
+        data,
+        event,
+        outcome,
+      );
       upsertKick({
         seq: event.Seq ?? 0,
         participant,
-        outcome: parsePenaltyKickOutcome(data?.Outcome),
+        outcome,
         player,
         playerShort,
       });
+      if (outcome === "scored") rememberScorer(participant, data);
       continue;
     }
 
@@ -185,12 +286,24 @@ function collectShootoutKicks(
           : event.Participant === 2
             ? 2
             : 1;
-    const { player, playerShort } = playerFromData(amend.New, nameById);
+    const outcome = parsePenaltyKickOutcome(amend.New.Outcome);
+    const { player, playerShort } = mergePlayerFields(
+      playerFromData(amend.New, nameById),
+      outcome === "missed" || outcome === "saved"
+        ? playerFromPenaltyStatsDelta(
+            penStatsBaseline[participant],
+            participantPlayerStats(event, participant),
+            knownScorerIds[participant],
+            nameById,
+          )
+        : { player: null, playerShort: null },
+    );
     amendLastForParticipant(participant, {
-      outcome: parsePenaltyKickOutcome(amend.New.Outcome),
+      outcome,
       player,
       playerShort,
     });
+    if (outcome === "scored") rememberScorer(participant, amend.New);
   }
 
   return collapsePenaltyReplayDuplicates(kicks.sort((a, b) => a.seq - b.seq));

@@ -103,9 +103,13 @@ export default function PenaltyKickMarks({
         const flashing = nameFlashKeys.has(key);
         const expanded = expandedKey === key;
         const showName = name != null && (flashing || expanded);
+        const active = showName;
 
         return (
-          <span key={key} className={styles.cell}>
+          <span
+            key={key}
+            className={`${styles.cell}${active ? ` ${styles.cellActive}` : ""}`}
+          >
             <button
               type="button"
               className={`${styles.markBtn}${missed ? ` ${styles.markBtnMissed}` : ` ${styles.markBtnScored}`} ${styles.markEnter}`}
