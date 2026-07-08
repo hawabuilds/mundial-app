@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MundialFixture, MundialGoal } from "../lib/fixtures";
 import { settledOnRegulationScore } from "../lib/fixtures";
+import { mergePenaltyShootout } from "@/lib/penaltyShootout";
 import { useLocalKickoff } from "../lib/kickoff";
 import Card from "./Card";
 import ExampleCallPreview from "./ExampleCallPreview";
@@ -16,6 +17,7 @@ import {
   GOAL_SCORE_REVEAL_MS,
   goalCelebrationTimingStyle,
 } from "./goalCelebration";
+import PenaltyKickMarks, { penaltyKickKey } from "./PenaltyKickMarks";
 import styles from "./FixtureCard.module.css";
 
 type FixtureCardProps = {
@@ -167,6 +169,33 @@ export default function FixtureCard({
   const prevHomeScore = useRef(fixture.homeScore ?? 0);
   const prevAwayScore = useRef(fixture.awayScore ?? 0);
   const hadCelebrationRef = useRef(false);
+  const stableShootoutRef = useRef<ReturnType<typeof mergePenaltyShootout>>(null);
+  const prevPenaltyKickKeysRef = useRef<Set<string>>(new Set());
+  const pensInitializedRef = useRef(false);
+
+  const [revealedPenaltyKickKeys, setRevealedPenaltyKickKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [penNameFlashKeys, setPenNameFlashKeys] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    stableShootoutRef.current = null;
+    prevPenaltyKickKeysRef.current = new Set();
+    pensInitializedRef.current = false;
+    setRevealedPenaltyKickKeys(new Set());
+    setPenNameFlashKeys(new Set());
+  }, [fixture.id]);
+
+  const displayShootout = useMemo(() => {
+    const incoming = fixture.penaltyShootout;
+    if (!incoming) return stableShootoutRef.current;
+    const merged = mergePenaltyShootout(stableShootoutRef.current, incoming);
+    stableShootoutRef.current = merged;
+    return merged;
+  }, [fixture.penaltyShootout]);
+
+  const inPenalties =
+    fixture.status === "P" || displayShootout?.inProgress === true;
 
   const [newGoalKey, setNewGoalKey] = useState<string | null>(null);
   const [scorePop, setScorePop] = useState(false);
@@ -184,6 +213,14 @@ export default function FixtureCard({
   useEffect(() => {
     const homeScore = fixture.homeScore ?? 0;
     const awayScore = fixture.awayScore ?? 0;
+
+    if (inPenalties) {
+      prevGoalCount.current = fixture.goals.length;
+      prevHomeScore.current = homeScore;
+      prevAwayScore.current = awayScore;
+      return;
+    }
+
     const goalsIncreased = fixture.goals.length > prevGoalCount.current;
     const scoreIncreased =
       homeScore > prevHomeScore.current || awayScore > prevAwayScore.current;
@@ -226,6 +263,7 @@ export default function FixtureCard({
     fixture.awayScore,
     featured,
     activeCelebration?.key,
+    inPenalties,
   ]);
 
   useEffect(() => {
@@ -329,16 +367,81 @@ export default function FixtureCard({
   const homeGoals = visibleGoals.filter((g) => g.side === "home");
   const awayGoals = visibleGoals.filter((g) => g.side === "away");
 
+  const inPenaltiesLive = inPenalties;
+  const penaltyShootout = displayShootout;
+  const showPenaltyMarks =
+    penaltyShootout != null && penaltyShootout.kicks.length > 0;
+  const showPensSubline =
+    penaltyShootout != null &&
+    !inPenaltiesLive &&
+    (penaltyShootout.kicks.length > 0 ||
+      penaltyShootout.homeScore > 0 ||
+      penaltyShootout.awayScore > 0);
+  const pensFinished =
+    penaltyShootout != null && !penaltyShootout.inProgress;
+
+  useEffect(() => {
+    if (!penaltyShootout?.kicks.length) return;
+
+    const currentKeys = penaltyShootout.kicks.map((kick) => penaltyKickKey(kick));
+
+    if (!pensInitializedRef.current) {
+      pensInitializedRef.current = true;
+      prevPenaltyKickKeysRef.current = new Set(currentKeys);
+      setRevealedPenaltyKickKeys(new Set(currentKeys));
+      return;
+    }
+
+    const prev = prevPenaltyKickKeysRef.current;
+    const added: string[] = [];
+    for (const key of currentKeys) {
+      if (!prev.has(key)) added.push(key);
+    }
+    if (added.length === 0) return;
+
+    prevPenaltyKickKeysRef.current = new Set(currentKeys);
+    setRevealedPenaltyKickKeys((revealed) => {
+      const next = new Set(revealed);
+      for (const key of added) next.add(key);
+      return next;
+    });
+
+    setPenNameFlashKeys((flash) => {
+      const next = new Set(flash);
+      for (const key of added) next.add(key);
+      return next;
+    });
+
+    const timers = added.map((key) =>
+      window.setTimeout(() => {
+        setPenNameFlashKeys((flash) => {
+          if (!flash.has(key)) return flash;
+          const next = new Set(flash);
+          next.delete(key);
+          return next;
+        });
+      }, 1000),
+    );
+
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, [penaltyShootout?.kicks]);
+
   const pillText =
     fixture.status === "HT"
       ? "HT"
-      : finished
-        ? showVerifiedProof
-          ? null
-          : "FT · Settled via TxLINE"
-        : fixture.elapsed != null
-          ? `LIVE ${fixture.elapsed}'`
-          : "LIVE";
+      : inPenaltiesLive
+        ? "Penalties"
+        : finished
+          ? showVerifiedProof
+            ? null
+            : pensFinished
+              ? "FT · Pens"
+              : "FT · Settled via TxLINE"
+          : fixture.elapsed != null
+            ? `LIVE ${fixture.elapsed}'`
+            : "LIVE";
 
   const renderScorers = (goals: typeof fixture.goals) =>
     showLive && goals.length > 0 ? (
@@ -397,9 +500,11 @@ export default function FixtureCard({
     ) : null;
 
   const sideClass = (side: "home" | "away") => {
-    const scored = scoringSide === side && scorePop;
+    const scored = !inPenaltiesLive && scoringSide === side && scorePop;
     return `${styles.side}${scored ? ` ${styles.sideScored}` : ""}`;
   };
+
+  const penaltyKicks = penaltyShootout?.kicks ?? [];
 
   return (
     <Card
@@ -440,11 +545,19 @@ export default function FixtureCard({
           <Flag code={fixture.homeCode} size={featured ? "lg" : "md"} />
           <span className={styles.team}>{fixture.home}</span>
           {renderScorers(homeGoals)}
+          {showPenaltyMarks ? (
+            <PenaltyKickMarks
+              kicks={penaltyKicks}
+              side="home"
+              revealedKeys={revealedPenaltyKickKeys}
+              nameFlashKeys={penNameFlashKeys}
+            />
+          ) : null}
         </div>
         {showLive && hasScore ? (
           <div
-            className={`${styles.scoreWrap}${scorePop ? ` ${styles.scorePop}` : ""}${
-              featured && cardMoment ? ` ${styles.scoreFeatured}` : ""
+            className={`${styles.scoreWrap}${!inPenaltiesLive && scorePop ? ` ${styles.scorePop}` : ""}${
+              featured && cardMoment && !inPenaltiesLive ? ` ${styles.scoreFeatured}` : ""
             }`}
           >
             <span
@@ -452,7 +565,9 @@ export default function FixtureCard({
             >
               <span
                 className={`${styles.scoreDigit}${
-                  scoringSide === "home" && scorePop ? ` ${styles.scoreDigitPop}` : ""
+                  !inPenaltiesLive && scoringSide === "home" && scorePop
+                    ? ` ${styles.scoreDigitPop}`
+                    : ""
                 }`}
               >
                 {displayHomeScore}
@@ -460,12 +575,19 @@ export default function FixtureCard({
               <span className={styles.scoreDash}>–</span>
               <span
                 className={`${styles.scoreDigit}${
-                  scoringSide === "away" && scorePop ? ` ${styles.scoreDigitPop}` : ""
+                  !inPenaltiesLive && scoringSide === "away" && scorePop
+                    ? ` ${styles.scoreDigitPop}`
+                    : ""
                 }`}
               >
                 {displayAwayScore}
               </span>
             </span>
+            {showPensSubline && penaltyShootout ? (
+              <span className={styles.pensSubline}>
+                Pens {penaltyShootout.homeScore}–{penaltyShootout.awayScore}
+              </span>
+            ) : null}
           </div>
         ) : (
           <span className={styles.vs}>vs</span>
@@ -474,15 +596,31 @@ export default function FixtureCard({
           <Flag code={fixture.awayCode} size={featured ? "lg" : "md"} />
           <span className={styles.team}>{fixture.away}</span>
           {renderScorers(awayGoals)}
+          {showPenaltyMarks ? (
+            <PenaltyKickMarks
+              kicks={penaltyKicks}
+              side="away"
+              revealedKeys={revealedPenaltyKickKeys}
+              nameFlashKeys={penNameFlashKeys}
+            />
+          ) : null}
         </div>
       </div>
 
-      {fixture.venueLine ? (
+      {!showPenaltyMarks && !showPensSubline && fixture.venueLine ? (
         <p className={styles.venue}>{fixture.venueLine}</p>
       ) : null}
 
-      {finished && endedAfterRegulation ? (
+      {!showPenaltyMarks &&
+      !showPensSubline &&
+      finished &&
+      endedAfterRegulation &&
+      !pensFinished ? (
         <p className={styles.settlementNote}>Settled on 90-min score</p>
+      ) : !showPenaltyMarks && !showPensSubline && finished && pensFinished ? (
+        <p className={styles.settlementNote}>Predictions settled on 90-min draw</p>
+      ) : !showPenaltyMarks && !showPensSubline && inPenaltiesLive ? (
+        <p className={styles.settlementNote}>Predictions locked at 90 min</p>
       ) : null}
 
       {showOdds && fixture.marketOdds ? (

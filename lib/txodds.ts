@@ -25,6 +25,7 @@ import {
   TOTAL_GOAL_STAT_KEYS,
 } from "./txScoreProofSemantics";
 import { resolveProofEventSeq } from "./txScoreEventSeq";
+import { matchEndedViaPenalties } from "./penaltyShootout";
 import { getTxoddsOrigin } from "./txoddsOrigin";
 import type { TxScoreStat } from "./txScoreStat";
 import {
@@ -598,6 +599,22 @@ export async function fetchScoreSequence(fixtureId: number): Promise<TxScoreEven
   return parseScoreSequenceBody(text);
 }
 
+/**
+ * Complete replay of every score update TxLINE retained for a fixture.
+ * GET /api/scores/updates/{fixtureId} — includes penalty kicks trimmed from snapshot.
+ */
+export async function fetchScoreUpdates(fixtureId: number): Promise<TxScoreEvent[]> {
+  const res = await txFetch(`/api/scores/updates/${fixtureId}`);
+  const text = await res.text();
+  if (res.status === 404) return [];
+  if (!res.ok) {
+    throw new Error(
+      `TxLINE scores updates failed: ${res.status} ${text.slice(0, 200)}`,
+    );
+  }
+  return parseScoreSequenceBody(text);
+}
+
 /** Latest state = highest Seq (falls back to array order). */
 export function latestScoreEvent(events: TxScoreEvent[]): TxScoreEvent | null {
   if (events.length === 0) return null;
@@ -725,6 +742,8 @@ export function scoresFeedShowsTerminalFinish(events: TxScoreEvent[]): boolean {
 
 /** Latest terminal StatusId from the scores feed (FT / AET / PEN / game_finalised). */
 export function latestTerminalStatusId(events: TxScoreEvent[]): number | null {
+  if (matchEndedViaPenalties(events)) return 13;
+
   const terminal = events.filter(
     (event) =>
       event.Action === "game_finalised" ||

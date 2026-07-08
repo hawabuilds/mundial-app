@@ -1,21 +1,17 @@
 import type { Fixture } from "@/app/data/fixtures";
-import { findFixtureByTeamsAndKickoff } from "@/app/data/fixtures";
+import { findFixtureByTeamsAndKickoff, fixtureDateTime } from "@/app/data/fixtures";
+import { WORLD_CUP_2026_FIXTURES } from "@/app/data/worldCup2026Fixtures";
+import {
+  BOARD_RECENT_MAX_AGE_HOURS,
+  BOARD_UPCOMING_LOOKAHEAD_HOURS,
+} from "./boardDisplayPolicy";
 import {
   fetchScoresSnapshot,
   latestScoreEvent,
+  latestTerminalStatusId,
   type TxFixture,
   type TxScoreEvent,
 } from "./txodds";
-
-/**
- * Fixture IDs that fell off `/fixtures/snapshot` but still update under
- * `/scores/snapshot/{id}`. Metadata is hydrated from the scores feed only.
- */
-export const PINNED_FIXTURE_IDS: number[] = [18188721, 18187298];
-
-export function pinnedFixtureIds(): Set<number> {
-  return new Set(PINNED_FIXTURE_IDS);
-}
 
 function gameStateFromScoreEvent(event: TxScoreEvent | null): number | undefined {
   if (event?.StatusId != null) return event.StatusId;
@@ -69,11 +65,32 @@ function pinnedToBoardRow(input: {
   return { fx, fixture, kickoffMs: kickoffUtcMs, kickoffUtcMs };
 }
 
-/** Build a board row from TxLINE scores when the fixtures snapshot omits a match. */
-export async function hydratePinnedRowFromScores(
+export type PinnedBoardRow = ReturnType<typeof pinnedToBoardRow>;
+
+/** Every registry match in the board window — hydrated when missing from snapshot. */
+export function pinnedTxFixtureIdsInBoardWindow(nowMs: number): number[] {
+  const recentMs = BOARD_RECENT_MAX_AGE_HOURS * 3_600_000;
+  const lookaheadMs = BOARD_UPCOMING_LOOKAHEAD_HOURS * 3_600_000;
+
+  return WORLD_CUP_2026_FIXTURES.filter((fixture) => fixture.externalFixtureId != null)
+    .filter((fixture) => {
+      const kickoffMs = fixtureDateTime(fixture).getTime();
+      if (kickoffMs > nowMs) {
+        return kickoffMs - nowMs <= lookaheadMs;
+      }
+      return nowMs - kickoffMs <= recentMs;
+    })
+    .map((fixture) => fixture.externalFixtureId!);
+}
+
+export function pinnedFixtureIds(nowMs = Date.now()): Set<number> {
+  return new Set(pinnedTxFixtureIdsInBoardWindow(nowMs));
+}
+
+function hydratePinnedRowFromScoreEvents(
   fixtureId: number,
-): Promise<ReturnType<typeof pinnedToBoardRow> | null> {
-  const events = await fetchScoresSnapshot(fixtureId);
+  events: TxScoreEvent[],
+): PinnedBoardRow | null {
   if (events.length === 0) return null;
 
   const anchor = latestScoreEvent(events) ?? events[events.length - 1]!;
@@ -108,6 +125,14 @@ export async function hydratePinnedRowFromScores(
     startTimeMs: startTime,
     competition: withMeta.Competition ?? "World Cup",
     fixtureGroupId: withMeta.FixtureGroupId,
-    gameState: gameStateFromScoreEvent(anchor),
+    gameState: latestTerminalStatusId(events) ?? gameStateFromScoreEvent(anchor),
   });
+}
+
+/** Build a board row from TxLINE scores when the fixtures snapshot omits a match. */
+export async function hydratePinnedRowFromScores(
+  fixtureId: number,
+): Promise<PinnedBoardRow | null> {
+  const events = await fetchScoresSnapshot(fixtureId);
+  return hydratePinnedRowFromScoreEvents(fixtureId, events);
 }

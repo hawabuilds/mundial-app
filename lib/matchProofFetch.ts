@@ -28,25 +28,17 @@ import {
   fetchScoresSnapshot,
   isTxoddsConfigured,
   latestScoreEvent,
+  latestTerminalStatusId,
   resolveTxFixture,
   type TxFixture,
   type TxScoreEvent,
 } from "./txodds";
 
-const TERMINAL_STATUS_IDS = new Set([5, 10, 13, 100]);
-
 /** Stop retrying terminal_fallback upgrades this long after the proof was first stored. */
 export const TERMINAL_FALLBACK_UPGRADE_MAX_MS = 24 * 60 * 60 * 1000;
 
 function terminalStatusId(events: TxScoreEvent[]): number | null {
-  const terminal = events.filter(
-    (event) => event.StatusId != null && TERMINAL_STATUS_IDS.has(event.StatusId),
-  );
-  if (terminal.length === 0) return null;
-  const latest = terminal.reduce((best, event) =>
-    (event.Seq ?? -1) >= (best.Seq ?? -1) ? event : best,
-  );
-  return latest.StatusId ?? null;
+  return latestTerminalStatusId(events);
 }
 
 type FixtureForProof = Pick<

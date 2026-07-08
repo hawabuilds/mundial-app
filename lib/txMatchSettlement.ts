@@ -9,6 +9,7 @@ export type LiveMatchData = {
   homeScore: number | null;
   awayScore: number | null;
   elapsed: number | null;
+  penaltyShootout?: import("./penaltyShootout").PenaltyShootout | null;
 };
 
 import {
@@ -21,6 +22,8 @@ import {
 
 import {
   fetchFixturesSnapshot,
+  fetchScoreSequence,
+  fetchScoreUpdates,
   fetchScoresSnapshot,
   isTxoddsConfigured,
   lastLiveClockSeconds,
@@ -36,10 +39,23 @@ import {
 } from "./txodds";
 
 import {
+  mergeScoreEventsForBackfill,
+} from "@/lib/backfillMatchGoals";
+import {
+  extractPenaltyShootout,
+  matchEndedViaPenalties,
+  mergePenaltyShootout,
+  type PenaltyShootout,
+} from "./penaltyShootout";
+import {
   matchGoalsFromEvents,
   persistTxlineGoals,
   resolveMatchGoalsForDisplay,
 } from "./matchGoalsPersist";
+import {
+  persistPenaltyKicks,
+  resolvePenaltyShootoutForDisplay,
+} from "./matchPenaltyPersist";
 import {
   FIXTURE_CACHE_LIVE_TTL_MS,
   FIXTURE_CACHE_TTL_MS,
@@ -55,6 +71,7 @@ export type FootballDataMatch = {
   homeTeam: { name: string };
   awayTeam: { name: string };
   score?: MatchScores;
+  penaltyShootout?: PenaltyShootout | null;
 };
 
 /** Enough of a fixture to resolve it against the TxLINE schedule. */
@@ -139,7 +156,7 @@ function mapStatus(status: string): string {
     case "ET":
     case "P":
     case "LIVE":
-      return "LIVE";
+      return status;
     case "NS":
     case "TBD":
     case "PST":
@@ -257,6 +274,8 @@ function resolveLiveClockSeconds(
   return Math.max(fromFeed, fromEvent);
 }
 
+const penaltyShootoutCache = new Map<number, PenaltyShootout>();
+
 function buildMatch(
   txFixture: TxFixture,
   lookup: MatchLookup,
@@ -299,8 +318,42 @@ function buildMatch(
     score = { goals: { home: 0, away: 0 } };
   }
 
+  let penaltyShootout: PenaltyShootout | null = null;
+  if (allEvents?.length) {
+    const extracted = extractPenaltyShootout(allEvents, homeIsP1, statusId);
+    if (extracted) {
+      penaltyShootout = mergePenaltyShootout(
+        penaltyShootoutCache.get(txFixture.FixtureId),
+        extracted,
+      );
+      if (penaltyShootout) {
+        penaltyShootoutCache.set(txFixture.FixtureId, penaltyShootout);
+      }
+    } else if (statusId === 13) {
+      penaltyShootout = penaltyShootoutCache.get(txFixture.FixtureId) ?? null;
+    }
+    if (penaltyShootout && score) {
+      score.penalty = {
+        home: penaltyShootout.homeScore,
+        away: penaltyShootout.awayScore,
+      };
+      if (
+        (statusId === 11 || statusId === 12 || statusId === 13) &&
+        penaltyShootout.aetHome != null &&
+        penaltyShootout.aetAway != null
+      ) {
+        score.goals = {
+          home: penaltyShootout.aetHome,
+          away: penaltyShootout.aetAway,
+        };
+      }
+    }
+  }
+
   const seconds = resolveLiveClockSeconds(event, allEvents, statusId);
-  const minute = typeof seconds === "number" ? Math.floor(seconds / 60) : null;
+  const inShootout = statusId === 11 || statusId === 12;
+  const minute =
+    inShootout || typeof seconds !== "number" ? null : Math.floor(seconds / 60);
 
   return {
     id: txFixture.FixtureId,
@@ -309,6 +362,7 @@ function buildMatch(
     homeTeam: { name: lookup.home },
     awayTeam: { name: lookup.away },
     score,
+    penaltyShootout,
   };
 }
 
@@ -338,8 +392,12 @@ function coerceInPlayScores(
 export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
   let homeScore: number | null = null;
   let awayScore: number | null = null;
+  const mappedStatus = mapStatus(match.status);
 
-  if (isTerminalMatchStatus(match.status)) {
+  if (mappedStatus === "P" && match.score?.goals) {
+    homeScore = match.score.goals.home ?? null;
+    awayScore = match.score.goals.away ?? null;
+  } else if (isTerminalMatchStatus(match.status)) {
     const display = extractDisplayScores(match);
     homeScore = display.homeScore;
     awayScore = display.awayScore;
@@ -356,10 +414,11 @@ export function mapMatchRow(match: FootballDataMatch): LiveMatchData {
 
   return {
     externalFixtureId: match.id,
-    status: mapStatus(match.status),
+    status: mappedStatus,
     homeScore,
     awayScore,
-    elapsed: match.minute ?? null,
+    elapsed: mappedStatus === "P" ? null : (match.minute ?? null),
+    penaltyShootout: match.penaltyShootout ?? null,
   };
 }
 
@@ -463,18 +522,46 @@ async function resolveTxFixtureMeta(
   );
 }
 
+async function loadScoreEventsForMatch(
+  fixtureId: number,
+  snapshot: TxScoreEvent[],
+): Promise<TxScoreEvent[]> {
+  if (!matchEndedViaPenalties(snapshot)) return snapshot;
+
+  const [updates, historical] = await Promise.all([
+    fetchScoreUpdates(fixtureId).catch(() => [] as TxScoreEvent[]),
+    fetchScoreSequence(fixtureId).catch(() => [] as TxScoreEvent[]),
+  ]);
+  if (updates.length === 0 && historical.length === 0) return snapshot;
+
+  return mergeScoreEventsForBackfill(
+    mergeScoreEventsForBackfill(historical, updates),
+    snapshot,
+  );
+}
+
 async function fetchMatchWithGoalsForId(
   fixtureId: number,
   lookup: MatchLookup,
   txFixture?: TxFixture,
 ): Promise<{ match: FootballDataMatch | null; goals: MatchGoal[] }> {
-  const events = await fetchScoresSnapshot(fixtureId);
+  const snapshot = await fetchScoresSnapshot(fixtureId);
+  const events = await loadScoreEventsForMatch(fixtureId, snapshot);
   const fx = await resolveTxFixtureMeta(fixtureId, lookup, txFixture);
   const eventForMatch = scoresFeedShowsTerminalFinish(events)
     ? latestScoreEvent(events)
     : latestLiveScoreEvent(events);
 
   const match = buildMatch(fx, lookup, eventForMatch, events);
+  if (match.penaltyShootout?.kicks.length) {
+    await persistPenaltyKicks(fixtureId, match.penaltyShootout.kicks);
+  }
+  if (match.penaltyShootout) {
+    match.penaltyShootout = await resolvePenaltyShootoutForDisplay(
+      fixtureId,
+      match.penaltyShootout,
+    );
+  }
   const homeIsP1 = txFixtureHomeIsP1(fx, lookup);
   const goals: MatchGoal[] = matchGoalsFromEvents(events, homeIsP1, "display");
   const actionGoals = matchGoalsFromEvents(events, homeIsP1, "persist");
@@ -494,19 +581,20 @@ async function fetchMatchWithGoalsForId(
  */
 export async function fetchMatchWithGoals(
   lookup: MatchLookup,
+  txFixture?: TxFixture,
 ): Promise<{ match: FootballDataMatch | null; goals: MatchGoal[] }> {
   if (lookup.id != null && lookup.id > 0) {
-    return fetchMatchWithGoalsForId(lookup.id, lookup);
+    return fetchMatchWithGoalsForId(lookup.id, lookup, txFixture);
   }
 
-  const txFixture = await resolveTxFixture(
+  const resolvedFixture = await resolveTxFixture(
     lookup.home,
     lookup.away,
     kickoffMsOf(lookup),
   );
-  if (!txFixture) return { match: null, goals: [] };
+  if (!resolvedFixture) return { match: null, goals: [] };
 
-  return fetchMatchWithGoalsForId(txFixture.FixtureId, lookup, txFixture);
+  return fetchMatchWithGoalsForId(resolvedFixture.FixtureId, lookup, resolvedFixture);
 }
 
 export { ApiFootballBudgetError, getApiFootballQuota } from "./txMatchSettlementCache";
@@ -563,6 +651,16 @@ export function liveFromTxGameState(
 ): LiveMatchData | null {
   if (gameState == null || isGameStateFinished(gameState)) return null;
   if (!isGameStateInPlay(gameState)) return null;
+  if (gameState === 11 || gameState === 12) {
+    return {
+      externalFixtureId: fixtureId,
+      status: "P",
+      homeScore: 0,
+      awayScore: 0,
+      elapsed: null,
+      penaltyShootout: null,
+    };
+  }
   const status = gameState === 3 || gameState === 8 ? "HT" : "LIVE";
   return {
     externalFixtureId: fixtureId,

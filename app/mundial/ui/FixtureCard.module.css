@@ -415,6 +415,17 @@
   font-size: 1.5rem;
 }
 
+.pensSubline {
+  font-family: var(--m-font-match);
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--m-white);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
 .scoreDigit {
   display: inline-block;
   min-width: 0.65em;

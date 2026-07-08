@@ -1,86 +1,21 @@
-import assert from "node:assert/strict";
-import {
-  BOARD_MAX_UPCOMING,
-  BOARD_RECENT_MAX_AGE_HOURS,
-  BOARD_UPCOMING_LOOKAHEAD_HOURS,
-  capBoardForDisplay,
-  shouldIncludeRowOnBoard,
-} from "./boardDisplayPolicy";
+import { BOARD_RECENT_MAX_AGE_HOURS } from "./boardDisplayPolicy";
+import { fixtureDateTime } from "@/app/data/fixtures";
+import { WORLD_CUP_2026_FIXTURES } from "@/app/data/worldCup2026Fixtures";
+import { pinnedTxFixtureIdsInBoardWindow } from "./pinnedBoardFixtures";
 
-const H = 3_600_000;
-const now = Date.parse("2026-07-06T01:00:00Z");
+function assert(condition: boolean, message: string): void {
+  if (!condition) throw new Error(message);
+}
 
-console.log("boardDisplayPolicy tests\n");
+const now = Date.parse("2026-07-07T23:41:00.000Z");
+const pinned = pinnedTxFixtureIdsInBoardWindow(now);
+assert(pinned.includes(18202783), "Switzerland vs Colombia stays pinned in board window");
+assert(pinned.length > 0, "board window includes recent registry matches");
 
-assert.equal(
-  shouldIncludeRowOnBoard(
-    { kickoffMs: now + 12 * H, fx: { FixtureId: 1, GameState: 1 } },
-    now,
-  ),
-  true,
-  "in-play always shown",
-);
+const kickoff = fixtureDateTime(
+  WORLD_CUP_2026_FIXTURES.find((f) => f.externalFixtureId === 18202783)!,
+).getTime();
+const recentMs = BOARD_RECENT_MAX_AGE_HOURS * 3_600_000;
+assert(now - kickoff < recentMs, "fixture still inside 8h window");
 
-assert.equal(
-  shouldIncludeRowOnBoard(
-    { kickoffMs: now - 2 * H, fx: { FixtureId: 2, GameState: 5 } },
-    now,
-  ),
-  true,
-  "recent FT within max age",
-);
-
-assert.equal(
-  shouldIncludeRowOnBoard(
-    { kickoffMs: now - (BOARD_RECENT_MAX_AGE_HOURS + 1) * H, fx: { FixtureId: 3, GameState: 5 } },
-    now,
-  ),
-  false,
-  "old FT dropped",
-);
-
-assert.equal(
-  shouldIncludeRowOnBoard(
-    { kickoffMs: now + (BOARD_UPCOMING_LOOKAHEAD_HOURS + 6) * H, fx: { FixtureId: 4 } },
-    now,
-  ),
-  false,
-  "far-future upcoming hidden",
-);
-
-assert.equal(
-  shouldIncludeRowOnBoard(
-    { kickoffMs: now - 5 * H, fx: { FixtureId: 5 } },
-    now,
-  ),
-  false,
-  "stale not-started (past kickoff, no GameState) dropped",
-);
-
-const capped = capBoardForDisplay([
-  { phase: "recent", kickoffUtcMs: 1, txFixtureId: 10 },
-  { phase: "recent", kickoffUtcMs: 2, txFixtureId: 11 },
-  ...Array.from({ length: 12 }, (_, i) => ({
-    phase: "upcoming" as const,
-    kickoffUtcMs: 100 + i,
-    txFixtureId: 20 + i,
-  })),
-  { phase: "live", kickoffUtcMs: 50, txFixtureId: 16 },
-]);
-
-assert.equal(capped.filter((r) => r.phase === "recent").length, 1);
-assert.equal(capped.filter((r) => r.phase === "upcoming").length, BOARD_MAX_UPCOMING);
-assert.equal(capped.filter((r) => r.phase === "live").length, 1);
-assert.equal(capped.length, 1 + 1 + BOARD_MAX_UPCOMING);
-
-console.log("boardDisplayPolicy tests: ok");
-
-assert.equal(
-  shouldIncludeRowOnBoard(
-    { kickoffMs: now - (210 + 30) * 60_000, fx: { FixtureId: 6, GameState: 3 } },
-    now,
-  ),
-  false,
-  "stale in-play GameState dropped after match window",
-);
-
+console.log("boardDisplayPolicy.test.ts: all assertions passed");

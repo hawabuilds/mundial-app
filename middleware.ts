@@ -123,6 +123,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  if (pathname === "/penalty-preview" || pathname.startsWith("/penalty-preview/")) {
+    const url = request.nextUrl.clone();
+    const sub =
+      pathname === "/penalty-preview" ? "" : pathname.slice("/penalty-preview".length);
+    url.pathname = `/mundial/penalty-preview${sub}`;
+    return NextResponse.rewrite(url);
+  }
+
   const url = request.nextUrl.clone();
   url.pathname = "/";
   return NextResponse.redirect(url, 308);

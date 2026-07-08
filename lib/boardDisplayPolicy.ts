@@ -9,7 +9,7 @@ import type { FixturePhase } from "@/lib/enrichFixtures";
 /** Upcoming fixtures more than this far in the future are hidden. */
 export const BOARD_UPCOMING_LOOKAHEAD_HOURS = 96;
 
-/** Drop finished cards this long after kickoff (unless still the only FT on screen). */
+/** Drop finished cards this long after kickoff. */
 export const BOARD_RECENT_MAX_AGE_HOURS = 8;
 
 /** Max upcoming rows after filtering (next games only). */
@@ -18,16 +18,35 @@ export const BOARD_MAX_UPCOMING = 10;
 /** Max full-time cards on the board at once. */
 export const BOARD_MAX_RECENT = 1;
 
+const RECENT_MAX_AGE_MS = BOARD_RECENT_MAX_AGE_HOURS * 3_600_000;
+
 type BoardRowLike = {
   kickoffMs: number;
   fx: { GameState?: number; FixtureId: number };
 };
 
+function isPinnedBoardKickoffWindow(kickoffMs: number, nowMs: number): boolean {
+  const lookaheadMs = BOARD_UPCOMING_LOOKAHEAD_HOURS * 3_600_000;
+  if (kickoffMs > nowMs) {
+    return kickoffMs - nowMs <= lookaheadMs;
+  }
+  return nowMs - kickoffMs <= RECENT_MAX_AGE_MS;
+}
+
 export function shouldIncludeRowOnBoard(
   row: BoardRowLike,
   nowMs: number,
+  pinnedFixtureIds?: ReadonlySet<number>,
 ): boolean {
   const { kickoffMs, fx } = row;
+
+  if (
+    pinnedFixtureIds?.has(fx.FixtureId) &&
+    isPinnedBoardKickoffWindow(kickoffMs, nowMs)
+  ) {
+    return true;
+  }
+
   const gameState = fx.GameState;
 
   if (isGameStateInPlay(gameState)) {
@@ -42,7 +61,7 @@ export function shouldIncludeRowOnBoard(
   }
 
   if (isGameStateFinished(gameState)) {
-    return nowMs - kickoffMs <= BOARD_RECENT_MAX_AGE_HOURS * 3_600_000;
+    return nowMs - kickoffMs <= RECENT_MAX_AGE_MS;
   }
 
   const lookaheadMs = BOARD_UPCOMING_LOOKAHEAD_HOURS * 3_600_000;
@@ -97,6 +116,9 @@ export function capBoardForDisplay<T extends BoardEntryLike>(
 export function filterBoardRows<T extends BoardRowLike>(
   rows: T[],
   nowMs: number,
+  pinnedFixtureIds?: ReadonlySet<number>,
 ): T[] {
-  return rows.filter((row) => shouldIncludeRowOnBoard(row, nowMs));
+  return rows.filter((row) =>
+    shouldIncludeRowOnBoard(row, nowMs, pinnedFixtureIds),
+  );
 }

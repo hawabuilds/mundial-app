@@ -6,6 +6,7 @@ import type {
   MatchMarketOdds,
   MatchTxLineProof,
 } from "@/app/lib/leaderboard-client";
+import type { PenaltyShootout } from "@/lib/penaltyShootout";
 import { endedAfterRegulation } from "@/lib/txScoreProofSemantics";
 import { matchStageLabel } from "@/lib/matchStage";
 import { formatVenueLine, getVenueForMatch } from "./venues";
@@ -41,7 +42,10 @@ export function resolveCurrentMatch<T extends CurrentMatchLike>(
 ): T | null {
   const liveNow = fixtures.find(
     (f) =>
-      f.phase === "live" || f.status === "LIVE" || f.status === "HT",
+      f.phase === "live" ||
+      f.status === "LIVE" ||
+      f.status === "HT" ||
+      f.status === "P",
   );
   if (liveNow) return liveNow;
   const recent = fixtures.find((f) => f.phase === "recent");
@@ -75,6 +79,8 @@ export type MundialFixture = {
   terminalStatusId?: number | null;
   /** Epoch ms (UTC) from TxLINE StartTime when available. */
   kickoffUtcMs?: number;
+  /** Penalty shootout kicks and tally when match went to pens. */
+  penaltyShootout?: PenaltyShootout | null;
 };
 
 export function settledOnRegulationScore(terminalStatusId?: number | null): boolean {
@@ -148,6 +154,7 @@ export function toMundialFixture(fixture: UpcomingMatch): MundialFixture {
     txlineProof: fixture.txlineProof ?? null,
     terminalStatusId: fixture.terminalStatusId ?? null,
     kickoffUtcMs: fixture.kickoffUtcMs,
+    penaltyShootout: live?.penaltyShootout ?? null,
   };
 }
 

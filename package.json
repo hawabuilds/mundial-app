@@ -13,6 +13,8 @@
     "test:match-proof-dual": "npx tsx lib/matchProofDual.test.ts",
     "test:score-proof-semantics": "npx tsx lib/txScoreProofSemantics.test.ts",
     "test:match-goals-backfill": "npx tsx lib/backfillMatchGoals.test.ts",
+    "test:penalty-shootout": "npx tsx lib/penaltyShootout.test.ts",
+    "test:board-display-policy": "npx tsx lib/boardDisplayPolicy.test.ts",
     "test:scoring": "npx tsx lib/scoring.test.ts",
     "test:solana-voucher": "npx tsx lib/solanaPayoutVoucher.test.ts",
     "test:tx-match-settlement": "npx tsx lib/txMatchSettlement.test.ts",

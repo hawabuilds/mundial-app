@@ -136,6 +136,7 @@ export type MatchLiveInfo = {
   homeScore: number | null;
   awayScore: number | null;
   elapsed: number | null;
+  penaltyShootout?: import("@/lib/penaltyShootout").PenaltyShootout | null;
 } | null;
 
 export type FixturePhase = "live" | "recent" | "upcoming";

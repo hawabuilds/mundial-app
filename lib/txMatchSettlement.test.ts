@@ -98,12 +98,26 @@ assert.deepEqual(
   }),
   {
     externalFixtureId: 99,
-    status: "LIVE",
+    status: "1H",
     homeScore: 0,
     awayScore: 0,
     elapsed: null,
+    penaltyShootout: null,
   },
   "early 1H with no Stats payload defaults live board to 0-0",
+);
+
+assert.deepEqual(
+  liveFromTxGameState(77, 12),
+  {
+    externalFixtureId: 77,
+    status: "P",
+    homeScore: 0,
+    awayScore: 0,
+    elapsed: null,
+    penaltyShootout: null,
+  },
+  "GameState 12 maps to penalty shootout live row",
 );
 
 assert.deepEqual(

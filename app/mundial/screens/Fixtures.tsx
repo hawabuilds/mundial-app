@@ -38,7 +38,8 @@ function findLiveMatch(fixtures: MundialFixture[]): MundialFixture | null {
         f.status === "HT" ||
         f.status === "1H" ||
         f.status === "2H" ||
-        f.status === "ET",
+        f.status === "ET" ||
+        f.status === "P",
     ) ?? null
   );
 }
@@ -213,8 +214,11 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
         featuredLive.status === "HT" ||
         featuredLive.status === "1H" ||
         featuredLive.status === "2H" ||
-        featuredLive.status === "ET"
-      ? "Live now"
+        featuredLive.status === "ET" ||
+        featuredLive.status === "P"
+      ? featuredLive.status === "P"
+        ? "Penalties"
+        : "Live now"
       : "Full time";
   const rankLabel = statsLoading ? "—" : rank != null ? `#${rank}` : "—";
   const ptsLabel =

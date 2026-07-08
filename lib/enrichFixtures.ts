@@ -173,8 +173,8 @@ function isFixtureFinished(
  * Fixtures for the app's live board. Unlike {@link enrichUpcomingFixtures}, a
  * match is kept on screen once it kicks off:
  *  - "live": started and not yet finished — shows running clock + score.
- *  - "recent": finished, kept until the next match kicks off (so the result
- *    lingers instead of vanishing at full time).
+ *  - "recent": finished — stays until the next board kickoff or 8h after kickoff,
+ *    whichever comes first.
  *  - "upcoming": not started yet.
  * Ordered live first, then recent, then upcoming (each by kickoff).
  */
@@ -236,6 +236,10 @@ export async function enrichBoardFixtures(
 
 export function formatMatchStatus(live: LiveMatchData | null): string | null {
   if (!live) return null;
+
+  if (live.status === "P") {
+    return "Penalties";
+  }
 
   if (isFinishedStatus(live.status)) {
     return `FT ${live.homeScore}–${live.awayScore}`;

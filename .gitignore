@@ -57,3 +57,4 @@ scripts/_*.png
 /solana-program/target/
 
 .vercel
+.env*

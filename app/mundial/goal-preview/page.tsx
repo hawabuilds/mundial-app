@@ -115,6 +115,11 @@ export default function GoalPreviewPage() {
         <p className={styles.copy}>
           Score and scorer flip when GOAL holds (~2.7s), then the overlay fades.
         </p>
+        <p className={styles.note}>
+          <a className={styles.link} href="/penalty-preview">
+            Penalty shootout preview
+          </a>
+        </p>
 
         <div className={styles.demo}>
           <FixtureCard
@@ -141,3 +146,4 @@ export default function GoalPreviewPage() {
     </main>
   );
 }
+
