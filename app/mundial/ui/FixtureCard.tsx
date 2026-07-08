@@ -379,6 +379,9 @@ export default function FixtureCard({
       penaltyShootout.awayScore > 0);
   const pensFinished =
     penaltyShootout != null && !penaltyShootout.inProgress;
+  /** Pen shootout UI active — hide venue / settlement footnotes for the whole phase. */
+  const penShootoutOnCard =
+    inPenaltiesLive || showPenaltyMarks || showPensSubline;
 
   useEffect(() => {
     if (!penaltyShootout?.kicks.length) return;
@@ -501,7 +504,51 @@ export default function FixtureCard({
 
   const sideClass = (side: "home" | "away") => {
     const scored = !inPenaltiesLive && scoringSide === side && scorePop;
-    return `${styles.side}${scored ? ` ${styles.sideScored}` : ""}`;
+    return `${styles.side}${showPenaltyMarks ? ` ${styles.sidePenLayout}` : ""}${
+      scored ? ` ${styles.sideScored}` : ""
+    }`;
+  };
+
+  const renderSideContent = (
+    side: "home" | "away",
+    code: string,
+    team: string,
+    goals: typeof fixture.goals,
+  ) => {
+    const flag = <Flag code={code} size={featured ? "lg" : "md"} />;
+    const teamName = <span className={styles.team}>{team}</span>;
+    const scorers = renderScorers(goals);
+    const penMarks = showPenaltyMarks ? (
+      <div className={styles.sidePenMarks}>
+        <PenaltyKickMarks
+          kicks={penaltyKicks}
+          side={side}
+          revealedKeys={revealedPenaltyKickKeys}
+          nameFlashKeys={penNameFlashKeys}
+        />
+      </div>
+    ) : null;
+
+    if (!showPenaltyMarks) {
+      return (
+        <>
+          {flag}
+          {teamName}
+          {scorers}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className={styles.sideTop}>
+          {flag}
+          {teamName}
+          {scorers}
+        </div>
+        {penMarks}
+      </>
+    );
   };
 
   const penaltyKicks = penaltyShootout?.kicks ?? [];
@@ -540,19 +587,13 @@ export default function FixtureCard({
         )}
       </div>
 
-      <div className={`${styles.matchup} ${showLive ? styles.matchupLive : ""}`}>
+      <div
+        className={`${styles.matchup} ${showLive ? styles.matchupLive : ""}${
+          showPenaltyMarks ? ` ${styles.matchupPenAligned}` : ""
+        }`}
+      >
         <div className={sideClass("home")}>
-          <Flag code={fixture.homeCode} size={featured ? "lg" : "md"} />
-          <span className={styles.team}>{fixture.home}</span>
-          {renderScorers(homeGoals)}
-          {showPenaltyMarks ? (
-            <PenaltyKickMarks
-              kicks={penaltyKicks}
-              side="home"
-              revealedKeys={revealedPenaltyKickKeys}
-              nameFlashKeys={penNameFlashKeys}
-            />
-          ) : null}
+          {renderSideContent("home", fixture.homeCode, fixture.home, homeGoals)}
         </div>
         {showLive && hasScore ? (
           <div
@@ -593,34 +634,21 @@ export default function FixtureCard({
           <span className={styles.vs}>vs</span>
         )}
         <div className={sideClass("away")}>
-          <Flag code={fixture.awayCode} size={featured ? "lg" : "md"} />
-          <span className={styles.team}>{fixture.away}</span>
-          {renderScorers(awayGoals)}
-          {showPenaltyMarks ? (
-            <PenaltyKickMarks
-              kicks={penaltyKicks}
-              side="away"
-              revealedKeys={revealedPenaltyKickKeys}
-              nameFlashKeys={penNameFlashKeys}
-            />
-          ) : null}
+          {renderSideContent("away", fixture.awayCode, fixture.away, awayGoals)}
         </div>
       </div>
 
-      {!showPenaltyMarks && !showPensSubline && fixture.venueLine ? (
+      {!penShootoutOnCard && fixture.venueLine ? (
         <p className={styles.venue}>{fixture.venueLine}</p>
       ) : null}
 
-      {!showPenaltyMarks &&
-      !showPensSubline &&
+      {!penShootoutOnCard &&
       finished &&
       endedAfterRegulation &&
       !pensFinished ? (
         <p className={styles.settlementNote}>Settled on 90-min score</p>
-      ) : !showPenaltyMarks && !showPensSubline && finished && pensFinished ? (
+      ) : !penShootoutOnCard && finished && pensFinished ? (
         <p className={styles.settlementNote}>Predictions settled on 90-min draw</p>
-      ) : !showPenaltyMarks && !showPensSubline && inPenaltiesLive ? (
-        <p className={styles.settlementNote}>Predictions locked at 90 min</p>
       ) : null}
 
       {showOdds && fixture.marketOdds ? (
