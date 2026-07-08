@@ -25,15 +25,15 @@ import {
 
 import {
 
-  ApiFootballBudgetError,
+  TxLineBudgetError,
 
-  fetchApiMatch,
+  fetchTxLineMatch,
 
-  isApiFootballConfigured,
+  isTxLineConfigured,
 
   mapMatchRow,
 
-  resolveFinalScoreFromApiMatch,
+  resolveFinalScoreFromTxLineMatch,
 
   type LiveMatchData,
 
@@ -43,7 +43,7 @@ import { fixtureAutoSettlesFromApi } from "./fixtureAutoSettle";
 
 
 
-/** Earliest auto-score check after kickoff (API must report FT). */
+/** Earliest auto-score check after kickoff (TxLINE must report terminal). */
 
 export const MINUTES_AFTER_KICKOFF_BEFORE_SCORE = 90;
 
@@ -204,7 +204,7 @@ export async function getFixturesPendingAutoScore(
 
 
 
-async function resolveFinalScoreFromApi(
+async function resolveFinalScoreFromTxLine(
 
   fixture: Fixture,
 
@@ -218,7 +218,7 @@ async function resolveFinalScoreFromApi(
 
 }> {
 
-  const match = await fetchApiMatch(fixture, { fresh: true });
+  const match = await fetchTxLineMatch(fixture, { fresh: true });
 
   if (!match) return { finalScore: null, live: null };
 
@@ -226,7 +226,7 @@ async function resolveFinalScoreFromApi(
 
   const live = mapMatchRow(match);
 
-  const finalScore = resolveFinalScoreFromApiMatch(
+  const finalScore = resolveFinalScoreFromTxLineMatch(
 
     match,
 
@@ -252,13 +252,13 @@ export async function autoScoreFinishedMatches(
 
 ): Promise<AutoScoreResult[]> {
 
-  const apiConfigured = isApiFootballConfigured();
+  const txlineConfigured = isTxLineConfigured();
 
   const results: AutoScoreResult[] = [];
 
 
 
-  if (!apiConfigured && !fixtures.some((fixture) => fixtureFinalScore(fixture))) {
+  if (!txlineConfigured && !fixtures.some((fixture) => fixtureFinalScore(fixture))) {
 
     return [
 
@@ -330,11 +330,11 @@ export async function autoScoreFinishedMatches(
 
 
 
-      if (!finalScore && apiConfigured) {
+      if (!finalScore && txlineConfigured) {
 
         try {
 
-          const resolved = await resolveFinalScoreFromApi(fixture);
+          const resolved = await resolveFinalScoreFromTxLine(fixture);
 
           finalScore = resolved.finalScore;
 
@@ -344,7 +344,7 @@ export async function autoScoreFinishedMatches(
 
         } catch (error) {
 
-          if (error instanceof ApiFootballBudgetError) {
+          if (error instanceof TxLineBudgetError) {
 
             results.push({
 

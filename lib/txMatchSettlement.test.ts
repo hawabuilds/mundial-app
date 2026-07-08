@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  resolveFinalScoreFromApiMatch,
+  resolveFinalScoreFromTxLineMatch,
   mapMatchRow,
   liveFromTxGameState,
   type FootballDataMatch,
@@ -20,19 +20,19 @@ const finished: FootballDataMatch = {
 };
 
 assert.deepEqual(
-  resolveFinalScoreFromApiMatch(finished, kickoffMs, afterWindow, 105),
+  resolveFinalScoreFromTxLineMatch(finished, kickoffMs, afterWindow, 105),
   { homeScore: 3, awayScore: 0 },
   "FT + fullTime after window => score",
 );
 
 assert.equal(
-  resolveFinalScoreFromApiMatch(finished, kickoffMs, kickoffMs + 60_000, 105),
+  resolveFinalScoreFromTxLineMatch(finished, kickoffMs, kickoffMs + 60_000, 105),
   null,
   "before scoring window => null",
 );
 
 assert.equal(
-  resolveFinalScoreFromApiMatch(
+  resolveFinalScoreFromTxLineMatch(
     { ...finished, status: "1H", score: { fullTime: { home: 1, away: 0 } } },
     kickoffMs,
     afterWindow,
@@ -43,7 +43,7 @@ assert.equal(
 );
 
 assert.equal(
-  resolveFinalScoreFromApiMatch(
+  resolveFinalScoreFromTxLineMatch(
     { ...finished, status: "FT", score: { fullTime: { home: null, away: null } } },
     kickoffMs,
     afterWindow,
@@ -66,13 +66,13 @@ const penFinal: FootballDataMatch = {
 };
 
 assert.deepEqual(
-  resolveFinalScoreFromApiMatch(penFinal, kickoffMs, afterWindow, 105),
+  resolveFinalScoreFromTxLineMatch(penFinal, kickoffMs, afterWindow, 105),
   { homeScore: 1, awayScore: 1 },
   "PEN status settles 90+injury, not shootout",
 );
 
 assert.deepEqual(
-  resolveFinalScoreFromApiMatch(
+  resolveFinalScoreFromTxLineMatch(
     {
       ...penFinal,
       status: "AET",

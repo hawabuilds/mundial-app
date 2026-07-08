@@ -1,5 +1,7 @@
 # Copa Mundial
 
+![CI](https://github.com/hawabuilds/mundial-app/actions/workflows/ci.yml/badge.svg)
+
 Score-prediction game on X (Twitter): reply with a scoreline before kickoff, earn points from accuracy and market odds, climb a cumulative leaderboard. Daily snapshot at 10:00 UTC locks the top 20 for USDC payout on Solana.
 
 **Live:** [copamundial.app](https://copamundial.app) · **Track:** Superteam × TxODDS — Consumer & Fan Experiences
@@ -36,11 +38,7 @@ npm run demo:epoch -- --pot 2000
 npm run e2e:solana-claim -- <epochId>
 
 # Key unit tests
-npm run test:tx-match-settlement
-npm run test:match-proof-dual
-npm run test:score-proof-semantics
-npm run test:penalty-shootout
-npm run test:solana-voucher
+npm run test:ci
 ```
 
 Example proof output for Argentina vs Egypt (TxFixtureId `18202701`): [`docs/PROOF_DEMO.md`](docs/PROOF_DEMO.md).
@@ -78,6 +76,40 @@ X-Api-Token:   <activated api token>
 | 5 | `GET /api/scores/historical/{fixtureId}` | Score replay to backfill `match_goals` when post-FT snapshot trims events (`lib/backfillMatchGoals.ts`) |
 | 6 | `GET /api/scores/updates/{fixtureId}` | Full kick-by-kick penalty replay when snapshot drops shootout rows (`lib/penaltyShootout.ts`, `loadScoreEventsForMatch()` in `lib/txMatchSettlement.ts`) |
 
+### TxLINE integration map
+
+```mermaid
+flowchart LR
+  subgraph TxLINE
+    F[fixtures/snapshot]
+    S[scores/snapshot]
+    O[odds/snapshot]
+    V[stat-validation]
+    H[historical replay]
+    U[scores/updates]
+  end
+  F --> Board[Live board]
+  S --> Settlement[Match settlement]
+  O --> Odds[match_odds lock]
+  Settlement --> State[match_state]
+  V --> Proofs[match_proofs]
+  Proofs --> Badge[TxLINE verified badge]
+  H --> Goals[match_goals]
+  U --> Pens[match_penalty_kicks]
+  Pens --> Board
+  State --> Score[Prediction scoring]
+```
+
+### Penalty shootout pipeline
+
+When a knockout match goes to pens, the scores **snapshot** often trims individual kick rows after full time. Copa Mundial merges three feeds:
+
+1. **Snapshot** — live tally and terminal status
+2. **Updates** (`/api/scores/updates/{fixtureId}`) — kick-by-kick replay with `PlayerId` on scored pens
+3. **Historical** — fallback when updates are empty
+
+Parsed kicks persist to `match_penalty_kicks` and render as ○/× marks under each side on the fixture card (`app/mundial/ui/PenaltyKickMarks.tsx`). UI sandbox: [`/proof-preview`](https://copamundial.app/proof-preview) (verified badge), [`/penalty-preview`](https://copamundial.app/penalty-preview) (shootout marks).
+
 Live goal events accumulate in `match_goals` via the scores feed (`lib/matchGoalsPersist.ts`). Odds locking uses `match_odds`, not goal rows.
 
 ### Scoring formula
@@ -106,6 +138,8 @@ After a match settles via TxLINE, the scoring cron fetches stat-validation proof
 Event **seq** selection prefers the `game_finalised` record from the scores feed. If only a terminal whistle proof is available at first fetch, the row is stored with `seq_source=terminal_fallback` and upgraded when the finalised proof arrives (self-healing within 24 hours).
 
 The **TxLINE verified** badge on an FT card is shown only when the regulation proof exactly matches the settled score in `match_state`. Any mismatch suppresses the badge (`evaluateProofSemantics` in `lib/txScoreProofSemantics.ts`).
+
+![TxLINE verified badge on a settled FT fixture card](docs/screenshots/verified-badge.png)
 
 **On-chain verification** is reproducible via `scripts/verify-proof.ts`: fetches both proofs, then simulates TxOracle `validate_stat` + `equalTo` against the devnet `daily_scores_roots` Merkle root (`lib/txlineValidateStat.ts`, IDL in `txodds/txoracle-devnet.json`). This is a judge/ops CLI path — not triggered from the fan UI at runtime.
 

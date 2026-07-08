@@ -20,6 +20,7 @@
     "test:tx-match-settlement": "npx tsx lib/txMatchSettlement.test.ts",
     "test:txline-fixture-sync": "npx tsx lib/txlineFixtureSync.test.ts",
     "test:collection-eligibility": "npx tsx lib/collectionEligibility.test.ts",
+    "test:ci": "npm run test:tx-match-settlement && npm run test:match-proof-dual && npm run test:score-proof-semantics && npm run test:penalty-shootout && npm run test:solana-voucher",
     "sync:fixtures": "npx tsx scripts/sync-fixtures.ts",
     "collect:fixtures": "npx tsx scripts/collect-fixtures.ts",
     "gen:solana-keys": "npx tsx scripts/generate-solana-payout-keys.ts",

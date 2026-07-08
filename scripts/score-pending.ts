@@ -4,9 +4,9 @@ config({ path: ".env.local" });
 import { fixtureDateTime, getFixtureById } from "../app/data/fixtures";
 import { getMatchState } from "../app/lib/supabase";
 import {
-  fetchApiMatch,
+  fetchTxLineMatch,
   mapMatchRow,
-  resolveFinalScoreFromApiMatch,
+  resolveFinalScoreFromTxLineMatch,
 } from "../lib/txMatchSettlement";
 import {
   autoScoreFinishedMatches,
@@ -34,13 +34,13 @@ async function main() {
     console.log("collected_at", state?.predictions_collected_at ?? null);
     console.log("scored_at", state?.scored_at ?? null);
 
-    const row = await fetchApiMatch(f);
+    const row = await fetchTxLineMatch(f);
     if (!row) {
       console.log("api: no row");
       continue;
     }
     const live = mapMatchRow(row);
-    const final = resolveFinalScoreFromApiMatch(
+    const final = resolveFinalScoreFromTxLineMatch(
       row,
       fixtureDateTime(f).getTime(),
       now.getTime(),

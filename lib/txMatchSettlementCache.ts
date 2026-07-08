@@ -9,8 +9,8 @@ const fixtureCache = new Map<
 let dailyRemaining: number | null = null;
 let dailyLimit: number | null = null;
 
-/** Stop calling API when remaining daily quota is at or below this (cron reserve). */
-export const API_FOOTBALL_MIN_RESERVE = 15;
+/** Stop calling TxLINE when remaining daily quota is at or below this (cron reserve). */
+export const TXLINE_MIN_RESERVE = 15;
 
 /** Default TTL when quota headers are unknown. */
 export const FIXTURE_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -22,10 +22,10 @@ export const FIXTURE_CACHE_TTL_MS = 15 * 60 * 1000;
  */
 export const FIXTURE_CACHE_LIVE_TTL_MS = 5 * 60 * 1000;
 
-export class ApiFootballBudgetError extends Error {
+export class TxLineBudgetError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "ApiFootballBudgetError";
+    this.name = "TxLineBudgetError";
   }
 }
 
@@ -46,14 +46,14 @@ export function markQuotaExhausted(): void {
   dailyRemaining = 0;
 }
 
-export function getApiFootballQuota(): {
+export function getTxLineQuota(): {
   remaining: number | null;
   limit: number | null;
 } {
   return { remaining: dailyRemaining, limit: dailyLimit };
 }
 
-export function canUseApiFootball(minReserve = API_FOOTBALL_MIN_RESERVE): boolean {
+export function canUseTxLine(minReserve = TXLINE_MIN_RESERVE): boolean {
   if (dailyRemaining === null) return true;
   return dailyRemaining > minReserve;
 }

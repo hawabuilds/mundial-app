@@ -3,7 +3,7 @@ import { fixtureDateTime, getActiveFixtures } from "@/app/data/fixtures";
 import { fixtureAutoSettlesFromApi } from "@/lib/fixtureAutoSettle";
 import {
   fetchLiveMatch,
-  isApiFootballConfigured,
+  isTxLineConfigured,
   isFinishedStatus,
   isStartedOrFinishedStatus,
   type LiveMatchData,
@@ -47,7 +47,7 @@ async function resolveLive(fixture: Fixture): Promise<LiveMatchData | null> {
   const fromResult = liveFromFixtureResult(fixture);
   if (fromResult) return fromResult;
 
-  if (!isApiFootballConfigured() || !shouldEnrichFixtureFromApi(fixture)) {
+  if (!isTxLineConfigured() || !shouldEnrichFixtureFromApi(fixture)) {
     return null;
   }
 
@@ -63,7 +63,7 @@ export async function enrichFixture(fixture: Fixture): Promise<EnrichedFixture> 
   return {
     ...fixture,
     live,
-    apiConfigured: isApiFootballConfigured(),
+    apiConfigured: isTxLineConfigured(),
   };
 }
 
@@ -87,7 +87,7 @@ export async function enrichFixtures(
       results.push({
         ...fixture,
         live: fromResult,
-        apiConfigured: isApiFootballConfigured(),
+        apiConfigured: isTxLineConfigured(),
       });
       continue;
     }
@@ -99,7 +99,7 @@ export async function enrichFixtures(
       results.push({
         ...fixture,
         live: null,
-        apiConfigured: isApiFootballConfigured(),
+        apiConfigured: isTxLineConfigured(),
       });
       continue;
     }

@@ -84,12 +84,12 @@ export type MatchLookup = {
   time: string;
 };
 
-export function isApiFootballConfigured(): boolean {
+export function isTxLineConfigured(): boolean {
   return isTxoddsConfigured();
 }
 
 export function isFootballDataConfigured(): boolean {
-  return isApiFootballConfigured();
+  return isTxLineConfigured();
 }
 
 // ---------------------------------------------------------------------------
@@ -430,7 +430,7 @@ function kickoffMsOf(lookup: MatchLookup): number {
   return new Date(`${lookup.date}T${lookup.time}:00Z`).getTime();
 }
 
-export async function fetchApiMatch(
+export async function fetchTxLineMatch(
   lookup: MatchLookup,
   options?: { fresh?: boolean },
 ): Promise<FootballDataMatch | null> {
@@ -469,7 +469,7 @@ export async function fetchApiMatch(
 export async function fetchLiveMatch(
   lookup: MatchLookup,
 ): Promise<LiveMatchData | null> {
-  const match = await fetchApiMatch(lookup);
+  const match = await fetchTxLineMatch(lookup);
   if (!match) return null;
   return mapMatchRow(match);
 }
@@ -597,10 +597,10 @@ export async function fetchMatchWithGoals(
   return fetchMatchWithGoalsForId(resolvedFixture.FixtureId, lookup, resolvedFixture);
 }
 
-export { ApiFootballBudgetError, getApiFootballQuota } from "./txMatchSettlementCache";
+export { TxLineBudgetError, getTxLineQuota } from "./txMatchSettlementCache";
 
-/** Resolve final score once the feed reports the match finished (FT/AET/PEN). */
-export function resolveFinalScoreFromApiMatch(
+/** Resolve final score once the TxLINE feed reports the match finished (FT/AET/PEN). */
+export function resolveFinalScoreFromTxLineMatch(
   match: FootballDataMatch,
   kickoffMs: number,
   nowMs: number,

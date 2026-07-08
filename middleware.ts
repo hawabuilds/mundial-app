@@ -131,6 +131,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  if (pathname === "/proof-preview" || pathname.startsWith("/proof-preview/")) {
+    const url = request.nextUrl.clone();
+    const sub =
+      pathname === "/proof-preview" ? "" : pathname.slice("/proof-preview".length);
+    url.pathname = `/mundial/proof-preview${sub}`;
+    return NextResponse.rewrite(url);
+  }
+
   const url = request.nextUrl.clone();
   url.pathname = "/";
   return NextResponse.redirect(url, 308);
