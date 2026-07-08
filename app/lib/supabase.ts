@@ -1495,3 +1495,42 @@ export async function getUserScoringExtras(userId: string): Promise<{
     },
   };
 }
+
+export type SolanaClaimRow = {
+  epoch_id: number;
+  user_id: string;
+  user_handle: string;
+  recipient_token_account: string;
+  amount_base_units: number;
+  tx_signature: string;
+  confirmed_at: string;
+};
+
+/** Idempotent insert — duplicate tx_signature is ignored. */
+export async function recordSolanaClaim(
+  row: SolanaClaimRow,
+): Promise<{ inserted: boolean }> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("solana_claims").insert({
+    epoch_id: row.epoch_id,
+    user_id: row.user_id,
+    user_handle: row.user_handle,
+    recipient_token_account: row.recipient_token_account,
+    amount_base_units: row.amount_base_units,
+    tx_signature: row.tx_signature,
+    confirmed_at: row.confirmed_at,
+  });
+
+  if (!error) return { inserted: true };
+  if (error.code === "23505") return { inserted: false };
+  throw new Error(error.message);
+}
+
+export async function countSolanaClaims(): Promise<number> {
+  const supabase = getSupabaseAdminClient();
+  const { count, error } = await supabase
+    .from("solana_claims")
+    .select("*", { count: "exact", head: true });
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}

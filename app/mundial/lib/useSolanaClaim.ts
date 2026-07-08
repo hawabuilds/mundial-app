@@ -47,6 +47,14 @@ export function useSolanaClaim(usdcMint: string | null) {
           signTransaction,
         });
 
+        await fetch("/api/solana/record-claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ epochId, txSignature: signature }),
+        }).catch(() => {
+          // Claim succeeded on-chain even if audit log fails.
+        });
+
         setLastSignature(signature);
         return signature;
       } catch (error) {

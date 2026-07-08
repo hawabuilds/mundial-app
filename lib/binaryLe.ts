@@ -17,3 +17,12 @@ export function u64LeBytes(value: bigint): Uint8Array {
   writeU64Le(out, 0, value);
   return out;
 }
+
+export function readU64Le(source: Uint8Array, offset: number): bigint {
+  const view = new DataView(
+    source.buffer,
+    source.byteOffset,
+    source.byteLength,
+  );
+  return view.getBigUint64(offset, true);
+}

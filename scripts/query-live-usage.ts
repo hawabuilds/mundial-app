@@ -38,16 +38,30 @@ async function main() {
     .from("payout_epochs")
     .select("*", { count: "exact", head: true });
 
+  let claimsCount: number | null = null;
+  let claimsError: string | null = null;
+  const claimsRes = await supabase
+    .from("solana_claims")
+    .select("*", { count: "exact", head: true });
+  if (claimsRes.error) {
+    claimsError = claimsRes.error.message;
+  } else {
+    claimsCount = claimsRes.count ?? 0;
+  }
+
   console.log(
     JSON.stringify(
       {
         queriedAt: new Date().toISOString(),
+        supabaseHost: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname,
         predictions,
         distinctPlayersWithPoints: distinctWithPoints,
         matchesSettledViaTxline: scoredMatches,
         proofsInMatchProofs: proofs,
         proofsWithVerifiedBadge: verifiedProofs ?? 0,
         payoutEpochs: epochCount ?? 0,
+        solanaClaims: claimsCount,
+        solanaClaimsError: claimsError,
       },
       null,
       2,
