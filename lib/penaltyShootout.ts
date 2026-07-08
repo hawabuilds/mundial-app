@@ -62,12 +62,12 @@ function lineupNameById(events: TxScoreEvent[]): Map<number, string> {
   return map;
 }
 
-type PlayerStatRow = Record<string, number>;
+type ParticipantPlayerStats = Record<string, Record<string, number>>;
 
 function participantPlayerStats(
   event: TxScoreEvent,
   participant: 1 | 2,
-): PlayerStatRow | undefined {
+): ParticipantPlayerStats | undefined {
   const key = participant === 2 ? "Participant2" : "Participant1";
   return event.PlayerStats?.[key];
 }
@@ -100,8 +100,8 @@ function playerFromData(
 
 /** Miss/save takers sometimes only appear in PlayerStats (attempts up, goals flat). */
 function playerFromPenaltyStatsDelta(
-  baseline: PlayerStatRow | undefined,
-  current: PlayerStatRow | undefined,
+  baseline: ParticipantPlayerStats | undefined,
+  current: ParticipantPlayerStats | undefined,
   knownScorerIds: ReadonlySet<number>,
   nameById: Map<number, string>,
 ): { player: string | null; playerShort: string | null } {
@@ -179,7 +179,7 @@ function collectShootoutKicks(
   const sorted = [...events].sort((a, b) => (a.Seq ?? 0) - (b.Seq ?? 0));
   const nameById = lineupNameById(sorted);
   const kicks: RawShootoutKick[] = [];
-  const penStatsBaseline: Partial<Record<1 | 2, PlayerStatRow>> = {};
+  const penStatsBaseline: Partial<Record<1 | 2, ParticipantPlayerStats>> = {};
   const knownScorerIds: Record<1 | 2, Set<number>> = {
     1: new Set(),
     2: new Set(),
