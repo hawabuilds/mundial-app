@@ -223,6 +223,7 @@ export async function getTxScheduleBoard(
   }
 
   const pinnedIds = pinnedFixtureIds(nowMs);
+  const hydrateJobs: Promise<void>[] = [];
   for (const fixtureId of pinnedTxFixtureIdsInBoardWindow(nowMs)
     .sort((a, b) => {
       const ka = registryKickoffByTxId.get(a) ?? 0;
@@ -234,12 +235,17 @@ export async function getTxScheduleBoard(
       return ka - kb;
     })
     .slice(0, PINNED_HYDRATE_MAX)) {
-    const pinned = await hydratePinnedRowFromScores(fixtureId);
-    if (!pinned) continue;
-    const existingIdx = rows.findIndex((row) => row.fx.FixtureId === fixtureId);
-    if (existingIdx >= 0) rows[existingIdx] = pinned;
-    else rows.push(pinned);
+    hydrateJobs.push(
+      (async () => {
+        const pinned = await hydratePinnedRowFromScores(fixtureId);
+        if (!pinned) return;
+        const existingIdx = rows.findIndex((row) => row.fx.FixtureId === fixtureId);
+        if (existingIdx >= 0) rows[existingIdx] = pinned;
+        else rows.push(pinned);
+      })(),
+    );
   }
+  await Promise.all(hydrateJobs);
 
   rows.sort((a, b) => a.kickoffMs - b.kickoffMs);
 
