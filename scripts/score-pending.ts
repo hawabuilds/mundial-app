@@ -10,14 +10,14 @@ import {
 } from "../lib/txMatchSettlement";
 import {
   autoScoreFinishedMatches,
-  getFixturesPendingAutoScore,
+  getFixturesPendingAutoScoreFromSlate,
 } from "../lib/scoreFinishedMatches";
 
 async function main() {
   const now = new Date();
   console.log("now", now.toISOString());
 
-  const pending = await getFixturesPendingAutoScore();
+  const pending = await getFixturesPendingAutoScoreFromSlate();
   console.log(
     "pending auto-score:",
     pending.map((f) => `${f.id} ${f.home} vs ${f.away}`),

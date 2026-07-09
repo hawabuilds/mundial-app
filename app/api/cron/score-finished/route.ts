@@ -1,7 +1,7 @@
 import { isCronAuthorized } from "@/lib/cronAuth";
 import {
   autoScoreFinishedMatches,
-  getFixturesPendingAutoScore,
+  getFixturesPendingAutoScoreFromSlate,
 } from "@/lib/scoreFinishedMatches";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const pendingScore = await getFixturesPendingAutoScore();
+    const pendingScore = await getFixturesPendingAutoScoreFromSlate();
     const results = await autoScoreFinishedMatches(pendingScore);
 
     return NextResponse.json({

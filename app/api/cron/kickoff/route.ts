@@ -2,7 +2,7 @@ import { isCronAuthorized } from "@/lib/cronAuth";
 import { runDuePredictionCollection } from "@/lib/runDueCollection";
 import {
   autoScoreFinishedMatches,
-  getFixturesPendingAutoScore,
+  getFixturesPendingAutoScoreFromSlate,
 } from "@/lib/scoreFinishedMatches";
 import { syncLiveMatchGoals } from "@/lib/syncLiveMatchGoals";
 import {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const registryMissing = registryGap(registry);
 
     // Score before X collection so a slow collect cannot block leaderboard updates.
-    const pendingScore = await getFixturesPendingAutoScore();
+    const pendingScore = await getFixturesPendingAutoScoreFromSlate();
     const scoreResults = await autoScoreFinishedMatches(pendingScore);
     const liveGoals = await syncLiveMatchGoals();
     const collection = await runDuePredictionCollection();

@@ -14,6 +14,7 @@ import {
 } from "@/app/lib/supabase";
 
 import { ensureMatchOddsForFixture } from "@/lib/ensureMatchOdds";
+import { getCollectionFixtureSlate } from "@/lib/syncNewFixturesFromTxline";
 import {
   fetchAndPersistMatchProof,
   retryMissingMatchProofs,
@@ -200,6 +201,15 @@ export async function getFixturesPendingAutoScore(
 
   return pending;
 
+}
+
+
+
+/** Static registry + TxLINE auto fixtures with tweets — same slate as collection. */
+export async function getFixturesPendingAutoScoreFromSlate(
+  now: Date = new Date(),
+): Promise<Fixture[]> {
+  return getFixturesPendingAutoScore(await getCollectionFixtureSlate(), now);
 }
 
 
