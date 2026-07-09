@@ -414,7 +414,7 @@ export async function autoScoreFinishedMatches(
 
       await ensureMatchOddsForFixture(fixture).catch(() => null);
 
-      await scoreMatchPredictions(fixture.id, finalScore);
+      await scoreMatchPredictions(fixture.id, finalScore, fixture);
 
       await ensureMatchGoalsBackfilled(fixture.id, fixture);
 
