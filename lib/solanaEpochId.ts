@@ -1,13 +1,13 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { epochIdForDate } from "@/lib/epochId";
+import { epochIdForDate, getFirstSnapshotEpochId } from "@/lib/epochId";
 import { readSolanaConfig } from "@/lib/solanaOpenEpoch";
 
-/** Devnet uses timestamp epochs; production would use YYYYMMDD. */
+/** Calendar YYYYMMDD when FIRST_SNAPSHOT_EPOCH_ID is set; else sequential devnet ids. */
 export function useSequentialSolanaEpochIds(): boolean {
   const mode = process.env.SOLANA_EPOCH_ID_MODE?.trim().toLowerCase();
   if (mode === "calendar") return false;
   if (mode === "sequential") return true;
-  return true;
+  return getFirstSnapshotEpochId() === null;
 }
 
 export async function resolveSolanaOpenEpochId(params: {

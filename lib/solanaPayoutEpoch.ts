@@ -14,6 +14,7 @@ import {
   type OpenSolanaEpochResult,
 } from "@/lib/solanaOpenEpoch";
 import { formatUsdcFromBaseUnits, parseUsdcToBaseUnits } from "@/lib/formatUsdc";
+import { ensureVaultUsdcForEpoch } from "@/lib/solanaVaultFunding";
 import { Connection, PublicKey } from "@solana/web3.js";
 
 export type SolanaEpochPotMeta = {
@@ -132,13 +133,34 @@ export async function ensureSolanaPayoutEpochForSnapshot(
     };
   }
 
-  const available = await getAvailableSolanaEpochPot(connection, config.programId);
+  let available = await getAvailableSolanaEpochPot(connection, config.programId);
   if (!available) {
     return {
       epoch: null,
       created: false,
       reason: "Solana config or vault token account not found",
     };
+  }
+
+  const targetPot = readSolanaDailyPotUsdcBaseUnits();
+  if (targetPot && targetPot > available.availablePot) {
+    const funded = await ensureVaultUsdcForEpoch({
+      connection,
+      programId: config.programId,
+      usdcMint: config.usdcMint,
+      requiredPot: targetPot,
+      availablePot: available.availablePot,
+    });
+    if (!funded.ok) {
+      return { epoch: null, created: false, reason: funded.reason };
+    }
+    if (funded.minted > 0n) {
+      const refreshed = await getAvailableSolanaEpochPot(
+        connection,
+        config.programId,
+      );
+      if (refreshed) available = refreshed;
+    }
   }
 
   const potSyncBase: SolanaEpochPotMeta = {

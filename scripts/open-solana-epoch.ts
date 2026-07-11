@@ -10,6 +10,7 @@ import {
   readSolanaDailyPotUsdcBaseUnits,
   resolveSolanaEpochPotAmount,
 } from "../lib/solanaPayoutEpoch";
+import { ensureVaultUsdcForEpoch } from "../lib/solanaVaultFunding";
 import {
   resolveSolanaOpenEpochId,
   useSequentialSolanaEpochIds,
@@ -93,10 +94,33 @@ async function main() {
     }
   }
 
-  const available = await getAvailableSolanaEpochPot(
+  let available = await getAvailableSolanaEpochPot(
     connection,
     payoutConfig.programId,
   );
+  if (available && pot > available.availablePot) {
+    const funded = await ensureVaultUsdcForEpoch({
+      connection,
+      programId: payoutConfig.programId,
+      usdcMint: payoutConfig.usdcMint,
+      requiredPot: pot,
+      availablePot: available.availablePot,
+    });
+    if (!funded.ok) {
+      console.error(funded.reason);
+      process.exit(1);
+    }
+    if (funded.minted > 0n) {
+      console.log(
+        `Auto-minted ${formatUsdcFromBaseUnits(funded.minted)} USDC into vault (${funded.signature})`,
+      );
+      const refreshed = await getAvailableSolanaEpochPot(
+        connection,
+        payoutConfig.programId,
+      );
+      if (refreshed) available = refreshed;
+    }
+  }
   if (available) {
     const check = resolveSolanaEpochPotAmount(available.availablePot);
     if (!check.ok || pot > available.availablePot) {
