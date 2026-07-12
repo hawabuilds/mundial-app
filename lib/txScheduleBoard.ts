@@ -15,14 +15,17 @@ import {
   type LiveMatchData,
   type MatchGoal,
 } from "./txMatchSettlement";
-import { boardMatchHasStarted } from "@/lib/boardMatchPhase";
+import {
+  boardMatchHasStarted,
+  nextStartedKickoffAfterMs,
+} from "@/lib/boardMatchPhase";
 import {
   BOARD_MATCH_MAX_MIN,
+  MATCH_ASSUMED_DURATION_MIN,
   type BoardFixture,
   type FixturePhase,
 } from "./enrichFixtures";
 import {
-  persistTxlineGoals,
   resolveMatchGoalsForDisplay,
 } from "@/lib/matchGoalsPersist";
 import { boardVenueLine } from "@/app/mundial/lib/venues";
@@ -124,8 +127,6 @@ type BoardRow = {
 };
 
 /** Score lookups for every visible match in the kickoff window (live detection). */
-const BOARD_SCORE_FETCH_MAX = 12;
-const PINNED_HYDRATE_MAX = 12;
 
 const registryKickoffByTxId = new Map(
   WORLD_CUP_2026_FIXTURES.filter((f) => f.externalFixtureId != null).map((f) => [
@@ -141,10 +142,17 @@ function rowHasStarted(
   return boardMatchHasStarted(row.fx.GameState, live);
 }
 
-function lookupPriority(a: BoardRow, b: BoardRow, nowMs: number): number {
-  const pinned = pinnedFixtureIds(nowMs);
-  const aPin = pinned.has(a.fx.FixtureId) ? 1 : 0;
-  const bPin = pinned.has(b.fx.FixtureId) ? 1 : 0;
+/** Score lookups for delayed-kickoff detection (pre-whistle). */
+const BOARD_SCORE_FETCH_MAX = 12;
+
+function lookupPriority(
+  a: BoardRow,
+  b: BoardRow,
+  nowMs: number,
+  pinnedIds: ReadonlySet<number>,
+): number {
+  const aPin = pinnedIds.has(a.fx.FixtureId) ? 1 : 0;
+  const bPin = pinnedIds.has(b.fx.FixtureId) ? 1 : 0;
   if (bPin !== aPin) return bPin - aPin;
   const aPlay = isGameStateInPlay(a.fx.GameState) ? 1 : 0;
   const bPlay = isGameStateInPlay(b.fx.GameState) ? 1 : 0;
@@ -152,8 +160,12 @@ function lookupPriority(a: BoardRow, b: BoardRow, nowMs: number): number {
   return b.kickoffMs - a.kickoffMs;
 }
 
-function shouldFetchBoardLive(row: BoardRow, nowMs: number): boolean {
-  if (pinnedFixtureIds(nowMs).has(row.fx.FixtureId) && row.kickoffMs <= nowMs) {
+function shouldFetchBoardLive(
+  row: BoardRow,
+  nowMs: number,
+  pinnedIds: ReadonlySet<number>,
+): boolean {
+  if (pinnedIds.has(row.fx.FixtureId) && row.kickoffMs <= nowMs) {
     return true;
   }
   if (isGameStateInPlay(row.fx.GameState)) return true;
@@ -168,6 +180,45 @@ function shouldFetchBoardLive(row: BoardRow, nowMs: number): boolean {
     return false;
   }
   return nowMs - row.kickoffMs < BOARD_MATCH_MAX_MIN * 60_000;
+}
+
+/** Tournament pins and any started match always get a scores feed lookup. */
+function mustAlwaysFetchBoardScores(
+  row: BoardRow,
+  nowMs: number,
+  pinnedIds: ReadonlySet<number>,
+): boolean {
+  if (pinnedIds.has(row.fx.FixtureId) && row.kickoffMs <= nowMs) {
+    return true;
+  }
+  if (isGameStateInPlay(row.fx.GameState) || isGameStateFinished(row.fx.GameState)) {
+    return true;
+  }
+  return row.kickoffMs <= nowMs && shouldFetchBoardLive(row, nowMs, pinnedIds);
+}
+
+async function fetchBoardLiveRow(
+  row: BoardRow,
+  liveData: Map<number, { live: LiveMatchData | null; goals: MatchGoal[] }>,
+): Promise<void> {
+  try {
+    const { match, goals: matchGoals } = await fetchMatchWithGoals(
+      {
+        id: row.fx.FixtureId,
+        home: row.fixture.home,
+        away: row.fixture.away,
+        date: row.fixture.date,
+        time: row.fixture.time,
+      },
+      row.fx,
+    );
+    liveData.set(row.fx.FixtureId, {
+      live: match ? mapMatchRow(match) : null,
+      goals: matchGoals,
+    });
+  } catch {
+    liveData.set(row.fx.FixtureId, { live: null, goals: [] });
+  }
 }
 
 function isBoardMatchFinished(
@@ -192,7 +243,7 @@ function isBoardMatchFinished(
     return true;
   }
   if (isGameStateInPlay(row.fx.GameState)) return false;
-  return nowMs - row.kickoffMs >= BOARD_MATCH_MAX_MIN * 60_000;
+  return nowMs - row.kickoffMs >= MATCH_ASSUMED_DURATION_MIN * 60_000;
 }
 
 function resolveLive(
@@ -222,19 +273,21 @@ export async function getTxScheduleBoard(
     rows.push({ fx, fixture, kickoffMs: kickoffUtcMs, kickoffUtcMs });
   }
 
-  const pinnedIds = pinnedFixtureIds(nowMs);
+  const pinnedIds = pinnedFixtureIds(nowMs, sorted);
+  const kickoffByTxId = new Map(
+    rows.map((row) => [row.fx.FixtureId, row.kickoffMs] as const),
+  );
   const hydrateJobs: Promise<void>[] = [];
-  for (const fixtureId of pinnedTxFixtureIdsInBoardWindow(nowMs)
+  for (const fixtureId of pinnedTxFixtureIdsInBoardWindow(nowMs, sorted)
     .sort((a, b) => {
-      const ka = registryKickoffByTxId.get(a) ?? 0;
-      const kb = registryKickoffByTxId.get(b) ?? 0;
+      const ka = kickoffByTxId.get(a) ?? registryKickoffByTxId.get(a) ?? 0;
+      const kb = kickoffByTxId.get(b) ?? registryKickoffByTxId.get(b) ?? 0;
       const aPast = ka <= nowMs ? 0 : 1;
       const bPast = kb <= nowMs ? 0 : 1;
       if (aPast !== bPast) return aPast - bPast;
       if (aPast === 0) return kb - ka;
       return ka - kb;
-    })
-    .slice(0, PINNED_HYDRATE_MAX)) {
+    })) {
     hydrateJobs.push(
       (async () => {
         const pinned = await hydratePinnedRowFromScores(fixtureId);
@@ -251,60 +304,43 @@ export async function getTxScheduleBoard(
 
   const visibleRows = filterBoardRows(rows, nowMs, pinnedIds);
 
-  const kickoffs = visibleRows.map((row) => row.kickoffMs).sort((a, b) => a - b);
-  const nextKickoffAfter = (finishedKickoffMs: number): number => {
-    for (const row of visibleRows) {
-      if (row.kickoffMs <= finishedKickoffMs) continue;
-      const gs = row.fx.GameState;
-      if (
-        isGameStateInPlay(gs) ||
-        isGameStateFinished(gs) ||
-        row.kickoffMs > nowMs
-      ) {
-        return row.kickoffMs;
-      }
-    }
-    return Number.POSITIVE_INFINITY;
-  };
-
   // Fetch live scores for in-progress matches first (in-play GameState wins budget).
   const liveData = new Map<
     number,
     { live: LiveMatchData | null; goals: MatchGoal[] }
   >();
-  let liveLookups = 0;
-  // Prefer kickoff-passed rows so scores feed can flip them to live promptly.
-  const lookupCandidates = visibleRows
-    .filter((row) => shouldFetchBoardLive(row, nowMs))
+
+  const mustFetchRows = visibleRows
+    .filter((row) => mustAlwaysFetchBoardScores(row, nowMs, pinnedIds))
     .sort((a, b) => {
       const aPast = a.kickoffMs <= nowMs ? 1 : 0;
       const bPast = b.kickoffMs <= nowMs ? 1 : 0;
       if (bPast !== aPast) return bPast - aPast;
-      return lookupPriority(a, b, nowMs);
+      return lookupPriority(a, b, nowMs, pinnedIds);
     });
 
-  for (const row of lookupCandidates) {
-    if (liveLookups >= BOARD_SCORE_FETCH_MAX) break;
-    liveLookups += 1;
-    try {
-      const { match, goals: matchGoals } = await fetchMatchWithGoals(
-        {
-          id: row.fx.FixtureId,
-          home: row.fixture.home,
-          away: row.fixture.away,
-          date: row.fixture.date,
-          time: row.fixture.time,
-        },
-        row.fx,
-      );
-      liveData.set(row.fx.FixtureId, {
-        live: match ? mapMatchRow(match) : null,
-        goals: matchGoals,
-      });
-    } catch {
-      liveData.set(row.fx.FixtureId, { live: null, goals: [] });
-    }
+  await Promise.all(mustFetchRows.map((row) => fetchBoardLiveRow(row, liveData)));
+
+  let optionalLookups = 0;
+  const optionalFetchRows = visibleRows
+    .filter(
+      (row) =>
+        !liveData.has(row.fx.FixtureId) &&
+        shouldFetchBoardLive(row, nowMs, pinnedIds),
+    )
+    .sort((a, b) => lookupPriority(a, b, nowMs, pinnedIds));
+
+  for (const row of optionalFetchRows) {
+    if (optionalLookups >= BOARD_SCORE_FETCH_MAX) break;
+    optionalLookups += 1;
+    await fetchBoardLiveRow(row, liveData);
   }
+
+  const nextKickoffAfter = (finishedKickoffMs: number): number =>
+    nextStartedKickoffAfterMs(finishedKickoffMs, visibleRows, (row) => ({
+      gameState: row.fx.GameState,
+      live: resolveLive(row, liveData.get(row.fx.FixtureId)),
+    }));
 
   const board: ScheduleBoardFixture[] = [];
   const oddsByFixtureId = new Map<number, Match1x2Odds | null>();

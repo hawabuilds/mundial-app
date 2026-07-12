@@ -1,55 +1,42 @@
 import assert from "node:assert/strict";
-import {
-  boardMatchHasStarted,
-  boardMatchIsLive,
-} from "./boardMatchPhase";
+import { nextStartedKickoffAfterMs } from "./boardMatchPhase";
 
-console.log("boardMatchPhase tests\n");
+const englandKickoff = Date.parse("2026-07-11T21:00:00.000Z");
+const argentinaKickoff = Date.parse("2026-07-12T01:00:00.000Z");
+const nowBeforeArgentina = Date.parse("2026-07-12T00:45:00.000Z");
 
-assert.equal(boardMatchHasStarted(2, null), true, "GameState 1H counts as started");
-assert.equal(boardMatchHasStarted(1, null), false, "GameState NS alone is not started");
 assert.equal(
-  boardMatchHasStarted(1, {
-    externalFixtureId: 1,
-    status: "LIVE",
-    homeScore: 0,
-    awayScore: 0,
-    elapsed: 12,
-  }),
-  true,
-  "scores feed LIVE counts as started even when snapshot GameState lags",
-);
-assert.equal(
-  boardMatchHasStarted(1, {
-    externalFixtureId: 1,
-    status: "NS",
-    homeScore: null,
-    awayScore: null,
-    elapsed: null,
-  }),
-  false,
-  "NS feed with NS GameState stays upcoming",
+  nextStartedKickoffAfterMs(
+    englandKickoff,
+    [
+      { kickoffMs: englandKickoff },
+      { kickoffMs: argentinaKickoff },
+    ],
+    (row) =>
+      row.kickoffMs === argentinaKickoff
+        ? { gameState: 1, live: null }
+        : { gameState: 5, live: { status: "FT" } as never },
+  ),
+  Number.POSITIVE_INFINITY,
+  "scheduled next kickoff does not drop FT card before it starts",
 );
 
 assert.equal(
-  boardMatchIsLive(1, {
-    externalFixtureId: 1,
-    status: "LIVE",
-    homeScore: 1,
-    awayScore: 0,
-    elapsed: 34,
-  }),
-  true,
-);
-assert.equal(
-  boardMatchIsLive(5, {
-    externalFixtureId: 1,
-    status: "FT",
-    homeScore: 2,
-    awayScore: 1,
-    elapsed: null,
-  }),
-  false,
+  nextStartedKickoffAfterMs(
+    englandKickoff,
+    [
+      { kickoffMs: englandKickoff },
+      { kickoffMs: argentinaKickoff },
+    ],
+    (row) =>
+      row.kickoffMs === argentinaKickoff
+        ? { gameState: 2, live: { status: "LIVE" } as never }
+        : { gameState: 5, live: { status: "FT" } as never },
+  ),
+  argentinaKickoff,
+  "FT card ends once the next match has kicked off",
 );
 
-console.log("boardMatchPhase tests: ok");
+void nowBeforeArgentina;
+
+console.log("boardMatchPhase.test.ts: ok");

@@ -1,10 +1,9 @@
 import type { Fixture } from "@/app/data/fixtures";
 import { findFixtureByTeamsAndKickoff, fixtureDateTime } from "@/app/data/fixtures";
 import { WORLD_CUP_2026_FIXTURES } from "@/app/data/worldCup2026Fixtures";
-import {
-  BOARD_RECENT_MAX_AGE_HOURS,
-  BOARD_UPCOMING_LOOKAHEAD_HOURS,
-} from "./boardDisplayPolicy";
+import { isPinnedBoardKickoffWindow } from "./boardDisplayPolicy";
+import { normalizeStartTimeMs } from "@/lib/formatKickoff";
+import { isFriendlyCompetition } from "@/lib/matchStage";
 import {
   fetchScoresSnapshot,
   latestScoreEvent,
@@ -67,24 +66,53 @@ function pinnedToBoardRow(input: {
 
 export type PinnedBoardRow = ReturnType<typeof pinnedToBoardRow>;
 
-/** Every registry match in the board window — hydrated when missing from snapshot. */
-export function pinnedTxFixtureIdsInBoardWindow(nowMs: number): number[] {
-  const recentMs = BOARD_RECENT_MAX_AGE_HOURS * 3_600_000;
-  const lookaheadMs = BOARD_UPCOMING_LOOKAHEAD_HOURS * 3_600_000;
-
+function registryPinnedTxFixtureIds(nowMs: number): number[] {
   return WORLD_CUP_2026_FIXTURES.filter((fixture) => fixture.externalFixtureId != null)
     .filter((fixture) => {
       const kickoffMs = fixtureDateTime(fixture).getTime();
-      if (kickoffMs > nowMs) {
-        return kickoffMs - nowMs <= lookaheadMs;
-      }
-      return nowMs - kickoffMs <= recentMs;
+      return isPinnedBoardKickoffWindow(kickoffMs, nowMs);
     })
     .map((fixture) => fixture.externalFixtureId!);
 }
 
-export function pinnedFixtureIds(nowMs = Date.now()): Set<number> {
-  return new Set(pinnedTxFixtureIdsInBoardWindow(nowMs));
+/** Every TxLINE World Cup fixture in the board window (QF+ included). */
+export function pinnedTxFixtureIdsFromSnapshot(
+  txFixtures: readonly TxFixture[],
+  nowMs: number,
+): number[] {
+  const ids: number[] = [];
+  for (const fx of txFixtures) {
+    const competition = fx.Competition ?? "";
+    if (isFriendlyCompetition(competition)) continue;
+    const kickoffMs = normalizeStartTimeMs(fx.StartTime);
+    if (!isPinnedBoardKickoffWindow(kickoffMs, nowMs)) continue;
+    ids.push(fx.FixtureId);
+  }
+  return ids;
+}
+
+/**
+ * All tournament matches in the board window — static registry plus every
+ * World Cup row on the TxLINE schedule (quarter-finals and beyond).
+ */
+export function pinnedTxFixtureIdsInBoardWindow(
+  nowMs: number,
+  txFixtures?: readonly TxFixture[],
+): number[] {
+  const ids = new Set<number>(registryPinnedTxFixtureIds(nowMs));
+  if (txFixtures?.length) {
+    for (const fixtureId of pinnedTxFixtureIdsFromSnapshot(txFixtures, nowMs)) {
+      ids.add(fixtureId);
+    }
+  }
+  return [...ids];
+}
+
+export function pinnedFixtureIds(
+  nowMs = Date.now(),
+  txFixtures?: readonly TxFixture[],
+): Set<number> {
+  return new Set(pinnedTxFixtureIdsInBoardWindow(nowMs, txFixtures));
 }
 
 function hydratePinnedRowFromScoreEvents(

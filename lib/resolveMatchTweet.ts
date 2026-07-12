@@ -22,10 +22,10 @@ export type ResolveMatchPostOptions = {
   discoverMaxPages?: number;
 };
 
-/** Predict modal / match-post API — fast path, may use cached id. */
+/** Predict modal / match-post API — validate cache, search 2 pages like cron. */
 export const UI_MATCH_POST_OPTIONS: ResolveMatchPostOptions = {
-  trustCachedTweet: true,
-  discoverMaxPages: 1,
+  trustCachedTweet: false,
+  discoverMaxPages: 2,
 };
 
 /** Kickoff, sync, collection, scoring — always validate cache or re-discover. */

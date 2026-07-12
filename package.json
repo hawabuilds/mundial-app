@@ -16,6 +16,8 @@
     "test:match-goals-merge": "npx tsx lib/matchGoalsMerge.test.ts",
     "test:penalty-shootout": "npx tsx lib/penaltyShootout.test.ts",
     "test:board-display-policy": "npx tsx lib/boardDisplayPolicy.test.ts",
+    "test:pinned-board-fixtures": "npx tsx lib/pinnedBoardFixtures.test.ts",
+    "test:board-match-phase": "npx tsx lib/boardMatchPhase.test.ts",
     "test:scoring": "npx tsx lib/scoring.test.ts",
     "test:solana-voucher": "npx tsx lib/solanaPayoutVoucher.test.ts",
     "test:tx-match-settlement": "npx tsx lib/txMatchSettlement.test.ts",

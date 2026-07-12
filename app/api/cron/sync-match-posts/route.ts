@@ -1,8 +1,10 @@
 import {
   FIXTURES,
+  fixtureCacheKey,
   fixtureDateTime,
   getActiveFixtures,
 } from "@/app/data/fixtures";
+import { getTxlineFixturesForMatchPostSync } from "@/lib/boardMatchPostSync";
 import { isCronAuthorized } from "@/lib/cronAuth";
 import { CRON_MATCH_POST_OPTIONS, resolveMatchPost } from "@/lib/resolveMatchTweet";
 import {
@@ -22,11 +24,18 @@ export async function GET(request: NextRequest) {
   const registryMissing = registryGap(registry);
 
   const now = new Date();
-  const upcoming = getActiveFixtures(FIXTURES).filter((fixture) => {
+  const staticUpcoming = getActiveFixtures(FIXTURES).filter((fixture) => {
     const kickoff = fixtureDateTime(fixture);
     const hoursUntil = (kickoff.getTime() - now.getTime()) / (60 * 60 * 1000);
     return hoursUntil >= -2 && hoursUntil <= 168;
   });
+
+  const txlineUpcoming = await getTxlineFixturesForMatchPostSync(now);
+  const upcomingByKey = new Map<string, (typeof staticUpcoming)[number]>();
+  for (const fixture of [...staticUpcoming, ...txlineUpcoming]) {
+    upcomingByKey.set(fixtureCacheKey(fixture), fixture);
+  }
+  const upcoming = [...upcomingByKey.values()];
 
   const results = [];
 

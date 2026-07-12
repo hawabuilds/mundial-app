@@ -50,6 +50,8 @@ const TEAM_ALIASES: Record<string, readonly string[]> = {
   Malta: ["Malta", "MLT"],
   Norway: ["Norway", "NOR"],
   Sweden: ["Sweden", "SWE"],
+  Argentina: ["Argentina", "ARG"],
+  Switzerland: ["Switzerland", "SUI", "Suiza", "Swiss"],
   "South Africa": ["RSA", "Bafana Bafana"],
   "Curaçao": ["Curacao", "Curaçao", "Cura??ao"],
   Scotland: ["Scotland", "SCO"],

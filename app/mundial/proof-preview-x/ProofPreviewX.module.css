@@ -1,0 +1,12 @@
+/* Fixed 16:9 canvas — panel uses GoalPreview.module.css at 1:1 scale (same as verified-badge.png). */
+.frame {
+  width: 1600px;
+  height: 900px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.06), transparent 42%),
+    #050505;
+}

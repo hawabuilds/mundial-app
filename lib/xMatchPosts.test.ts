@@ -47,4 +47,27 @@ assert.ok(
   "full Türkiye fixture tweet",
 );
 
+const argSui = {
+  id: 99999,
+  home: "Argentina",
+  away: "Switzerland",
+  date: "2026-07-12",
+  time: "01:00",
+  group: "FIFA World Cup",
+};
+assert.ok(
+  tweetMatchesFixture(
+    "Argentina 🇦🇷 vs Switzerland 🇨🇭\nKick-off: 12 July 01:00 UTC",
+    argSui,
+  ),
+  "Argentina vs Switzerland with flags",
+);
+assert.ok(
+  tweetMatchesFixture(
+    "Argentina vs Suiza — reply with your score before kick-off",
+    argSui,
+  ),
+  "Spanish Suiza alias for Switzerland",
+);
+
 console.log("xMatchPosts.test.ts: ok");

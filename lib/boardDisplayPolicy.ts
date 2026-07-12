@@ -25,7 +25,11 @@ type BoardRowLike = {
   fx: { GameState?: number; FixtureId: number };
 };
 
-function isPinnedBoardKickoffWindow(kickoffMs: number, nowMs: number): boolean {
+/** Board pin window: upcoming within lookahead, or recently finished. */
+export function isPinnedBoardKickoffWindow(
+  kickoffMs: number,
+  nowMs: number,
+): boolean {
   const lookaheadMs = BOARD_UPCOMING_LOOKAHEAD_HOURS * 3_600_000;
   if (kickoffMs > nowMs) {
     return kickoffMs - nowMs <= lookaheadMs;
