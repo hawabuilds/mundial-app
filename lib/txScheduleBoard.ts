@@ -277,11 +277,15 @@ export async function getTxScheduleBoard(
   const kickoffByTxId = new Map(
     rows.map((row) => [row.fx.FixtureId, row.kickoffMs] as const),
   );
+  // Hydrate only fixtures missing from the TxLINE snapshot (registry pins /
+  // delayed coverage). Never overwrite snapshot Participant names — scores
+  // without lineups fall back to "Home"/"Away" and wipe real team names.
   const hydrateJobs: Promise<void>[] = [];
   for (const fixtureId of pinnedTxFixtureIdsInBoardWindow(nowMs, sorted)
+    .filter((fixtureId) => !kickoffByTxId.has(fixtureId))
     .sort((a, b) => {
-      const ka = kickoffByTxId.get(a) ?? registryKickoffByTxId.get(a) ?? 0;
-      const kb = kickoffByTxId.get(b) ?? registryKickoffByTxId.get(b) ?? 0;
+      const ka = registryKickoffByTxId.get(a) ?? 0;
+      const kb = registryKickoffByTxId.get(b) ?? 0;
       const aPast = ka <= nowMs ? 0 : 1;
       const bPast = kb <= nowMs ? 0 : 1;
       if (aPast !== bPast) return aPast - bPast;
@@ -292,9 +296,14 @@ export async function getTxScheduleBoard(
       (async () => {
         const pinned = await hydratePinnedRowFromScores(fixtureId);
         if (!pinned) return;
-        const existingIdx = rows.findIndex((row) => row.fx.FixtureId === fixtureId);
-        if (existingIdx >= 0) rows[existingIdx] = pinned;
-        else rows.push(pinned);
+        if (
+          pinned.fixture.home === "Home" &&
+          pinned.fixture.away === "Away"
+        ) {
+          return;
+        }
+        if (rows.some((row) => row.fx.FixtureId === fixtureId)) return;
+        rows.push(pinned);
       })(),
     );
   }

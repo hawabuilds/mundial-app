@@ -143,8 +143,11 @@ function hydratePinnedRowFromScoreEvents(
     lineupsEv?.Lineups?.map((t) => t.preferredName?.trim()).filter(Boolean) ??
     [];
   const p1Home = withMeta.Participant1IsHome !== false;
-  const p1Name = teamNames[0] ?? "Home";
-  const p2Name = teamNames[1] ?? "Away";
+  const p1Name = teamNames[0]?.trim();
+  const p2Name = teamNames[1]?.trim();
+  // Scores without lineups are not enough to build a board row — callers must
+  // keep the TxLINE fixtures snapshot names instead of inventing Home/Away.
+  if (!p1Name || !p2Name) return null;
 
   return pinnedToBoardRow({
     fixtureId,
