@@ -261,24 +261,33 @@ function goalKey(goal: StoredGoal): string {
 
 function goalQuality(goal: StoredGoal): number {
   let score = 0;
-  if (goal.player) score += 4;
-  if (goal.minute != null) score += 2;
+  if (goal.player && goal.minute != null) score += 12;
+  else if (goal.minute != null) score += 5;
+  else if (goal.player) score += 3;
   if (goal.ownGoal) score += 1;
   if (goal.penalty) score += 1;
   return score;
 }
 
 function pickBetterGoal(a: StoredGoal, b: StoredGoal): StoredGoal {
-  const qa = goalQuality(a);
-  const qb = goalQuality(b);
-  if (qb !== qa) return qb > qa ? b : a;
+  const merged = mergeGoalFields(a, b);
+  if (
+    goalQuality(merged) >= goalQuality(a) &&
+    goalQuality(merged) >= goalQuality(b)
+  ) {
+    return merged;
+  }
+  return goalQuality(a) >= goalQuality(b) ? a : b;
+}
+
+function mergeGoalFields(a: StoredGoal, b: StoredGoal): StoredGoal {
   return {
     side: a.side,
-    minute: b.minute ?? a.minute,
-    ownGoal: b.ownGoal || a.ownGoal,
-    penalty: b.penalty || a.penalty,
-    player: b.player ?? a.player,
-    playerShort: b.playerShort ?? a.playerShort,
+    minute: a.minute ?? b.minute,
+    ownGoal: a.ownGoal || b.ownGoal,
+    penalty: a.penalty || b.penalty,
+    player: a.player ?? b.player,
+    playerShort: a.playerShort ?? b.playerShort,
   };
 }
 
@@ -302,6 +311,134 @@ function collapseBySideMinute(goals: StoredGoal[]): StoredGoal[] {
   );
 }
 
+function flagsMatch(a: StoredGoal, b: StoredGoal): boolean {
+  return a.ownGoal === b.ownGoal && a.penalty === b.penalty;
+}
+
+/**
+ * Join rows where scorer name and clock arrived on different polls/keys
+ * (e.g. `home|?|0` + `home|23|0`). When one named row pairs with several
+ * timed placeholders on the same side, apply the name to each — covers a
+ * single late amend for a multi-goal haul (e.g. Bellingham x2).
+ */
+export function fuseSplitGoalRows(goals: StoredGoal[]): StoredGoal[] {
+  const output: StoredGoal[] = [];
+
+  for (const side of ["home", "away"] as const) {
+    const sideGoals = goals.filter((goal) => goal.side === side);
+    const complete = sideGoals.filter(
+      (goal) => goal.player && goal.minute != null,
+    );
+    let namedUntimed = sideGoals.filter(
+      (goal) => goal.player && goal.minute == null,
+    );
+    let timedUnnamed = sideGoals.filter(
+      (goal) => !goal.player && goal.minute != null,
+    );
+    const empty = sideGoals.filter(
+      (goal) => !goal.player && goal.minute == null,
+    );
+
+    output.push(...complete);
+
+    while (namedUntimed.length > 0 && timedUnnamed.length > 0) {
+      const named = namedUntimed[0]!;
+      const matchIdx = timedUnnamed.findIndex((timed) => flagsMatch(named, timed));
+      const idx = matchIdx >= 0 ? matchIdx : 0;
+      const timed = timedUnnamed[idx]!;
+      output.push(pickBetterGoal(named, timed));
+      timedUnnamed = timedUnnamed.filter((_, i) => i !== idx);
+
+      const remainingSameFlags = timedUnnamed.some((timed) =>
+        flagsMatch(named, timed),
+      );
+      if (namedUntimed.length === 1 && remainingSameFlags) {
+        continue;
+      }
+      namedUntimed = namedUntimed.filter((goal) => goal !== named);
+    }
+
+    if (namedUntimed.length === 1 && timedUnnamed.length > 0) {
+      const named = namedUntimed[0]!;
+      for (const timed of timedUnnamed) {
+        output.push(
+          flagsMatch(named, timed)
+            ? pickBetterGoal(named, timed)
+            : timed,
+        );
+      }
+      namedUntimed = [];
+      timedUnnamed = [];
+    }
+
+    output.push(...namedUntimed, ...timedUnnamed, ...empty);
+  }
+
+  return output.sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999));
+}
+
+function untimedGoalKey(side: StoredGoal["side"], ownGoal: boolean): string {
+  return `${side}|?|${ownGoal ? 1 : 0}`;
+}
+
+/** True when a fused row should be written after a live poll. */
+function shouldPersistMergedGoal(
+  goal: StoredGoal,
+  incomingKeys: Set<string>,
+  incoming: StoredGoal[],
+): boolean {
+  const key = goalKey(goal);
+  if (incomingKeys.has(key)) return true;
+  if (!goal.player || goal.minute == null) return false;
+
+  const untimedKey = untimedGoalKey(goal.side, goal.ownGoal);
+  if (incomingKeys.has(untimedKey)) return true;
+
+  const timedKey = `${goal.side}|${goal.minute}|${goal.ownGoal ? 1 : 0}`;
+  if (!incomingKeys.has(timedKey)) return false;
+  const incomingTimed = incoming.find((row) => goalKey(row) === timedKey);
+  return !incomingTimed?.player;
+}
+
+function absorbedUntimedKeys(
+  canonical: StoredGoal[],
+  rawKeys: string[],
+): string[] {
+  const canonicalKeys = new Set(canonical.map(goalKey));
+  return [
+    ...new Set(
+      rawKeys.filter((key) => key.includes("|?|") && !canonicalKeys.has(key)),
+    ),
+  ];
+}
+
+async function pruneAbsorbedUntimedGoalKeys(
+  fixtureId: number,
+  canonical: StoredGoal[],
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_goals")
+    .select("goal_key")
+    .eq("fixture_id", fixtureId);
+
+  if (error) throw new Error(error.message);
+
+  const toDelete = absorbedUntimedKeys(
+    canonical,
+    (data ?? []).map((row) => String(row.goal_key)),
+  );
+  if (toDelete.length === 0) return;
+
+  const { error: deleteError } = await supabase
+    .from("match_goals")
+    .delete()
+    .eq("fixture_id", fixtureId)
+    .in("goal_key", toDelete);
+
+  if (deleteError) throw new Error(deleteError.message);
+}
+
 /** Merge stored + fresh goals; prefer non-null scorer names and latest data. */
 export function mergeMatchGoals(
   stored: StoredGoal[],
@@ -319,7 +456,7 @@ export function mergeMatchGoals(
     byKey.set(key, pickBetterGoal(prev, goal));
   }
 
-  return collapseBySideMinute([...byKey.values()]);
+  return fuseSplitGoalRows(collapseBySideMinute([...byKey.values()]));
 }
 
 /**
@@ -382,8 +519,13 @@ export async function saveMatchGoals(
   const existing = await getMatchGoals(fixtureId).catch(() => [] as StoredGoal[]);
   const merged = mergeMatchGoals(existing, goals);
   const incomingKeys = new Set(goals.map(goalKey));
-  const toWrite = merged.filter((goal) => incomingKeys.has(goalKey(goal)));
-  if (toWrite.length === 0) return;
+  const toWrite = merged.filter((goal) =>
+    shouldPersistMergedGoal(goal, incomingKeys, goals),
+  );
+  if (toWrite.length === 0) {
+    await pruneAbsorbedUntimedGoalKeys(fixtureId, merged).catch(() => {});
+    return;
+  }
 
   const supabase = getSupabaseAdminClient();
   const rows = toWrite.map((goal) => ({
@@ -408,6 +550,7 @@ export async function saveMatchGoals(
   }
 
   if (error) throw new Error(error.message);
+  await pruneAbsorbedUntimedGoalKeys(fixtureId, merged).catch(() => {});
 }
 
 /**
@@ -448,6 +591,7 @@ export async function upsertMatchGoals(
   }
 
   if (error) throw new Error(error.message);
+  await pruneAbsorbedUntimedGoalKeys(fixtureId, merged).catch(() => {});
   return { before: existing, after: merged };
 }
 

@@ -19,6 +19,7 @@ import {
   resolveSolanaOpenEpochId,
   useSequentialSolanaEpochIds,
 } from "@/lib/solanaEpochId";
+import { notifyDiscordDailyLeaderboard } from "@/lib/discordLeaderboardNotify";
 import { ensureSolanaPayoutEpochForSnapshot } from "@/lib/solanaPayoutEpoch";
 import { readSolanaPayoutConfig } from "@/lib/solanaPayoutConfig";
 import { Connection } from "@solana/web3.js";
@@ -41,6 +42,7 @@ export type SnapshotEpochResult =
       reservedLiabilityWei?: string;
       availablePotWei?: string;
       epochOpenOnChain?: OpenSolanaEpochResult;
+      discordLeaderboard?: { status: string; reason?: string };
     };
 
 async function resolveSnapshotEpochId(now: Date): Promise<bigint | null> {
@@ -175,6 +177,29 @@ export async function snapshotEpochLeaderboard(
 
   await markPayoutEpochFinalized(epochId, potUsdCents);
 
+  let discordLeaderboard:
+    | { status: string; reason?: string }
+    | undefined;
+  try {
+    const discordResult = await notifyDiscordDailyLeaderboard({
+      epochId,
+      standings: topTwenty,
+    });
+    discordLeaderboard = {
+      status: discordResult.status,
+      ...(discordResult.status !== "posted" && "reason" in discordResult
+        ? { reason: discordResult.reason }
+        : {}),
+    };
+  } catch (error) {
+    const reason =
+      error instanceof Error
+        ? error.message
+        : "Discord leaderboard notification failed";
+    console.error("[discord-leaderboard]", reason);
+    discordLeaderboard = { status: "failed", reason };
+  }
+
   const balanceField = potSync?.vaultBalance;
   const reservedField = potSync?.totalReserved;
   const availableField = potSync?.availablePot;
@@ -188,6 +213,7 @@ export async function snapshotEpochLeaderboard(
     bnbUsdAtSnapshot: null,
     finalizedAt: new Date().toISOString(),
     payoutRail: "solana",
+    ...(discordLeaderboard ? { discordLeaderboard } : {}),
     ...(epochAutoCreated ? { epochAutoCreated: true } : {}),
     ...(potSyncedFromContract ? { potSyncedFromContract: true } : {}),
     ...(balanceField

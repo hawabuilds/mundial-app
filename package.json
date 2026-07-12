@@ -13,6 +13,7 @@
     "test:match-proof-dual": "npx tsx lib/matchProofDual.test.ts",
     "test:score-proof-semantics": "npx tsx lib/txScoreProofSemantics.test.ts",
     "test:match-goals-backfill": "npx tsx lib/backfillMatchGoals.test.ts",
+    "test:match-goals-merge": "npx tsx lib/matchGoalsMerge.test.ts",
     "test:penalty-shootout": "npx tsx lib/penaltyShootout.test.ts",
     "test:board-display-policy": "npx tsx lib/boardDisplayPolicy.test.ts",
     "test:scoring": "npx tsx lib/scoring.test.ts",
