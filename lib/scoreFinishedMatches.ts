@@ -134,8 +134,8 @@ export function getFixturesDueForAutoScore(
 
 
 
-/** Regular time + ET/PEN + API lag — not days of polling. */
-const AUTO_SCORE_MAX_HOURS_AFTER_KICKOFF = 4;
+/** Regular time + ET/PEN + API lag — keep polling finished matches. */
+const AUTO_SCORE_MAX_HOURS_AFTER_KICKOFF = 72;
 
 
 
@@ -170,31 +170,30 @@ export async function getFixturesPendingAutoScore(
 
     const kickoffMs = fixtureDateTime(fixture).getTime();
     const elapsedMs = nowMs - kickoffMs;
-    if (elapsedMs < 0 || elapsedMs > maxAgeMs) continue;
+    if (elapsedMs < 0) continue;
     if (!isPastScoringWindow(fixture, now)) continue;
 
     if (await isMatchScored(fixture.id)) continue;
 
-
-
     const manualResult = fixtureFinalScore(fixture);
-
     const apiAutoSettle = fixtureAutoSettlesFromApi(fixture);
     const collected = await isEffectivelyCollected(fixture.id);
     if (!collected && !manualResult && !apiAutoSettle) {
       continue;
     }
 
+    // Collected-but-unscored matches keep retrying past the normal age cap so a
+    // missed settlement (e.g. fixture dropped from TxLINE schedule snapshot)
+    // cannot permanently skip scoring.
+    if (elapsedMs > maxAgeMs && !collected) continue;
+
     if (manualResult) {
       pending.push(fixture);
       continue;
     }
 
-    // Poll API-Football every cron tick (5 min) from 90 min after kickoff until
-    // the match is scored — bounded only by AUTO_SCORE_MAX_HOURS_AFTER_KICKOFF.
-    // No fixed poll windows, so a finished match can never get stuck unscored.
+    // Poll TxLINE every cron tick from 90 min after kickoff until scored.
     pending.push(fixture);
-
   }
 
 

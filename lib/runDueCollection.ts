@@ -13,16 +13,23 @@ import {
   shouldMarkMatchCollected,
 } from "@/lib/collectionComplete";
 import {
+  filterBacklogFixturesForCollection,
   filterFixturesForCollection,
   getFixturesDueForCollection,
+  isWithinCollectionBacklogWindow,
 } from "@/lib/kickoff";
 import {
   buildTxStartTimeByFixtureId,
   resolveTxStartTimeForFixture,
 } from "@/lib/effectiveKickoff";
 import { fetchFixturesSnapshot, isTxoddsConfigured } from "@/lib/txodds";
-import { CRON_MATCH_POST_OPTIONS, resolveMatchPost } from "@/lib/resolveMatchTweet";
+import {
+  COLLECTION_MATCH_POST_OPTIONS,
+  CRON_MATCH_POST_OPTIONS,
+  resolveMatchPost,
+} from "@/lib/resolveMatchTweet";
 import { getCollectionFixtureSlate } from "@/lib/syncNewFixturesFromTxline";
+import { getStoredMatchTweetId } from "@/app/lib/supabase";
 
 export type CollectionPassResult = Record<string, unknown>;
 
@@ -33,16 +40,39 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
   const resolveEffectiveKickoffMs = (fixture: Fixture) =>
     resolveTxStartTimeForFixture(fixture, startByTxId, txFixtures);
 
-  const dueFixtures = await filterFixturesForCollection(
-    getFixturesDueForCollection(new Date(), await getCollectionFixtureSlate()),
+  const now = new Date();
+  const slate = await getCollectionFixtureSlate();
+  const backlogSlate = slate.filter((fixture) =>
+    isWithinCollectionBacklogWindow(fixture, now, resolveEffectiveKickoffMs(fixture) ?? undefined),
+  );
+
+  const slotDueFixtures = await filterFixturesForCollection(
+    getFixturesDueForCollection(now, slate),
     async (matchId) => {
       const state = await getMatchState(matchId);
       const at = state?.predictions_collected_at;
       return at ? new Date(at) : null;
     },
     isEffectivelyCollected,
-    new Date(),
+    now,
     resolveEffectiveKickoffMs,
+  );
+
+  const backlogDueFixtures = await filterBacklogFixturesForCollection(
+    backlogSlate,
+    async (matchId) => Boolean(await getStoredMatchTweetId(matchId)),
+    isEffectivelyCollected,
+    now,
+    resolveEffectiveKickoffMs,
+  );
+
+  const seenMatchIds = new Set<number>();
+  const dueFixtures = [...slotDueFixtures, ...backlogDueFixtures].filter(
+    (fixture) => {
+      if (seenMatchIds.has(fixture.id)) return false;
+      seenMatchIds.add(fixture.id);
+      return true;
+    },
   );
 
   const results: CollectionPassResult[] = [];
@@ -69,7 +99,9 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
 
       const alreadyScored = await isMatchScored(fixture.id);
 
-      const post = await resolveMatchPost(fixture, CRON_MATCH_POST_OPTIONS);
+      const post =
+        (await resolveMatchPost(fixture, COLLECTION_MATCH_POST_OPTIONS)) ??
+        (await resolveMatchPost(fixture, CRON_MATCH_POST_OPTIONS));
       if (!post) {
         results.push({
           matchId: fixture.id,
@@ -92,7 +124,7 @@ export async function runDuePredictionCollection(): Promise<CollectionPassResult
       if (shouldMarkMatchCollected(result)) {
         await markMatchCollected(fixture.id);
         const rescore = alreadyScored
-          ? await rescoreCollectedMatch(fixture.id)
+          ? await rescoreCollectedMatch(fixture.id, fixture)
           : null;
         results.push({
           matchId: fixture.id,

@@ -133,6 +133,10 @@ async function scoreBackfilledMatch(
   };
 }
 
+function scoreAttemptSucceeded(scoreResult: Record<string, unknown>): boolean {
+  return scoreResult.status === "scored" || scoreResult.status === "rescored";
+}
+
 async function processPendingMatch(
   row: PredictionBackfillRow,
   nowMs: number,
@@ -140,12 +144,22 @@ async function processPendingMatch(
   const label = matchLabel(row);
 
   if (row.status === "done") {
-    return {
-      matchId: row.match_id,
-      label,
-      status: "already_done",
-      message: `match ${row.match_id}: already done`,
-    };
+    // Self-heal: collection marked done before scoring succeeded.
+    if (
+      (await isEffectivelyCollected(row.match_id)) &&
+      !(await isMatchScored(row.match_id))
+    ) {
+      console.log(
+        `match ${row.match_id}: collected but unscored — reopening backfill`,
+      );
+    } else {
+      return {
+        matchId: row.match_id,
+        label,
+        status: "already_done",
+        message: `match ${row.match_id}: already done`,
+      };
+    }
   }
 
   if (row.status === "abandoned") {
@@ -175,6 +189,63 @@ async function processPendingMatch(
       label,
       status: "already_done",
       message: `match ${row.match_id}: already collected+scored, marking done`,
+    };
+  }
+
+  // Collected but never scored (false backfill completion) — score only.
+  if (
+    (await isEffectivelyCollected(row.match_id)) &&
+    !(await isMatchScored(row.match_id))
+  ) {
+    const fixture = await loadFixture(row.match_id);
+    if (!fixture) {
+      const message = `match ${row.match_id}: fixture not found in match_state`;
+      console.log(message);
+      await bumpBackfillAttempt(row.match_id, { lastError: message });
+      return {
+        matchId: row.match_id,
+        label,
+        status: "error",
+        message,
+      };
+    }
+
+    const scoreResult = await scoreBackfilledMatch(fixture);
+    if (!scoreAttemptSucceeded(scoreResult)) {
+      const reason =
+        typeof scoreResult.reason === "string"
+          ? scoreResult.reason
+          : typeof scoreResult.status === "string"
+            ? scoreResult.status
+            : "scoring skipped";
+      const message = `match ${row.match_id}: still pending scoring (${reason}) — will retry in 15min`;
+      console.log(message);
+      await bumpBackfillAttempt(row.match_id, {
+        status: "pending",
+        lastError: reason,
+        lastResult: { score: scoreResult },
+      });
+      return {
+        matchId: row.match_id,
+        label,
+        status: "pending_no_replies",
+        message,
+      };
+    }
+
+    const message = `match ${row.match_id}: X recovered, collected (existing) predictions, scored, leaderboard updated`;
+    console.log(message);
+    await bumpBackfillAttempt(row.match_id, {
+      status: "done",
+      completed: true,
+      lastError: null,
+      lastResult: { score: scoreResult },
+    });
+    return {
+      matchId: row.match_id,
+      label,
+      status: "collected_scored",
+      message,
     };
   }
 
@@ -261,6 +332,33 @@ async function processPendingMatch(
     await markMatchCollected(fixture.id);
     const scoreResult = await scoreBackfilledMatch(fixture);
 
+    if (!scoreAttemptSucceeded(scoreResult)) {
+      const reason =
+        typeof scoreResult.reason === "string"
+          ? scoreResult.reason
+          : typeof scoreResult.status === "string"
+            ? scoreResult.status
+            : "scoring skipped";
+      const message = `match ${row.match_id}: collected ${collected.validPredictionsSaved} predictions, but scoring pending (${reason}) — will retry in 15min`;
+      console.log(message);
+      await bumpBackfillAttempt(row.match_id, {
+        status: "pending",
+        lastError: reason,
+        lastResult: {
+          collected,
+          score: scoreResult,
+        },
+      });
+      return {
+        matchId: row.match_id,
+        label,
+        status: "pending_no_replies",
+        message,
+        repliesFetched: collected.repliesFetched,
+        predictionsSaved: collected.validPredictionsSaved,
+      };
+    }
+
     const message = `match ${row.match_id}: X recovered, collected ${collected.validPredictionsSaved} predictions, scored, leaderboard updated`;
     console.log(message);
     await bumpBackfillAttempt(row.match_id, {
@@ -318,9 +416,24 @@ export async function runPredictionBackfill(
   now: Date = new Date(),
 ): Promise<PredictionBackfillPassResult> {
   const rows = await ensurePredictionBackfillRows();
-  const pending = rows.filter((row) => row.status === "pending");
 
-  if (pending.length === 0) {
+  const workRows: PredictionBackfillRow[] = [];
+  for (const row of rows) {
+    if (row.status === "pending") {
+      workRows.push(row);
+      continue;
+    }
+    // Self-heal false completions: collected predictions but never scored.
+    if (
+      row.status === "done" &&
+      (await isEffectivelyCollected(row.match_id)) &&
+      !(await isMatchScored(row.match_id))
+    ) {
+      workRows.push(row);
+    }
+  }
+
+  if (workRows.length === 0) {
     const message = "backfill complete, disabling";
     console.log(message);
     return {
@@ -337,13 +450,26 @@ export async function runPredictionBackfill(
   }
 
   const matches: BackfillMatchResult[] = [];
-  for (const row of pending) {
+  for (const row of workRows) {
     matches.push(await processPendingMatch(row, now.getTime()));
   }
 
   const refreshed = await ensurePredictionBackfillRows();
-  const stillPending = refreshed.some((row) => row.status === "pending");
-  const complete = !stillPending;
+  const stillPending = [];
+  for (const row of refreshed) {
+    if (row.status === "pending") {
+      stillPending.push(row);
+      continue;
+    }
+    if (
+      row.status === "done" &&
+      (await isEffectivelyCollected(row.match_id)) &&
+      !(await isMatchScored(row.match_id))
+    ) {
+      stillPending.push(row);
+    }
+  }
+  const complete = stillPending.length === 0;
   const message = complete
     ? "backfill complete, disabling"
     : "X still down, will retry in 15min";

@@ -1424,6 +1424,7 @@ export async function isMatchScored(matchId: number): Promise<boolean> {
 /** Award points when predictions were collected after an API auto-score. */
 export async function rescoreCollectedMatch(
   matchId: number,
+  fixtureOverride?: Fixture,
 ): Promise<ScoreMatchResult | null> {
   const state = await getMatchState(matchId);
   if (
@@ -1435,7 +1436,21 @@ export async function rescoreCollectedMatch(
     return null;
   }
 
-  const fixture = getFixtureById(matchId);
+  const fixture =
+    fixtureOverride ??
+    getFixtureById(matchId) ??
+    (state.home_team && state.away_team && state.kickoff_at
+      ? ({
+          id: matchId,
+          home: state.home_team,
+          away: state.away_team,
+          date: new Date(state.kickoff_at).toISOString().slice(0, 10),
+          time: new Date(state.kickoff_at).toISOString().slice(11, 16),
+          group: state.competition ?? "FIFA World Cup",
+          externalFixtureId: state.tx_fixture_id ?? matchId,
+          autoSettleFromApi: true,
+        } satisfies Fixture)
+      : null);
   if (!fixture) return null;
 
   const finalScore: MatchScore = {

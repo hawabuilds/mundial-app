@@ -76,8 +76,10 @@ export type FootballDataMatch = {
 
 /** Enough of a fixture to resolve it against the TxLINE schedule. */
 export type MatchLookup = {
-  /** TxLINE FixtureId — when set, scores are fetched directly (no snapshot lookup). */
+  /** TxLINE FixtureId — when set, scores are fetched directly if snapshot lookup misses. */
   id?: number;
+  /** Same as {@link id}; accepted so Fixture objects can be passed through. */
+  externalFixtureId?: number;
   home: string;
   away: string;
   date: string;
@@ -430,24 +432,56 @@ function kickoffMsOf(lookup: MatchLookup): number {
   return new Date(`${lookup.date}T${lookup.time}:00Z`).getTime();
 }
 
-export async function fetchTxLineMatch(
+function lookupTxFixtureId(lookup: MatchLookup): number | null {
+  const id = lookup.id ?? lookup.externalFixtureId;
+  return id != null && id > 0 ? id : null;
+}
+
+/**
+ * Resolve TxLINE metadata from the live fixtures snapshot, then fall back to
+ * FixtureId + scores feed once finished matches drop off the schedule snapshot.
+ */
+async function resolveTxFixtureForLookup(
   lookup: MatchLookup,
-  options?: { fresh?: boolean },
-): Promise<FootballDataMatch | null> {
-  const txFixture = await resolveTxFixture(
+): Promise<{ txFixture: TxFixture; events?: TxScoreEvent[] } | null> {
+  const fromSnapshot = await resolveTxFixture(
     lookup.home,
     lookup.away,
     kickoffMsOf(lookup),
   );
-  if (!txFixture) return null;
+  if (fromSnapshot) return { txFixture: fromSnapshot };
 
+  const fixtureId = lookupTxFixtureId(lookup);
+  if (fixtureId == null) return null;
+
+  const events = await fetchScoresSnapshot(fixtureId);
+  if (events.length === 0) return null;
+
+  return {
+    txFixture: stubTxFixture(
+      fixtureId,
+      lookup,
+      latestTerminalStatusId(events) ?? latestScoreEvent(events)?.StatusId,
+    ),
+    events,
+  };
+}
+
+export async function fetchTxLineMatch(
+  lookup: MatchLookup,
+  options?: { fresh?: boolean },
+): Promise<FootballDataMatch | null> {
+  const resolved = await resolveTxFixtureForLookup(lookup);
+  if (!resolved) return null;
+
+  const { txFixture } = resolved;
   const id = txFixture.FixtureId;
   if (!options?.fresh) {
     const cached = getCachedFixture(id);
     if (cached !== undefined) return cached;
   }
 
-  const events = await fetchScoresSnapshot(id);
+  const events = resolved.events ?? (await fetchScoresSnapshot(id));
   const eventForMatch = scoresFeedShowsTerminalFinish(events)
     ? latestScoreEvent(events)
     : latestLiveScoreEvent(events);
