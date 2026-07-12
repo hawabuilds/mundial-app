@@ -6,9 +6,25 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+function isSnapshotPaused(): boolean {
+  const raw = process.env.SNAPSHOT_PAUSED?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
 export async function GET(request: NextRequest) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isSnapshotPaused()) {
+    console.log("snapshot paused");
+    return NextResponse.json({
+      checkedAt: new Date().toISOString(),
+      result: {
+        status: "skipped",
+        reason: "snapshot paused",
+      },
+    });
   }
 
   try {
