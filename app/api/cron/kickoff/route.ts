@@ -5,6 +5,7 @@ import {
   getFixturesPendingAutoScoreFromSlate,
 } from "@/lib/scoreFinishedMatches";
 import { syncLiveMatchGoals } from "@/lib/syncLiveMatchGoals";
+import { syncNewFixturesFromTxline } from "@/lib/syncNewFixturesFromTxline";
 import {
   registryGap,
   syncFixtureRegistryToSupabase,
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
     const pendingScore = await getFixturesPendingAutoScoreFromSlate();
     const scoreResults = await autoScoreFinishedMatches(pendingScore);
     const liveGoals = await syncLiveMatchGoals();
+    const txlineRegistry = await syncNewFixturesFromTxline();
     const collection = await runDuePredictionCollection();
 
     return NextResponse.json({
@@ -39,6 +41,11 @@ export async function GET(request: NextRequest) {
         missing: registryMissing,
         skipped: registry.skipped,
         errors: registry.errors,
+      },
+      txlineRegistry: {
+        inserted: txlineRegistry.inserted,
+        updated: txlineRegistry.updated,
+        awaitingTweet: txlineRegistry.awaitingTweet,
       },
       scoring: scoreResults,
       liveGoals,

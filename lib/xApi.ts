@@ -36,6 +36,35 @@ function getBearerToken(): string {
   return token;
 }
 
+const X_API_RETRY_ATTEMPTS = 4;
+const X_API_RETRY_BASE_MS = 2_000;
+
+function isRetryableXStatus(status: number): boolean {
+  return status === 503 || status === 502 || status === 429;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function fetchXApi(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  let lastResponse: Response | null = null;
+  for (let attempt = 0; attempt < X_API_RETRY_ATTEMPTS; attempt += 1) {
+    const response = await fetch(url, init);
+    lastResponse = response;
+    if (response.ok || !isRetryableXStatus(response.status)) {
+      return response;
+    }
+    if (attempt < X_API_RETRY_ATTEMPTS - 1) {
+      await sleep(X_API_RETRY_BASE_MS * (attempt + 1));
+    }
+  }
+  return lastResponse!;
+}
+
 export function getMatchPostAccount(): string {
   const account = process.env.X_MATCH_ACCOUNT?.trim() || "copamundialapp";
   return account.replace(/^@/, "");
@@ -79,7 +108,7 @@ export async function searchRecentPosts(
       url.searchParams.set("next_token", nextToken);
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchXApi(url.toString(), {
       headers: {
         Authorization: `Bearer ${bearerToken}`,
         "User-Agent": "mundial/1.0",
@@ -141,7 +170,7 @@ export async function fetchTweetById(tweetId: string): Promise<XTweetHit | null>
   url.searchParams.set("expansions", "author_id");
   url.searchParams.set("user.fields", "username");
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchXApi(url.toString(), {
     headers: {
       Authorization: `Bearer ${bearerToken}`,
       "User-Agent": "mundial/1.0",

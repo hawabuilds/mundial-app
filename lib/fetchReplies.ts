@@ -32,13 +32,7 @@ type XSearchResponse = {
   detail?: string;
 };
 
-function getBearerToken(): string {
-  const token = process.env.X_BEARER_TOKEN;
-  if (!token) {
-    throw new Error("Missing X_BEARER_TOKEN");
-  }
-  return token;
-}
+import { fetchXApi } from "./xApi";
 
 function buildSearchQuery(tweetId: string): string {
   return `in_reply_to_tweet_id:${tweetId} -is:retweet -is:quote`;
@@ -76,7 +70,10 @@ function mapTweetsToReplies(
  * Stops after MAX_PAGES even if more replies exist.
  */
 export async function fetchReplies(tweetId: string): Promise<FetchedReply[]> {
-  const bearerToken = getBearerToken();
+  const bearerToken = process.env.X_BEARER_TOKEN;
+  if (!bearerToken) {
+    throw new Error("Missing X_BEARER_TOKEN");
+  }
   const replies: FetchedReply[] = [];
   let nextToken: string | undefined;
   let pagesFetched = 0;
@@ -96,7 +93,7 @@ export async function fetchReplies(tweetId: string): Promise<FetchedReply[]> {
       url.searchParams.set("next_token", nextToken);
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchXApi(url.toString(), {
       headers: {
         Authorization: `Bearer ${bearerToken}`,
         "User-Agent": "mundial/1.0",
