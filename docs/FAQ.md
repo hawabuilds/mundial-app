@@ -84,6 +84,6 @@ You can switch wallets before you claim. Prizes already sent stay on the old add
 
 ## Still stuck?
 
-Send your **@X handle**, **match + date**, and a **link to your reply** (or a screenshot for wallet issues) to the team on X or Telegram.
+Send your **@X handle**, **match + date**, and a **link to your reply** (or a screenshot for wallet issues) to the team on X or Discord.
 
 **Disclaimer:** Skill-based prediction game. Not financial advice. [Full disclaimer →](https://copamundial.app/disclaimer)
