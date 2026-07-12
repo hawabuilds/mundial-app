@@ -17,12 +17,12 @@ import {
 import {
   bumpBackfillAttempt,
   ensurePredictionBackfillRows,
+  targetForMatch,
   type PredictionBackfillRow,
 } from "@/lib/predictionBackfillState";
 import {
   PREDICTION_BACKFILL_MAX_AGE_MS,
   PREDICTION_BACKFILL_MAX_ATTEMPTS,
-  targetForMatch,
 } from "@/lib/predictionBackfillTargets";
 import { autoScoreFinishedMatches } from "@/lib/scoreFinishedMatches";
 import { fetchFixturesSnapshot } from "@/lib/txodds";
