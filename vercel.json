@@ -18,6 +18,10 @@
     {
       "path": "/api/cron/sync-fixtures",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/backfill-predictions",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
