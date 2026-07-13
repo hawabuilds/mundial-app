@@ -5,6 +5,7 @@ const RESULTS_PER_PAGE = 100;
 const SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent";
 
 export type FetchedReply = {
+  id: string;
   authorId: string;
   authorUsername: string;
   text: string;
@@ -49,12 +50,13 @@ function mapTweetsToReplies(
   const replies: FetchedReply[] = [];
 
   for (const tweet of tweets) {
-    if (!tweet.author_id || !tweet.created_at) continue;
+    if (!tweet.id || !tweet.author_id || !tweet.created_at) continue;
 
     const user = usersById.get(tweet.author_id);
     if (!user) continue;
 
     replies.push({
+      id: tweet.id,
       authorId: tweet.author_id,
       authorUsername: user.username,
       text: tweet.text,
