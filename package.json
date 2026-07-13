@@ -49,6 +49,7 @@
     "@solana/wallet-standard-wallet-adapter-react": "^1.1.4",
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.106.1",
+    "@vercel/analytics": "^2.0.1",
     "country-flag-icons": "^1.6.17",
     "next": "16.2.6",
     "next-auth": "^5.0.0-beta.31",

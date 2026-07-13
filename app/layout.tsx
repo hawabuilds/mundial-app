@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { isCopaMundialHost } from "./mundial/lib/mundial-path";
 import { Providers } from "./providers";
@@ -39,6 +40,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Providers copaMundialHost={copaMundialHost}>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   );
