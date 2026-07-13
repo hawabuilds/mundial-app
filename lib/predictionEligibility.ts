@@ -12,13 +12,17 @@ import { CRON_MATCH_POST_OPTIONS, resolveMatchTweetId } from "./resolveMatchTwee
 
 
 export type EligiblePrediction = {
+
   userId: string;
+
   userHandle: string;
+
   homeScore: number;
+
   awayScore: number;
+
   repliedAt: string;
-  /** X tweet id of the user's prediction reply (for bot auto-replies). */
-  sourceTweetId: string;
+
 };
 
 
@@ -68,12 +72,17 @@ export function buildEligiblePreKickoffPredictions(
 
 
     eligible.set(reply.authorId, {
+
       userId: reply.authorId,
+
       userHandle: formatHandle(reply.authorUsername),
+
       homeScore: parsed.homeScore,
+
       awayScore: parsed.awayScore,
+
       repliedAt: reply.createdAt,
-      sourceTweetId: reply.id,
+
     });
 
   }
