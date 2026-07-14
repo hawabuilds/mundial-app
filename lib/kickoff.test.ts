@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import { FIXTURES, fixtureDateTime } from "../app/data/fixtures";
 
 import {
+  COLLECTION_BACKLOG_MAX_HOURS_AFTER_KICKOFF,
   COLLECTION_RETRY_OFFSETS_MINUTES,
   COLLECTION_WINDOW_MINUTES_AFTER_KICKOFF,
   getFixturesDueForCollection,
   isCollectionRetryDue,
+  isWithinCollectionBacklogWindow,
   isWithinCollectionWindow,
   shouldCollectPredictions,
+  shouldCollectPredictionsBacklog,
 } from "./kickoff";
 
 const fixture = FIXTURES[0]!;
@@ -73,5 +76,35 @@ assert.equal(
 );
 
 assert.equal(COLLECTION_RETRY_OFFSETS_MINUTES.length, 3, "exactly 3 collection attempts");
+
+assert.equal(
+  shouldCollectPredictionsBacklog(
+    fixture,
+    new Date(kickoff.getTime() + 6 * 60_000),
+  ),
+  false,
+  "inside slot window: backlog does not run",
+);
+
+assert.equal(
+  shouldCollectPredictionsBacklog(
+    fixture,
+    new Date(kickoff.getTime() + (COLLECTION_WINDOW_MINUTES_AFTER_KICKOFF + 10) * 60_000),
+  ),
+  true,
+  "past slot window: backlog retries every cron",
+);
+
+assert.equal(
+  isWithinCollectionBacklogWindow(
+    fixture,
+    new Date(
+      kickoff.getTime() +
+        (COLLECTION_BACKLOG_MAX_HOURS_AFTER_KICKOFF * 60 + 10) * 60_000,
+    ),
+  ),
+  false,
+  "past backlog horizon: stop retrying",
+);
 
 console.log("kickoff.test.ts: ok");
