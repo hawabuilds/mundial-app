@@ -69,18 +69,22 @@ function mapTweetsToReplies(
 
 /**
  * Fetch replies to a match tweet via X API v2 recent search.
- * Stops after MAX_PAGES even if more replies exist.
+ * Stops after maxPages (default {@link MAX_PAGES}) even if more replies exist.
  */
-export async function fetchReplies(tweetId: string): Promise<FetchedReply[]> {
+export async function fetchReplies(
+  tweetId: string,
+  options?: { maxPages?: number },
+): Promise<FetchedReply[]> {
   const bearerToken = process.env.X_BEARER_TOKEN;
   if (!bearerToken) {
     throw new Error("Missing X_BEARER_TOKEN");
   }
+  const maxPages = Math.max(1, Math.min(options?.maxPages ?? MAX_PAGES, MAX_PAGES));
   const replies: FetchedReply[] = [];
   let nextToken: string | undefined;
   let pagesFetched = 0;
 
-  while (pagesFetched < MAX_PAGES) {
+  while (pagesFetched < maxPages) {
     const url = new URL(SEARCH_URL);
     url.searchParams.set("query", buildSearchQuery(tweetId));
     url.searchParams.set("max_results", String(RESULTS_PER_PAGE));
