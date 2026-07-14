@@ -1,8 +1,9 @@
 import { getSupabaseAdminClient } from "@/app/lib/supabase";
 import { postTweetAsUser, readXUserOAuth1Credentials } from "@/lib/xPostTweet";
 
+/** No URL entities — keeps X write cost at plain-text rate; real links live in bio. */
 export const PREDICTION_REPLY_BOT_MESSAGE =
-  "Nice pick 🔮 Track your prediction and climb the leaderboard at copamundial.app — and join the community → discord.gg/BS3q3aMFd";
+  "Nice pick — track your prediction and climb the leaderboard on our site (link in @copamundialapp bio). Community invite is there too";
 
 const TABLE = "prediction_bot_replies";
 
@@ -59,9 +60,15 @@ export function isPredictionReplyBotFirstTimeOnly(): boolean {
   return envFlag("X_REPLY_BOT_FIRST_TIME_ONLY", false);
 }
 
-export function predictionReplyBotMaxPerRun(): number {
-  // Fits ~60s cron with ~8s gaps between posts.
-  return envInt("X_REPLY_BOT_MAX_PER_RUN", 5);
+/**
+ * Optional emergency throttle. Default unlimited (flush all pending each cron).
+ * Set X_REPLY_BOT_MAX_PER_RUN to a positive int to re-enable a hard cap.
+ */
+export function predictionReplyBotMaxPerRun(): number | null {
+  const raw = process.env.X_REPLY_BOT_MAX_PER_RUN?.trim();
+  if (!raw) return null;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export function predictionReplyBotMinGapMs(): number {
@@ -224,6 +231,8 @@ export async function processPredictionBotReplies(options?: {
 
   const maxPerRun = predictionReplyBotMaxPerRun();
   const minGapMs = predictionReplyBotMinGapMs();
+  // Safety ceiling when uncapped so a single query stays bounded.
+  const loadLimit = maxPerRun ?? 1_000;
 
   const supabase = getSupabaseAdminClient();
   let query = supabase
@@ -231,7 +240,7 @@ export async function processPredictionBotReplies(options?: {
     .select("match_id, user_id, user_handle, source_tweet_id")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
-    .limit(maxPerRun);
+    .limit(loadLimit);
 
   if (options?.matchId != null) {
     query = query.eq("match_id", options.matchId);
@@ -267,8 +276,9 @@ export async function processPredictionBotReplies(options?: {
 
   let sentThisRun = 0;
 
-  for (const row of pending) {
-    if (sentThisRun >= maxPerRun) {
+  for (let i = 0; i < pending.length; i++) {
+    const row = pending[i]!;
+    if (maxPerRun != null && sentThisRun >= maxPerRun) {
       result.stoppedReason = "run_cap";
       console.log(
         `[reply-bot] run cap reached (${sentThisRun}/${maxPerRun}) — more pending next cron`,
@@ -308,7 +318,7 @@ export async function processPredictionBotReplies(options?: {
       console.log(
         `[reply-bot] replied to @${handle} match ${row.match_id} (bot tweet ${posted.tweetId})`,
       );
-      if (sentThisRun < maxPerRun) {
+      if (i < pending.length - 1) {
         await sleep(minGapMs);
       }
       continue;

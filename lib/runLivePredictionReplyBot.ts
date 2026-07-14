@@ -16,6 +16,7 @@ export type LiveReplyBotThread = {
   home: string;
   away: string;
   kickoffAt: string;
+  replyBotSinceId: string | null;
 };
 
 export type LiveReplyBotPassResult = {
@@ -30,19 +31,58 @@ export type LiveReplyBotPassResult = {
   message: string;
 };
 
+function maxTweetId(ids: string[]): string | null {
+  if (ids.length === 0) return null;
+  return ids.reduce((best, id) => (BigInt(id) > BigInt(best) ? id : best));
+}
+
 /** Pre-kickoff match threads with a registered tweet id. */
 export async function loadOpenMatchThreadsForReplyBot(
   now: Date = new Date(),
 ): Promise<LiveReplyBotThread[]> {
   const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("match_state")
-    .select("match_id, home_team, away_team, kickoff_at, match_tweet_id")
-    .not("match_tweet_id", "is", null)
-    .not("kickoff_at", "is", null)
-    .gt("kickoff_at", now.toISOString())
-    .order("kickoff_at", { ascending: true })
-    .limit(20);
+  type ThreadRow = {
+    match_id: number | string;
+    home_team: string | null;
+    away_team: string | null;
+    kickoff_at: string | null;
+    match_tweet_id: string | null;
+    reply_bot_since_id?: string | null;
+  };
+
+  let data: ThreadRow[] | null = null;
+  let error: { message: string } | null = null;
+
+  {
+    const first = await supabase
+      .from("match_state")
+      .select(
+        "match_id, home_team, away_team, kickoff_at, match_tweet_id, reply_bot_since_id",
+      )
+      .not("match_tweet_id", "is", null)
+      .not("kickoff_at", "is", null)
+      .gt("kickoff_at", now.toISOString())
+      .order("kickoff_at", { ascending: true })
+      .limit(20);
+    data = (first.data as ThreadRow[] | null) ?? null;
+    error = first.error;
+  }
+
+  if (error && /reply_bot_since_id/i.test(error.message)) {
+    console.warn(
+      "[reply-bot] reply_bot_since_id missing — run migration 20260714130000_match_state_reply_bot_since_id.sql (scanning without cursor)",
+    );
+    const fallback = await supabase
+      .from("match_state")
+      .select("match_id, home_team, away_team, kickoff_at, match_tweet_id")
+      .not("match_tweet_id", "is", null)
+      .not("kickoff_at", "is", null)
+      .gt("kickoff_at", now.toISOString())
+      .order("kickoff_at", { ascending: true })
+      .limit(20);
+    data = (fallback.data as ThreadRow[] | null) ?? null;
+    error = fallback.error;
+  }
 
   if (error) throw new Error(error.message);
 
@@ -53,15 +93,36 @@ export async function loadOpenMatchThreadsForReplyBot(
     const home = String(row.home_team ?? "").trim();
     const away = String(row.away_team ?? "").trim();
     if (!tweetId || !kickoffAt || !home || !away) continue;
+    const sinceRaw = row.reply_bot_since_id;
     threads.push({
       matchId: Number(row.match_id),
       tweetId,
       home,
       away,
       kickoffAt,
+      replyBotSinceId:
+        sinceRaw != null && String(sinceRaw).trim()
+          ? String(sinceRaw).trim()
+          : null,
     });
   }
   return threads;
+}
+
+async function advanceReplyBotSinceId(
+  matchId: number,
+  sinceId: string,
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase
+    .from("match_state")
+    .update({ reply_bot_since_id: sinceId })
+    .eq("match_id", matchId);
+  if (error) {
+    console.warn(
+      `[reply-bot] failed to save since_id for match ${matchId}: ${error.message}`,
+    );
+  }
 }
 
 function threadToFixture(thread: LiveReplyBotThread): Fixture {
@@ -83,6 +144,7 @@ function threadToFixture(thread: LiveReplyBotThread): Fixture {
 /**
  * Watch live pre-kickoff match posts and queue bot replies as valid
  * predictions appear — does not wait for post-kickoff collection.
+ * Uses since_id + 1 page so we mostly pay for new replies only.
  */
 export async function runLivePredictionReplyBot(
   now: Date = new Date(),
@@ -117,9 +179,16 @@ export async function runLivePredictionReplyBot(
   for (const thread of threads) {
     try {
       const fixture = threadToFixture(thread);
-      // Keep polling light — cron retries soon for more pages.
-      const replies = await fetchReplies(thread.tweetId, { maxPages: 2 });
+      const replies = await fetchReplies(thread.tweetId, {
+        maxPages: 1,
+        sinceId: thread.replyBotSinceId,
+      });
       repliesScanned += replies.length;
+
+      const newestId = maxTweetId(replies.map((r) => r.id));
+      if (newestId) {
+        await advanceReplyBotSinceId(thread.matchId, newestId);
+      }
 
       const seenAuthors = new Set<string>();
       for (const reply of replies) {

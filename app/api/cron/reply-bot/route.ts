@@ -3,11 +3,11 @@ import { runLivePredictionReplyBot } from "@/lib/runLivePredictionReplyBot";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * Poll open (pre-kickoff) match threads and reply under new valid predictions.
- * Independent of post-kickoff collection.
+ * Incremental since_id scans; flushes pending queue (8s gap, stop on X 429).
  */
 export async function GET(request: NextRequest) {
   if (!isCronAuthorized(request)) {

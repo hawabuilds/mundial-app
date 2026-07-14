@@ -70,16 +70,18 @@ function mapTweetsToReplies(
 /**
  * Fetch replies to a match tweet via X API v2 recent search.
  * Stops after maxPages (default {@link MAX_PAGES}) even if more replies exist.
+ * Pass sinceId to only return tweets newer than that id (live bot cost control).
  */
 export async function fetchReplies(
   tweetId: string,
-  options?: { maxPages?: number },
+  options?: { maxPages?: number; sinceId?: string | null },
 ): Promise<FetchedReply[]> {
   const bearerToken = process.env.X_BEARER_TOKEN;
   if (!bearerToken) {
     throw new Error("Missing X_BEARER_TOKEN");
   }
   const maxPages = Math.max(1, Math.min(options?.maxPages ?? MAX_PAGES, MAX_PAGES));
+  const sinceId = options?.sinceId?.trim() || undefined;
   const replies: FetchedReply[] = [];
   let nextToken: string | undefined;
   let pagesFetched = 0;
@@ -94,6 +96,9 @@ export async function fetchReplies(
     );
     url.searchParams.set("expansions", "author_id");
     url.searchParams.set("user.fields", "username");
+    if (sinceId) {
+      url.searchParams.set("since_id", sinceId);
+    }
 
     if (nextToken) {
       url.searchParams.set("next_token", nextToken);

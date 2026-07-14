@@ -19,18 +19,26 @@ assert.equal(
 );
 
 assert.ok(
-  PREDICTION_REPLY_BOT_MESSAGE.includes("copamundial.app"),
-  "message links to web app",
+  PREDICTION_REPLY_BOT_MESSAGE.includes("@copamundialapp"),
+  "message points to @copamundialapp bio",
 );
 assert.ok(
-  PREDICTION_REPLY_BOT_MESSAGE.includes("discord.gg/BS3q3aMFd"),
-  "message links to Discord",
+  /bio/i.test(PREDICTION_REPLY_BOT_MESSAGE),
+  "message mentions bio for the web link",
+);
+assert.ok(
+  !/copamundial\.app|discord\.gg|https?:\/\//i.test(PREDICTION_REPLY_BOT_MESSAGE),
+  "message must not include URL entities (plain-text write rate)",
 );
 assert.ok(
   !/bonus/i.test(PREDICTION_REPLY_BOT_MESSAGE),
   "message must not mention bonus points",
 );
 
-assert.equal(predictionReplyBotMaxPerRun(), 5);
+assert.equal(
+  predictionReplyBotMaxPerRun(),
+  null,
+  "per-run send cap defaults OFF (flush all pending)",
+);
 
 console.log("predictionReplyBot.test.ts: ok");
