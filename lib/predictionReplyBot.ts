@@ -59,11 +59,8 @@ export function isPredictionReplyBotFirstTimeOnly(): boolean {
   return envFlag("X_REPLY_BOT_FIRST_TIME_ONLY", false);
 }
 
-export function predictionReplyBotMaxPerHour(): number {
-  return envInt("X_REPLY_BOT_MAX_PER_HOUR", 10);
-}
-
 export function predictionReplyBotMaxPerRun(): number {
+  // Fits ~60s cron with ~8s gaps between posts.
   return envInt("X_REPLY_BOT_MAX_PER_RUN", 5);
 }
 
@@ -162,23 +159,6 @@ export async function enqueuePredictionBotReply(
   return "error";
 }
 
-async function countSentInLastHour(): Promise<number> {
-  const supabase = getSupabaseAdminClient();
-  const since = new Date(Date.now() - 60 * 60_000).toISOString();
-  const { count, error } = await supabase
-    .from(TABLE)
-    .select("user_id", { count: "exact", head: true })
-    .eq("status", "sent")
-    .gte("updated_at", since);
-
-  if (error) {
-    if (isMissingTableError(error.message)) return Number.POSITIVE_INFINITY;
-    console.warn(`[reply-bot] rate-count failed: ${error.message}`);
-    return Number.POSITIVE_INFINITY;
-  }
-  return count ?? 0;
-}
-
 async function markReply(
   matchId: number,
   userId: string,
@@ -242,24 +222,8 @@ export async function processPredictionBotReplies(options?: {
     };
   }
 
-  const maxPerHour = predictionReplyBotMaxPerHour();
   const maxPerRun = predictionReplyBotMaxPerRun();
   const minGapMs = predictionReplyBotMinGapMs();
-
-  const sentLastHour = await countSentInLastHour();
-  if (sentLastHour >= maxPerHour) {
-    console.log(
-      `[reply-bot] rate-limited: ${sentLastHour}/${maxPerHour} sent in last hour — will retry later`,
-    );
-    return {
-      enabled: true,
-      processed: 0,
-      sent: 0,
-      skipped: 0,
-      failed: 0,
-      stoppedReason: "hourly_cap",
-    };
-  }
 
   const supabase = getSupabaseAdminClient();
   let query = supabase
@@ -302,13 +266,12 @@ export async function processPredictionBotReplies(options?: {
   };
 
   let sentThisRun = 0;
-  let sentHourWindow = sentLastHour;
 
   for (const row of pending) {
-    if (sentHourWindow >= maxPerHour || sentThisRun >= maxPerRun) {
-      result.stoppedReason = "hourly_cap";
+    if (sentThisRun >= maxPerRun) {
+      result.stoppedReason = "run_cap";
       console.log(
-        `[reply-bot] rate-limited mid-run — stopping (hour=${sentHourWindow}/${maxPerHour}, run=${sentThisRun}/${maxPerRun})`,
+        `[reply-bot] run cap reached (${sentThisRun}/${maxPerRun}) — more pending next cron`,
       );
       break;
     }
@@ -342,11 +305,10 @@ export async function processPredictionBotReplies(options?: {
       });
       result.sent += 1;
       sentThisRun += 1;
-      sentHourWindow += 1;
       console.log(
         `[reply-bot] replied to @${handle} match ${row.match_id} (bot tweet ${posted.tweetId})`,
       );
-      if (sentThisRun < maxPerRun && sentHourWindow < maxPerHour) {
+      if (sentThisRun < maxPerRun) {
         await sleep(minGapMs);
       }
       continue;

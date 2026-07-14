@@ -3,7 +3,6 @@ import {
   isPredictionReplyBotEnabled,
   isPredictionReplyBotFirstTimeOnly,
   PREDICTION_REPLY_BOT_MESSAGE,
-  predictionReplyBotMaxPerHour,
   predictionReplyBotMaxPerRun,
 } from "./predictionReplyBot";
 
@@ -32,7 +31,6 @@ assert.ok(
   "message must not mention bonus points",
 );
 
-assert.equal(predictionReplyBotMaxPerHour(), 10);
 assert.equal(predictionReplyBotMaxPerRun(), 5);
 
 console.log("predictionReplyBot.test.ts: ok");
