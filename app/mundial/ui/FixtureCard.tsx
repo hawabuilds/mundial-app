@@ -11,10 +11,11 @@ import Flag from "./Flag";
 import MarketOddsLine from "./MarketOddsLine";
 import TxLineProofPopover from "./TxLineProofPopover";
 import { goalScorerDisplayName } from "@/lib/playerDisplayName";
-import type { GoalCelebration } from "./goalCelebration";
+import type { GoalCelebration } from "../ui/goalCelebration";
 import {
   GOAL_CARD_MOMENT_MS,
   GOAL_SCORE_REVEAL_MS,
+  GOAL_SCORER_WAIT_MS,
   goalCelebrationTimingStyle,
 } from "./goalCelebration";
 import PenaltyKickMarks, { penaltyKickKey } from "./PenaltyKickMarks";
@@ -125,6 +126,7 @@ function enrichGoalFromCelebration(
     player: goal.player ?? event.player,
     playerShort: goal.playerShort ?? event.player,
     ownGoal: goal.ownGoal || event.ownGoal,
+    penalty: goal.penalty || event.penalty,
   };
 }
 
@@ -135,6 +137,36 @@ function celebrationGoalDisplayName(
   return goalScorerDisplayName(enrichGoalFromCelebration(goal, event));
 }
 
+function resolveCelebrationDetails(
+  event: GoalCelebration,
+  goals: MundialGoal[],
+): {
+  player: string | null;
+  minute: number | null;
+  penalty: boolean;
+  ownGoal: boolean;
+} {
+  const matched =
+    goals.find((goal) => isCelebrationGoal(goal, event)) ??
+    goals.filter((goal) => goal.side === event.side).at(-1) ??
+    null;
+  return {
+    player:
+      event.player ?? (matched ? goalScorerDisplayName(matched) : null),
+    minute: event.minute ?? matched?.minute ?? null,
+    penalty: event.penalty || (matched?.penalty ?? false),
+    ownGoal: event.ownGoal || (matched?.ownGoal ?? false),
+  };
+}
+
+function celebrationFlashKey(
+  side: "home" | "away",
+  minute: number | null,
+  player: string,
+): string {
+  return `${side}-${minute ?? "goal"}-${player}`;
+}
+
 function goalsDuringCelebration(
   goals: MundialGoal[],
   event: GoalCelebration | null,
@@ -142,7 +174,7 @@ function goalsDuringCelebration(
 ): MundialGoal[] {
   if (!event) return goals;
 
-  return goals
+  const filtered = goals
     .filter((goal) => {
       if (!isCelebrationGoal(goal, event)) return true;
       if (hidePending) return false;
@@ -151,6 +183,37 @@ function goalsDuringCelebration(
     .map((goal) =>
       isCelebrationGoal(goal, event) ? enrichGoalFromCelebration(goal, event) : goal,
     );
+
+  if (hidePending) return filtered;
+
+  const details = resolveCelebrationDetails(event, goals);
+  if (!details.player && details.minute == null) return filtered;
+  if (filtered.some((goal) => isCelebrationGoal(goal, event))) {
+    return filtered.map((goal) =>
+      isCelebrationGoal(goal, event)
+        ? {
+            ...enrichGoalFromCelebration(goal, event),
+            penalty: goal.penalty || details.penalty,
+            ownGoal: goal.ownGoal || details.ownGoal,
+            minute: goal.minute ?? details.minute,
+            player: goal.player ?? details.player,
+            playerShort: goal.playerShort ?? details.player,
+          }
+        : goal,
+    );
+  }
+
+  return [
+    ...filtered,
+    {
+      side: event.side,
+      minute: details.minute,
+      player: details.player,
+      playerShort: details.player,
+      ownGoal: details.ownGoal,
+      penalty: details.penalty,
+    },
+  ];
 }
 
 export default function FixtureCard({
@@ -202,6 +265,10 @@ export default function FixtureCard({
   const [scoreRevealed, setScoreRevealed] = useState(false);
   const [scoringSide, setScoringSide] = useState<"home" | "away" | null>(null);
   const [cardMoment, setCardMoment] = useState(false);
+  const [revealTick, setRevealTick] = useState(0);
+  const scoreRevealDoneRef = useRef(false);
+  const revealReadyAtRef = useRef(0);
+  const revealDeadlineRef = useRef(0);
 
   const activeCelebration =
     featured &&
@@ -241,8 +308,10 @@ export default function FixtureCard({
 
     const latest = fixture.goals[fixture.goals.length - 1];
     if (latest) {
-      const key = `${latest.side}-${latest.minute}-${latest.player}`;
-      setNewGoalKey(key);
+      const label = goalScorerDisplayName(latest) ?? "Goal";
+      setNewGoalKey(
+        celebrationFlashKey(latest.side, latest.minute, label),
+      );
       setScoringSide(latest.side);
     } else if (homeScore > prevHomeScore.current) {
       setScoringSide("home");
@@ -270,6 +339,7 @@ export default function FixtureCard({
     if (!activeCelebration) {
       if (hadCelebrationRef.current) {
         hadCelebrationRef.current = false;
+        scoreRevealDoneRef.current = false;
         setScorePop(false);
         setScoreRevealed(false);
         setNewGoalKey(null);
@@ -279,37 +349,62 @@ export default function FixtureCard({
     }
 
     hadCelebrationRef.current = true;
+    scoreRevealDoneRef.current = false;
     setCardMoment(true);
     setScoringSide(activeCelebration.side);
     setScorePop(false);
     setScoreRevealed(false);
     setNewGoalKey(null);
+    revealReadyAtRef.current = Date.now() + GOAL_SCORE_REVEAL_MS;
+    revealDeadlineRef.current =
+      Date.now() + GOAL_SCORE_REVEAL_MS + GOAL_SCORER_WAIT_MS;
 
-    const revealTimer = window.setTimeout(() => {
-      const minute = activeCelebration.minute;
-      const player = activeCelebration.player;
-      if (player) {
-        setNewGoalKey(`${activeCelebration.side}-${minute ?? "goal"}-${player}`);
-      }
-      setScoreRevealed(true);
-      setScorePop(true);
-    }, GOAL_SCORE_REVEAL_MS);
+    const minTimer = window.setTimeout(
+      () => setRevealTick((tick) => tick + 1),
+      GOAL_SCORE_REVEAL_MS,
+    );
+    const maxTimer = window.setTimeout(
+      () => setRevealTick((tick) => tick + 1),
+      GOAL_SCORE_REVEAL_MS + GOAL_SCORER_WAIT_MS,
+    );
 
-    return () => window.clearTimeout(revealTimer);
-  }, [activeCelebration?.key, activeCelebration]);
+    return () => {
+      window.clearTimeout(minTimer);
+      window.clearTimeout(maxTimer);
+    };
+  }, [activeCelebration?.key]);
 
   useEffect(() => {
-    if (!activeCelebration || !scoreRevealed || newGoalKey != null) return;
-    const celebrated = fixture.goals.find((goal) =>
-      isCelebrationGoal(goal, activeCelebration),
+    if (!activeCelebration || scoreRevealDoneRef.current) return;
+
+    const details = resolveCelebrationDetails(
+      activeCelebration,
+      fixture.goals,
     );
-    const label =
-      activeCelebration.player ??
-      (celebrated ? celebrationGoalDisplayName(celebrated, activeCelebration) : null);
-    if (!label) return;
-    const minute = activeCelebration.minute ?? celebrated?.minute ?? null;
-    setNewGoalKey(`${activeCelebration.side}-${minute}-${label}`);
-  }, [activeCelebration, scoreRevealed, fixture.goals, newGoalKey]);
+    const hasScorer = details.player != null || details.minute != null;
+    const now = Date.now();
+    if (now < revealReadyAtRef.current) return;
+    if (!hasScorer && now < revealDeadlineRef.current) return;
+
+    scoreRevealDoneRef.current = true;
+    if (details.player) {
+      setNewGoalKey(
+        celebrationFlashKey(
+          activeCelebration.side,
+          details.minute,
+          details.player,
+        ),
+      );
+    } else if (details.minute != null) {
+      setNewGoalKey(
+        celebrationFlashKey(activeCelebration.side, details.minute, "Goal"),
+      );
+    } else {
+      setNewGoalKey(null);
+    }
+    setScoreRevealed(true);
+    setScorePop(true);
+  }, [activeCelebration, fixture.goals, revealTick]);
 
   useEffect(() => {
     if (!scorePop || cardMoment) return;
@@ -339,24 +434,24 @@ export default function FixtureCard({
 
   const holdScore = activeCelebration != null && !scoreRevealed;
 
-  const celebratedGoal = activeCelebration
-    ? fixture.goals.find((goal) => isCelebrationGoal(goal, activeCelebration))
-    : undefined;
-  const celebratedScorerLabel = activeCelebration
-    ? activeCelebration.player ??
-      (celebratedGoal
-        ? celebrationGoalDisplayName(celebratedGoal, activeCelebration)
-        : null)
+  const celebrationDetails = activeCelebration
+    ? resolveCelebrationDetails(activeCelebration, fixture.goals)
     : null;
+  const celebratedScorerLabel = celebrationDetails?.player ?? null;
   const holdScorer =
     activeCelebration != null &&
-    (!scoreRevealed || celebratedScorerLabel == null);
+    (!scoreRevealed ||
+      (celebratedScorerLabel == null && celebrationDetails?.minute == null));
 
-  const displayHomeScore = holdScore
-    ? activeCelebration.prevHomeScore
+  const displayHomeScore = activeCelebration
+    ? scoreRevealed
+      ? activeCelebration.homeScore
+      : activeCelebration.prevHomeScore
     : (fixture.homeScore ?? 0);
-  const displayAwayScore = holdScore
-    ? activeCelebration.prevAwayScore
+  const displayAwayScore = activeCelebration
+    ? scoreRevealed
+      ? activeCelebration.awayScore
+      : activeCelebration.prevAwayScore
     : (fixture.awayScore ?? 0);
 
   const visibleGoals = goalsDuringCelebration(
@@ -453,27 +548,46 @@ export default function FixtureCard({
           .filter((row) => row.player != null)
           .map((row, index) => {
           const key = `${row.player ?? "unknown"}-${row.minutes.join("-")}-${index}`;
+          const flashReady = activeCelebration
+            ? scoreRevealed && scorePop
+            : scorePop;
           const isNew =
+            flashReady &&
             newGoalKey != null &&
-            goals.some((goal) => {
-              const enriched =
-                activeCelebration && isCelebrationGoal(goal, activeCelebration)
-                  ? enrichGoalFromCelebration(goal, activeCelebration)
-                  : goal;
-              const label = goalScorerDisplayName(enriched);
-              if (!label || goalScorerDisplayName(row) !== label) return false;
-              if (
-                enriched.minute != null &&
-                !row.minutes.includes(enriched.minute)
-              ) {
-                return false;
-              }
-              return (
-                newGoalKey === `${enriched.side}-${enriched.minute}-${label}` &&
-                enriched.ownGoal === row.ownGoal &&
-                enriched.penalty === row.penalty
-              );
-            });
+            (activeCelebration
+              ? (() => {
+                  const details = resolveCelebrationDetails(
+                    activeCelebration,
+                    fixture.goals,
+                  );
+                  if (row.side !== activeCelebration.side) return false;
+                  const rowLabel = goalScorerDisplayName(row);
+                  if (details.player && rowLabel !== details.player) return false;
+                  if (
+                    details.minute != null &&
+                    row.minutes.length > 0 &&
+                    !row.minutes.includes(details.minute)
+                  ) {
+                    return false;
+                  }
+                  return details.player != null || details.minute != null;
+                })()
+              : goals.some((goal) => {
+                  const label = goalScorerDisplayName(goal);
+                  if (!label || goalScorerDisplayName(row) !== label) return false;
+                  if (
+                    goal.minute != null &&
+                    !row.minutes.includes(goal.minute)
+                  ) {
+                    return false;
+                  }
+                  return (
+                    newGoalKey ===
+                      celebrationFlashKey(goal.side, goal.minute, label) &&
+                    goal.ownGoal === row.ownGoal &&
+                    goal.penalty === row.penalty
+                  );
+                }));
           return (
             <li
               key={key}

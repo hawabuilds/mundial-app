@@ -121,6 +121,40 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     const scoreIncreased = home > prev.home || away > prev.away;
     const goalsIncreased = goalCount > prev.goalCount;
 
+    const enrichCelebration = (current: GoalCelebration): GoalCelebration => {
+      const sideGoal =
+        liveMatch.goals.filter((g) => g.side === current.side).at(-1) ??
+        liveMatch.goals[liveMatch.goals.length - 1] ??
+        null;
+      const nextHome = Math.max(current.homeScore, home);
+      const nextAway = Math.max(current.awayScore, away);
+      const nextPlayer =
+        current.player ??
+        (sideGoal ? goalScorerDisplayName(sideGoal) : null);
+      const nextMinute = current.minute ?? sideGoal?.minute ?? null;
+      const nextPenalty = current.penalty || (sideGoal?.penalty ?? false);
+      const nextOwnGoal = current.ownGoal || (sideGoal?.ownGoal ?? false);
+      if (
+        nextHome === current.homeScore &&
+        nextAway === current.awayScore &&
+        nextPlayer === current.player &&
+        nextMinute === current.minute &&
+        nextPenalty === current.penalty &&
+        nextOwnGoal === current.ownGoal
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        homeScore: nextHome,
+        awayScore: nextAway,
+        player: nextPlayer,
+        minute: nextMinute,
+        penalty: nextPenalty,
+        ownGoal: nextOwnGoal,
+      };
+    };
+
     if (scoreIncreased || goalsIncreased) {
       const latest = liveMatch.goals[liveMatch.goals.length - 1];
       const homeScored = home > prev.home;
@@ -135,22 +169,41 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
               ? "home"
               : "away");
 
-      setGoalCelebration({
-        key: Date.now(),
-        matchId: liveMatch.id,
-        side,
-        player: latest ? goalScorerDisplayName(latest) : null,
-        ownGoal: latest?.ownGoal ?? false,
-        minute: latest?.minute ?? null,
-        home: liveMatch.home,
-        away: liveMatch.away,
-        homeCode: liveMatch.homeCode,
-        awayCode: liveMatch.awayCode,
-        homeScore: home,
-        awayScore: away,
-        prevHomeScore: prev.home,
-        prevAwayScore: prev.away,
+      setGoalCelebration((current) => {
+        // Same scoring event: score already on the celebration, goals/scorer arrive later.
+        if (
+          current &&
+          current.matchId === liveMatch.id &&
+          home <= current.homeScore &&
+          away <= current.awayScore
+        ) {
+          return enrichCelebration(current);
+        }
+
+        return {
+          key: Date.now(),
+          matchId: liveMatch.id,
+          side,
+          player: latest ? goalScorerDisplayName(latest) : null,
+          ownGoal: latest?.ownGoal ?? false,
+          minute: latest?.minute ?? null,
+          penalty: latest?.penalty ?? false,
+          home: liveMatch.home,
+          away: liveMatch.away,
+          homeCode: liveMatch.homeCode,
+          awayCode: liveMatch.awayCode,
+          homeScore: home,
+          awayScore: away,
+          prevHomeScore: prev.home,
+          prevAwayScore: prev.away,
+        };
       });
+    } else {
+      setGoalCelebration((current) =>
+        current && current.matchId === liveMatch.id
+          ? enrichCelebration(current)
+          : current,
+      );
     }
 
     liveScoreRef.current = { id: liveMatch.id, home, away, goalCount };
@@ -158,7 +211,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     liveMatch?.id,
     liveMatch?.homeScore,
     liveMatch?.awayScore,
-    liveMatch?.goals.length,
+    liveMatch?.goals,
   ]);
 
   useEffect(() => {

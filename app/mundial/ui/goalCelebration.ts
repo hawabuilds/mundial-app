@@ -7,6 +7,8 @@ export type GoalCelebration = {
   player: string | null;
   ownGoal: boolean;
   minute: number | null;
+  /** In-play penalty kick (not shootout). */
+  penalty: boolean;
   home: string;
   away: string;
   homeCode: string;
@@ -25,8 +27,11 @@ export const GOAL_CARD_MOMENT_MS = GOAL_MOMENT_MS;
 /** When ball hits — card glow peak. */
 export const GOAL_IMPACT_MS = Math.round(GOAL_MOMENT_MS * 0.33);
 
-/** Score + scorer flip on the card — end of GOAL hold, overlay still fading. */
+/** Score + scorer flip together on the card — end of GOAL hold. */
 export const GOAL_SCORE_REVEAL_MS = Math.round(GOAL_MOMENT_MS * 0.76);
+
+/** Extra wait if score arrives before player/minute (common for penalties). */
+export const GOAL_SCORER_WAIT_MS = 2500;
 
 /** @deprecated use GOAL_SCORE_REVEAL_MS */
 export const GOAL_SCORER_REVEAL_MS = GOAL_SCORE_REVEAL_MS;
