@@ -29,6 +29,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await snapshotEpochLeaderboard();
+    console.log(
+      `[snapshot-epoch] ${result.status}` +
+        (result.status === "skipped"
+          ? `: ${result.reason}`
+          : ` epoch=${result.epochId} rows=${result.rows}`),
+    );
     return NextResponse.json({
       checkedAt: new Date().toISOString(),
       result: toJsonSafe(result),
@@ -36,6 +42,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Epoch snapshot failed";
+    console.error(`[snapshot-epoch] failed: ${message}`);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
