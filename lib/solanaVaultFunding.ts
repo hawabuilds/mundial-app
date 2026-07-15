@@ -15,9 +15,15 @@ export type EnsureVaultUsdcResult =
 /** Devnet-only: mint USDC into the rewards vault before snapshot/open. */
 export function isSolanaAutoMintVaultEnabled(): boolean {
   const flag = process.env.SOLANA_AUTO_MINT_VAULT?.trim().toLowerCase();
-  if (flag === "false" || flag === "0" || flag === "no") return false;
-  const rpc = process.env.SOLANA_RPC_URL?.trim() ?? "";
-  return rpc.includes("devnet");
+  if (flag === "false" || flag === "0" || flag === "no" || flag === "off") {
+    return false;
+  }
+  if (flag === "true" || flag === "1" || flag === "yes" || flag === "on") {
+    return true;
+  }
+  // This app is Solana-devnet-only (see solanaPublicConfig). Default ON so
+  // custom RPC URLs that omit the substring "devnet" still auto-fund.
+  return true;
 }
 
 function readMintAuthorityKeypair(expected: PublicKey): Keypair | null {
