@@ -255,47 +255,87 @@ async function resolveFinalScoreFromTxLine(
 
 
 
+export type AutoScoreOptions = {
+  /** Skip proof/scorer maintenance so callers can run collection first. */
+  skipMaintenance?: boolean;
+};
+
+export async function runAutoScoreMaintenance(): Promise<{
+  matchProof: Awaited<ReturnType<typeof retryMissingMatchProofs>>;
+  matchGoals: Awaited<ReturnType<typeof retryIncompleteMatchGoalsBackfills>>;
+}> {
+  const matchProof = await retryMissingMatchProofs(getActiveFixtures()).catch(
+    (error) => {
+      console.warn(
+        "[match-proof] Retry pass failed:",
+        error instanceof Error ? error.message : error,
+      );
+      return {
+        attempted: 0,
+        stored: 0,
+        semanticsRefreshed: 0,
+        upgrade: {
+          attempted: 0,
+          upgraded: 0,
+          skippedExpired: 0,
+          stillWaiting: 0,
+        },
+      };
+    },
+  );
+  if (
+    matchProof.upgrade.upgraded > 0 ||
+    matchProof.upgrade.attempted > 0 ||
+    matchProof.stored > 0 ||
+    matchProof.semanticsRefreshed > 0
+  ) {
+    console.info(
+      `[match-proof] Maintenance: attempted=${matchProof.attempted} stored=${matchProof.stored} semanticsRefreshed=${matchProof.semanticsRefreshed} upgradeAttempted=${matchProof.upgrade.attempted} upgraded=${matchProof.upgrade.upgraded} waiting=${matchProof.upgrade.stillWaiting} expired=${matchProof.upgrade.skippedExpired}`,
+    );
+  }
+
+  const matchGoals = await retryIncompleteMatchGoalsBackfills(
+    getActiveFixtures(),
+  ).catch((error) => {
+    console.warn(
+      "[match-goals] Scorer retry pass failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return { attempted: 0, backfilled: 0, skipped: 0, errors: 0, details: [] };
+  });
+  if (matchGoals.attempted > 0) {
+    console.info(
+      `[match-goals] Scorer retry: attempted=${matchGoals.attempted} backfilled=${matchGoals.backfilled} skipped=${matchGoals.skipped} errors=${matchGoals.errors}`,
+    );
+  }
+
+  return { matchProof, matchGoals };
+}
+
 export async function autoScoreFinishedMatches(
-
   fixtures: Fixture[] = FIXTURES,
-
+  options?: AutoScoreOptions,
 ): Promise<AutoScoreResult[]> {
-
   const txlineConfigured = isTxLineConfigured();
 
   const results: AutoScoreResult[] = [];
 
-
-
   if (!txlineConfigured && !fixtures.some((fixture) => fixtureFinalScore(fixture))) {
-
     return [
-
       {
-
         matchId: 0,
-
         status: "skipped",
-
         reason:
-
           "TxLINE not configured (TXODDS_API_TOKEN) and no fixture.result set",
-
       },
-
     ];
-
   }
-
-
 
   const active = getActiveFixtures(fixtures);
   const candidates =
     fixtures.length < FIXTURES.length
       ? active
       : await getFixturesPendingAutoScore(active);
-
-
 
   for (const fixture of candidates) {
 
@@ -449,45 +489,10 @@ export async function autoScoreFinishedMatches(
 
   }
 
-  const retry = await retryMissingMatchProofs(getActiveFixtures()).catch((error) => {
-    console.warn(
-      "[match-proof] Retry pass failed:",
-      error instanceof Error ? error.message : error,
-    );
-    return {
-      attempted: 0,
-      stored: 0,
-      semanticsRefreshed: 0,
-      upgrade: { attempted: 0, upgraded: 0, skippedExpired: 0, stillWaiting: 0 },
-    };
-  });
-  if (
-    retry.upgrade.upgraded > 0 ||
-    retry.upgrade.attempted > 0 ||
-    retry.stored > 0 ||
-    retry.semanticsRefreshed > 0
-  ) {
-    console.info(
-      `[match-proof] Maintenance: attempted=${retry.attempted} stored=${retry.stored} semanticsRefreshed=${retry.semanticsRefreshed} upgradeAttempted=${retry.upgrade.attempted} upgraded=${retry.upgrade.upgraded} waiting=${retry.upgrade.stillWaiting} expired=${retry.upgrade.skippedExpired}`,
-    );
-  }
-
-  const scorerRetry = await retryIncompleteMatchGoalsBackfills(
-    getActiveFixtures(),
-  ).catch((error) => {
-    console.warn(
-      "[match-goals] Scorer retry pass failed:",
-      error instanceof Error ? error.message : error,
-    );
-    return { attempted: 0, backfilled: 0, skipped: 0, errors: 0, details: [] };
-  });
-  if (scorerRetry.attempted > 0) {
-    console.info(
-      `[match-goals] Scorer retry: attempted=${scorerRetry.attempted} backfilled=${scorerRetry.backfilled} skipped=${scorerRetry.skipped} errors=${scorerRetry.errors}`,
-    );
+  if (!options?.skipMaintenance) {
+    await runAutoScoreMaintenance();
   }
 
   return results;
-
 }
 

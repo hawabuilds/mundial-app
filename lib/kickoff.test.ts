@@ -64,6 +64,26 @@ assert.equal(
   "collected in slot 1: not due between slots",
 );
 
+assert.equal(
+  shouldCollectPredictions(
+    fixture,
+    new Date(kickoff.getTime() + 40 * 60_000),
+    null,
+  ),
+  true,
+  "never collected: due between slots after first slot opens",
+);
+
+assert.equal(
+  shouldCollectPredictions(
+    fixture,
+    new Date(kickoff.getTime() + 70 * 60_000),
+    null,
+  ),
+  true,
+  "never collected: due in former dead zone after +55 slot",
+);
+
 const retryOffset = COLLECTION_RETRY_OFFSETS_MINUTES[1]!;
 assert.equal(
   isCollectionRetryDue(

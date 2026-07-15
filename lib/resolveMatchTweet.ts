@@ -34,6 +34,15 @@ export const CRON_MATCH_POST_OPTIONS: ResolveMatchPostOptions = {
   discoverMaxPages: 2,
 };
 
+/**
+ * Reply collection — trust Supabase tweet id (skip lookup) so X outages do not
+ * block fetchReplies when the id was already registered.
+ */
+export const COLLECTION_MATCH_POST_OPTIONS: ResolveMatchPostOptions = {
+  trustCachedTweet: true,
+  discoverMaxPages: 2,
+};
+
 function fixtureTweetId(fixture: Fixture): string | null {
   const manualTweetId = fixture.tweetId?.trim();
   return manualTweetId || null;

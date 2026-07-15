@@ -15,8 +15,9 @@ import {
 export const COLLECTION_WINDOW_MINUTES_AFTER_KICKOFF = 90;
 
 /**
- * Exactly three collection attempts — one per slot (cron runs every 5 min).
- * Offsets: ~5 min, ~25 min, ~55 min after kickoff (X index lag).
+ * Preferred first-pass slots (cron runs every 5 min). Offsets: ~5 / ~25 / ~55
+ * min after kickoff (X index lag). Missed slots still recover every cron once
+ * the first slot has opened — see {@link shouldCollectPredictions}.
  */
 export const COLLECTION_RETRY_OFFSETS_MINUTES = [5, 25, 55];
 
@@ -77,7 +78,21 @@ export function shouldCollectPredictions(
   lastCollectedAt: Date | null = null,
   effectiveKickoffMs?: number,
 ): boolean {
-  return isCollectionRetryDue(fixture, now, lastCollectedAt, effectiveKickoffMs);
+  if (isCollectionRetryDue(fixture, now, lastCollectedAt, effectiveKickoffMs)) {
+    return true;
+  }
+  if (!isWithinCollectionWindow(fixture, now, effectiveKickoffMs)) return false;
+
+  // Missed-slot recovery: once the first slot has opened, keep trying every
+  // cron tick until collected (or the 90-minute window ends). Avoids the dead
+  // zone between +5/+25/+55 slots when kickoff cron 504s during a live match.
+  const kickoffMs = resolveKickoffMs(fixture, effectiveKickoffMs);
+  const elapsedMin = (now.getTime() - kickoffMs) / 60_000;
+  const firstSlotMin = COLLECTION_RETRY_OFFSETS_MINUTES[0] ?? 5;
+  if (elapsedMin < firstSlotMin) return false;
+
+  const lastMs = lastCollectedAt?.getTime() ?? 0;
+  return lastMs < kickoffMs;
 }
 
 export function isWithinCollectionBacklogWindow(

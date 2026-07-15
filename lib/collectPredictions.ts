@@ -37,10 +37,19 @@ export type CollectResult = {
 
 export { isReplyBeforeKickoff } from "./predictionEligibility";
 
+export type CollectPredictionsOptions = {
+  /**
+   * Flush pending X reply-bot sends inline (8s gap). Default false — kickoff cron
+   * must stay under budget; the dedicated `/api/cron/reply-bot` flushes the queue.
+   */
+  flushReplyBot?: boolean;
+};
+
 export async function collectPredictionsForFixture(
   fixture: Fixture,
   tweetIdOverride?: string,
   effectiveKickoffMs?: number,
+  options?: CollectPredictionsOptions,
 ): Promise<CollectResult> {
   const tweetId =
     tweetIdOverride?.trim() ||
@@ -114,7 +123,7 @@ export async function collectPredictionsForFixture(
     | CollectResult["replyBot"]
     | undefined;
 
-  if (isPredictionReplyBotEnabled()) {
+  if (isPredictionReplyBotEnabled() && options?.flushReplyBot) {
     const bot = await processPredictionBotReplies({ matchId: fixture.id });
     replyBot = {
       queued: replyBotQueued,
@@ -122,6 +131,14 @@ export async function collectPredictionsForFixture(
       skipped: bot.skipped,
       failed: bot.failed,
       ...(bot.stoppedReason ? { stoppedReason: bot.stoppedReason } : {}),
+    };
+  } else if (replyBotQueued > 0) {
+    replyBot = {
+      queued: replyBotQueued,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      stoppedReason: "deferred_to_reply_bot_cron",
     };
   }
 
