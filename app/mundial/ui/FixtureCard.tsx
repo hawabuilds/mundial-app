@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MundialFixture, MundialGoal } from "../lib/fixtures";
 import { settledOnRegulationScore } from "../lib/fixtures";
 import { mergePenaltyShootout } from "@/lib/penaltyShootout";
@@ -306,6 +306,16 @@ export default function FixtureCard({
       return;
     }
 
+    // Featured card: goal overlay drives score hold + reveal — skip local pop.
+    if (featured) {
+      if (!goalsIncreased && !scoreIncreased) {
+        prevGoalCount.current = fixture.goals.length;
+        prevHomeScore.current = homeScore;
+        prevAwayScore.current = awayScore;
+      }
+      return;
+    }
+
     const latest = fixture.goals[fixture.goals.length - 1];
     if (latest) {
       const label = goalScorerDisplayName(latest) ?? "Goal";
@@ -335,7 +345,7 @@ export default function FixtureCard({
     inPenalties,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!activeCelebration) {
       if (hadCelebrationRef.current) {
         hadCelebrationRef.current = false;
@@ -434,6 +444,14 @@ export default function FixtureCard({
 
   const holdScore = activeCelebration != null && !scoreRevealed;
 
+  const homeScore = fixture.homeScore ?? 0;
+  const awayScore = fixture.awayScore ?? 0;
+  const scoreJumpedWithoutCelebration =
+    featured &&
+    inPlay &&
+    !activeCelebration &&
+    (homeScore > prevHomeScore.current || awayScore > prevAwayScore.current);
+
   const celebrationDetails = activeCelebration
     ? resolveCelebrationDetails(activeCelebration, fixture.goals)
     : null;
@@ -447,12 +465,16 @@ export default function FixtureCard({
     ? scoreRevealed
       ? activeCelebration.homeScore
       : activeCelebration.prevHomeScore
-    : (fixture.homeScore ?? 0);
+    : scoreJumpedWithoutCelebration
+      ? prevHomeScore.current
+      : homeScore;
   const displayAwayScore = activeCelebration
     ? scoreRevealed
       ? activeCelebration.awayScore
       : activeCelebration.prevAwayScore
-    : (fixture.awayScore ?? 0);
+    : scoreJumpedWithoutCelebration
+      ? prevAwayScore.current
+      : awayScore;
 
   const visibleGoals = goalsDuringCelebration(
     fixture.goals,

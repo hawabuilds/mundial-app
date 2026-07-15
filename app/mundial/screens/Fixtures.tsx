@@ -51,6 +51,111 @@ type LiveScoreSnapshot = {
   goalCount: number;
 };
 
+function enrichGoalCelebration(
+  current: GoalCelebration,
+  liveMatch: MundialFixture,
+): GoalCelebration {
+  const home = liveMatch.homeScore ?? 0;
+  const away = liveMatch.awayScore ?? 0;
+  const sideGoal =
+    liveMatch.goals.filter((g) => g.side === current.side).at(-1) ??
+    liveMatch.goals[liveMatch.goals.length - 1] ??
+    null;
+  const nextHome = Math.max(current.homeScore, home);
+  const nextAway = Math.max(current.awayScore, away);
+  const nextPlayer =
+    current.player ?? (sideGoal ? goalScorerDisplayName(sideGoal) : null);
+  const nextMinute = current.minute ?? sideGoal?.minute ?? null;
+  const nextPenalty = current.penalty || (sideGoal?.penalty ?? false);
+  const nextOwnGoal = current.ownGoal || (sideGoal?.ownGoal ?? false);
+  if (
+    nextHome === current.homeScore &&
+    nextAway === current.awayScore &&
+    nextPlayer === current.player &&
+    nextMinute === current.minute &&
+    nextPenalty === current.penalty &&
+    nextOwnGoal === current.ownGoal
+  ) {
+    return current;
+  }
+  return {
+    ...current,
+    homeScore: nextHome,
+    awayScore: nextAway,
+    player: nextPlayer,
+    minute: nextMinute,
+    penalty: nextPenalty,
+    ownGoal: nextOwnGoal,
+  };
+}
+
+function syncGoalCelebration(
+  liveMatch: MundialFixture | null,
+  prev: LiveScoreSnapshot | null,
+  current: GoalCelebration | null,
+): GoalCelebration | null {
+  if (!liveMatch) return null;
+
+  const home = liveMatch.homeScore ?? 0;
+  const away = liveMatch.awayScore ?? 0;
+  const goalCount = liveMatch.goals.length;
+
+  if (!prev || prev.id !== liveMatch.id) {
+    return null;
+  }
+
+  const scoreIncreased = home > prev.home || away > prev.away;
+  const goalsIncreased = goalCount > prev.goalCount;
+
+  if (scoreIncreased || goalsIncreased) {
+    const latest = liveMatch.goals[liveMatch.goals.length - 1];
+    const homeScored = home > prev.home;
+    const awayScored = away > prev.away;
+    const side: "home" | "away" =
+      latest?.side ??
+      (homeScored && !awayScored
+        ? "home"
+        : awayScored && !homeScored
+          ? "away"
+          : homeScored
+            ? "home"
+            : "away");
+
+    if (
+      current &&
+      current.matchId === liveMatch.id &&
+      home <= current.homeScore &&
+      away <= current.awayScore
+    ) {
+      return enrichGoalCelebration(current, liveMatch);
+    }
+
+    return {
+      key: Date.now(),
+      matchId: liveMatch.id,
+      side,
+      player: latest ? goalScorerDisplayName(latest) : null,
+      ownGoal: latest?.ownGoal ?? false,
+      minute: latest?.minute ?? null,
+      penalty: latest?.penalty ?? false,
+      home: liveMatch.home,
+      away: liveMatch.away,
+      homeCode: liveMatch.homeCode,
+      awayCode: liveMatch.awayCode,
+      homeScore: home,
+      awayScore: away,
+      prevHomeScore: prev.home,
+      prevAwayScore: prev.away,
+    };
+  }
+
+  if (current && current.matchId === liveMatch.id) {
+    return enrichGoalCelebration(current, liveMatch);
+  }
+
+  return current;
+}
+
 type Props = {
   onTabChange: (t: TabId) => void;
   vaultDot?: boolean;
@@ -82,7 +187,29 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       void fetchBoardMatches()
         .then((rows) => {
           if (cancelled) return;
-          setFixtures(rows.map(toMundialFixture));
+          const mundial = rows.map(toMundialFixture);
+          const live = findLiveMatch(mundial);
+          const prev = liveScoreRef.current;
+
+          if (live) {
+            const home = live.homeScore ?? 0;
+            const away = live.awayScore ?? 0;
+            const goalCount = live.goals.length;
+
+            if (!prev || prev.id !== live.id) {
+              liveScoreRef.current = { id: live.id, home, away, goalCount };
+            } else {
+              setGoalCelebration((current) =>
+                syncGoalCelebration(live, prev, current),
+              );
+              liveScoreRef.current = { id: live.id, home, away, goalCount };
+            }
+          } else {
+            liveScoreRef.current = null;
+            setGoalCelebration(null);
+          }
+
+          setFixtures(mundial);
         })
         .catch(() => {
           /* keep whatever we last had */
@@ -99,120 +226,6 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       window.clearInterval(interval);
     };
   }, [liveOnBoard]);
-
-  const liveMatch = findLiveMatch(fixtures);
-
-  useEffect(() => {
-    if (!liveMatch) {
-      liveScoreRef.current = null;
-      return;
-    }
-
-    const home = liveMatch.homeScore ?? 0;
-    const away = liveMatch.awayScore ?? 0;
-    const goalCount = liveMatch.goals.length;
-    const prev = liveScoreRef.current;
-
-    if (!prev || prev.id !== liveMatch.id) {
-      liveScoreRef.current = { id: liveMatch.id, home, away, goalCount };
-      return;
-    }
-
-    const scoreIncreased = home > prev.home || away > prev.away;
-    const goalsIncreased = goalCount > prev.goalCount;
-
-    const enrichCelebration = (current: GoalCelebration): GoalCelebration => {
-      const sideGoal =
-        liveMatch.goals.filter((g) => g.side === current.side).at(-1) ??
-        liveMatch.goals[liveMatch.goals.length - 1] ??
-        null;
-      const nextHome = Math.max(current.homeScore, home);
-      const nextAway = Math.max(current.awayScore, away);
-      const nextPlayer =
-        current.player ??
-        (sideGoal ? goalScorerDisplayName(sideGoal) : null);
-      const nextMinute = current.minute ?? sideGoal?.minute ?? null;
-      const nextPenalty = current.penalty || (sideGoal?.penalty ?? false);
-      const nextOwnGoal = current.ownGoal || (sideGoal?.ownGoal ?? false);
-      if (
-        nextHome === current.homeScore &&
-        nextAway === current.awayScore &&
-        nextPlayer === current.player &&
-        nextMinute === current.minute &&
-        nextPenalty === current.penalty &&
-        nextOwnGoal === current.ownGoal
-      ) {
-        return current;
-      }
-      return {
-        ...current,
-        homeScore: nextHome,
-        awayScore: nextAway,
-        player: nextPlayer,
-        minute: nextMinute,
-        penalty: nextPenalty,
-        ownGoal: nextOwnGoal,
-      };
-    };
-
-    if (scoreIncreased || goalsIncreased) {
-      const latest = liveMatch.goals[liveMatch.goals.length - 1];
-      const homeScored = home > prev.home;
-      const awayScored = away > prev.away;
-      const side: "home" | "away" =
-        latest?.side ??
-        (homeScored && !awayScored
-          ? "home"
-          : awayScored && !homeScored
-            ? "away"
-            : homeScored
-              ? "home"
-              : "away");
-
-      setGoalCelebration((current) => {
-        // Same scoring event: score already on the celebration, goals/scorer arrive later.
-        if (
-          current &&
-          current.matchId === liveMatch.id &&
-          home <= current.homeScore &&
-          away <= current.awayScore
-        ) {
-          return enrichCelebration(current);
-        }
-
-        return {
-          key: Date.now(),
-          matchId: liveMatch.id,
-          side,
-          player: latest ? goalScorerDisplayName(latest) : null,
-          ownGoal: latest?.ownGoal ?? false,
-          minute: latest?.minute ?? null,
-          penalty: latest?.penalty ?? false,
-          home: liveMatch.home,
-          away: liveMatch.away,
-          homeCode: liveMatch.homeCode,
-          awayCode: liveMatch.awayCode,
-          homeScore: home,
-          awayScore: away,
-          prevHomeScore: prev.home,
-          prevAwayScore: prev.away,
-        };
-      });
-    } else {
-      setGoalCelebration((current) =>
-        current && current.matchId === liveMatch.id
-          ? enrichCelebration(current)
-          : current,
-      );
-    }
-
-    liveScoreRef.current = { id: liveMatch.id, home, away, goalCount };
-  }, [
-    liveMatch?.id,
-    liveMatch?.homeScore,
-    liveMatch?.awayScore,
-    liveMatch?.goals,
-  ]);
 
   useEffect(() => {
     if (status === "loading") return;
