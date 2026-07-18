@@ -9,7 +9,7 @@ Mundial is a football score-prediction game. You reply to a match thread on X (T
 The part that makes it different: results aren’t just trusted, they’re provable. Match data comes from TxLINE (by TxODDS), which publishes score proofs anchored on Solana. When a match settles, Copa Mundial stores that proof and only shows a “TxLINE verified” badge when the proof’s regulation score matches the score we settled in the database. Separately, you can run the same proof against the on-chain Merkle root with a CLI script — that chain check is for judges and ops, not something the live card does on every refresh.
 
 **Live:** [copamundial.app](https://copamundial.app)  
-**Demo video:** [Watch on YouTube]([https://www.youtube.com/watch?v=Y2gv4rM7I0o])   
+**Demo video:** [Watch on YouTube](https://www.youtube.com/watch?v=Y2gv4rM7I0o)   
 **Network:** Solana devnet — rewards are test-USDC, not real money  
 **Track:** Superteam × TxODDS — Consumer & Fan Experiences  
 **Community:** [Discord](https://discord.gg/BS3q3aMFd)
