@@ -1,5 +1,7 @@
 import { getFixtureById } from "@/app/data/fixtures";
 import { ensureMatchOddsForFixture } from "@/lib/ensureMatchOdds";
+import { ensureMatchGoalsBackfilled } from "@/lib/backfillMatchGoals";
+import { settleFirstGoalscorerBonusForMatch } from "@/lib/settleFirstGoalscorerBonus";
 import {
   getMatchState,
   rescoreCollectedMatch,
@@ -23,6 +25,8 @@ export async function rescoreMatch(matchId: number): Promise<RescoreMatchResult>
 
     const collected = await rescoreCollectedMatch(matchId);
     if (collected) {
+      await ensureMatchGoalsBackfilled(matchId, fixture);
+      await settleFirstGoalscorerBonusForMatch(matchId, fixture);
       return { matchId, status: "ok", result: collected };
     }
 
@@ -47,6 +51,9 @@ export async function rescoreMatch(matchId: number): Promise<RescoreMatchResult>
       },
       fixture,
     );
+
+    await ensureMatchGoalsBackfilled(matchId, fixture);
+    await settleFirstGoalscorerBonusForMatch(matchId, fixture);
 
     return { matchId, status: "ok", result };
   } catch (error) {

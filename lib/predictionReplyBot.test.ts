@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  looksLikeInvalidPredictionAttempt,
+  parsePrediction,
+} from "./predictionParser";
+import {
+  formatPredictionReplyBotNudgeMessage,
   isPredictionReplyBotEnabled,
   isPredictionReplyBotFirstTimeOnly,
   PREDICTION_REPLY_BOT_MESSAGE,
@@ -19,20 +24,45 @@ assert.equal(
 );
 
 assert.ok(
-  PREDICTION_REPLY_BOT_MESSAGE.includes("@copamundialapp"),
-  "message points to @copamundialapp bio",
+  /first goalscorer/i.test(PREDICTION_REPLY_BOT_MESSAGE),
+  "success message directs users to first-goalscorer pick",
+);
+
+const nudge = formatPredictionReplyBotNudgeMessage("France", "England");
+assert.ok(
+  nudge.includes("France 2-1 England"),
+  "nudge includes example template",
 );
 assert.ok(
-  /bio/i.test(PREDICTION_REPLY_BOT_MESSAGE),
-  "message mentions bio for the web link",
+  /first valid reply before kickoff/i.test(nudge),
+  "nudge mentions kickoff rule",
 );
-assert.ok(
-  !/copamundial\.app|discord\.gg|https?:\/\//i.test(PREDICTION_REPLY_BOT_MESSAGE),
-  "message must not include URL entities (plain-text write rate)",
+
+const MATCH = { home: "Saint-Étienne", away: "Nice" };
+
+assert.equal(parsePrediction("Saint-Étienne 2-1 Nice", MATCH)?.homeScore, 2);
+assert.equal(
+  looksLikeInvalidPredictionAttempt("Saint-Étienne 2-1 Nice", MATCH),
+  false,
+  "valid pick is not an invalid attempt",
 );
-assert.ok(
-  !/bonus/i.test(PREDICTION_REPLY_BOT_MESSAGE),
-  "message must not mention bonus points",
+
+assert.equal(
+  looksLikeInvalidPredictionAttempt("2-1", MATCH),
+  true,
+  "bare score is an invalid attempt",
+);
+
+assert.equal(
+  looksLikeInvalidPredictionAttempt("Saint-Étienne 2-1", MATCH),
+  true,
+  "one team + score is an invalid attempt",
+);
+
+assert.equal(
+  looksLikeInvalidPredictionAttempt("Come on Saint-Étienne!", MATCH),
+  false,
+  "hype without score is not nudged",
 );
 
 assert.equal(

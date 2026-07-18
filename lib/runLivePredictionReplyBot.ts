@@ -2,8 +2,9 @@ import type { Fixture } from "@/app/data/fixtures";
 import { getSupabaseAdminClient } from "@/app/lib/supabase";
 import { isReplyBeforeKickoff } from "@/lib/predictionEligibility";
 import { fetchReplies } from "@/lib/fetchReplies";
-import { parsePrediction } from "@/lib/predictionParser";
+import { parsePrediction, looksLikeInvalidPredictionAttempt } from "@/lib/predictionParser";
 import {
+  enqueuePredictionBotFormatNudge,
   enqueuePredictionBotReply,
   isPredictionReplyBotEnabled,
   processPredictionBotReplies,
@@ -25,6 +26,7 @@ export type LiveReplyBotPassResult = {
   threadsScanned: number;
   repliesScanned: number;
   validPredictionsSeen: number;
+  formatNudgesQueued: number;
   queued: number;
   process: PredictionBotProcessResult;
   threadErrors: Array<{ matchId: number; error: string }>;
@@ -157,6 +159,7 @@ export async function runLivePredictionReplyBot(
       threadsScanned: 0,
       repliesScanned: 0,
       validPredictionsSeen: 0,
+      formatNudgesQueued: 0,
       queued: 0,
       process: {
         enabled: false,
@@ -173,6 +176,7 @@ export async function runLivePredictionReplyBot(
   const threads = await loadOpenMatchThreadsForReplyBot(now);
   let repliesScanned = 0;
   let validPredictionsSeen = 0;
+  let formatNudgesQueued = 0;
   let queued = 0;
   const threadErrors: Array<{ matchId: number; error: string }> = [];
 
@@ -196,18 +200,33 @@ export async function runLivePredictionReplyBot(
         seenAuthors.add(reply.authorId);
 
         if (!isReplyBeforeKickoff(reply.createdAt, fixture)) continue;
-        if (!parsePrediction(reply.text, fixture)) continue;
 
-        validPredictionsSeen += 1;
-        const result = await enqueuePredictionBotReply({
-          matchId: thread.matchId,
-          userId: reply.authorId,
-          userHandle: reply.authorUsername.startsWith("@")
-            ? reply.authorUsername
-            : `@${reply.authorUsername}`,
-          sourceTweetId: reply.id,
-        });
-        if (result === "queued") queued += 1;
+        const parsed = parsePrediction(reply.text, fixture);
+        if (parsed) {
+          validPredictionsSeen += 1;
+          const result = await enqueuePredictionBotReply({
+            matchId: thread.matchId,
+            userId: reply.authorId,
+            userHandle: reply.authorUsername.startsWith("@")
+              ? reply.authorUsername
+              : `@${reply.authorUsername}`,
+            sourceTweetId: reply.id,
+          });
+          if (result === "queued") queued += 1;
+          continue;
+        }
+
+        if (looksLikeInvalidPredictionAttempt(reply.text, fixture)) {
+          const nudge = await enqueuePredictionBotFormatNudge({
+            matchId: thread.matchId,
+            userId: reply.authorId,
+            userHandle: reply.authorUsername.startsWith("@")
+              ? reply.authorUsername
+              : `@${reply.authorUsername}`,
+            sourceTweetId: reply.id,
+          });
+          if (nudge === "queued") formatNudgesQueued += 1;
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -219,7 +238,7 @@ export async function runLivePredictionReplyBot(
   }
 
   const process = await processPredictionBotReplies();
-  const message = `scanned ${threads.length} open threads, queued ${queued}, sent ${process.sent}`;
+  const message = `scanned ${threads.length} open threads, queued ${queued}, nudged ${formatNudgesQueued}, sent ${process.sent}`;
   console.log(`[reply-bot] ${message}`);
 
   return {
@@ -228,6 +247,7 @@ export async function runLivePredictionReplyBot(
     threadsScanned: threads.length,
     repliesScanned,
     validPredictionsSeen,
+    formatNudgesQueued,
     queued,
     process,
     threadErrors,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  collapseLegacyDuplicateGoals,
   finalizeMatchGoals,
   fuseSplitGoalRows,
   mergeMatchGoals,
@@ -28,9 +29,27 @@ const bellingham: StoredGoal = {
   side: "home",
   player: "Jude Bellingham",
   playerShort: "J. Bellingham",
+  playerId: null,
+  clockSeconds: null,
+  seq: null,
   ownGoal: false,
   penalty: false,
 };
+
+function goal(partial: Omit<StoredGoal, never> & Partial<StoredGoal>): StoredGoal {
+  return {
+    minute: null,
+    side: "home",
+    player: null,
+    playerShort: null,
+    playerId: null,
+    clockSeconds: null,
+    seq: null,
+    ownGoal: false,
+    penalty: false,
+    ...partial,
+  };
+}
 
 run("fuseSplitGoalRows pairs one named row with one timed row", () => {
   const fused = fuseSplitGoalRows([
@@ -167,6 +186,58 @@ run("fuseSplitGoalRows keeps own-goal flags separate when pairing", () => {
   assert.equal(og?.player, "Own Goal Scorer");
   assert.equal(regular?.minute, 55);
   assert.equal(regular?.player, null);
+});
+
+run("collapseLegacyDuplicateGoals drops minute-key shadow when clock row exists", () => {
+  const collapsed = collapseLegacyDuplicateGoals([
+    goal({
+      minute: 69,
+      side: "away",
+      player: "Kylian Mbappe Lottin",
+      playerId: null,
+      clockSeconds: null,
+      seq: null,
+    }),
+    goal({
+      minute: 69,
+      side: "away",
+      player: "Kylian Mbappe Lottin",
+      playerId: 453928,
+      clockSeconds: 4164,
+      seq: 693,
+      penalty: true,
+    }),
+  ]);
+  assert.equal(collapsed.length, 1);
+  assert.equal(collapsed[0]?.clockSeconds, 4164);
+  assert.equal(collapsed[0]?.playerId, 453928);
+});
+
+run("mergeMatchGoals keeps same-minute goals when clock_seconds differ", () => {
+  const merged = mergeMatchGoals(
+    [
+      goal({
+        minute: 45,
+        side: "home",
+        player: "First",
+        clockSeconds: 45 * 60 + 10,
+        seq: 10,
+        playerId: 1,
+      }),
+      goal({
+        minute: 45,
+        side: "away",
+        player: "Second",
+        clockSeconds: 45 * 60 + 40,
+        seq: 20,
+        playerId: 2,
+      }),
+    ],
+    [],
+  );
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0]?.player, "First");
+  assert.equal(merged[1]?.player, "Second");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

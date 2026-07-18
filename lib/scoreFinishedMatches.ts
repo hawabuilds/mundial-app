@@ -23,6 +23,7 @@ import {
   ensureMatchGoalsBackfilled,
   retryIncompleteMatchGoalsBackfills,
 } from "@/lib/backfillMatchGoals";
+import { retryFirstGoalscorerBonusSettlement } from "@/lib/settleFirstGoalscorerBonus";
 
 import {
 
@@ -306,6 +307,23 @@ export async function runAutoScoreMaintenance(): Promise<{
   if (matchGoals.attempted > 0) {
     console.info(
       `[match-goals] Scorer retry: attempted=${matchGoals.attempted} backfilled=${matchGoals.backfilled} skipped=${matchGoals.skipped} errors=${matchGoals.errors}`,
+    );
+  }
+
+  const bonusSettlement = await retryFirstGoalscorerBonusSettlement(
+    getActiveFixtures(),
+  ).catch((error) => {
+    console.warn(
+      "[first-goalscorer] Bonus settlement pass failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return [] as Awaited<ReturnType<typeof retryFirstGoalscorerBonusSettlement>>;
+  });
+  if (bonusSettlement.length > 0) {
+    const doubled = bonusSettlement.reduce((sum, row) => sum + row.doubled, 0);
+    const voided = bonusSettlement.filter((row) => row.status === "settled_void").length;
+    console.info(
+      `[first-goalscorer] Maintenance: processed=${bonusSettlement.length} doubled=${doubled} voided=${voided}`,
     );
   }
 

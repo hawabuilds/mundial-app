@@ -1,0 +1,54 @@
+.cta {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-3);
+  width: 100%;
+  margin-top: var(--m-space-3);
+  padding: var(--m-space-3) var(--m-space-4);
+  border-radius: var(--m-radius-lg);
+  border: 1px solid var(--m-accent-border);
+  background: var(--m-accent-soft);
+  color: var(--m-white);
+  cursor: pointer;
+  text-align: left;
+}
+
+.badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--m-accent);
+  color: var(--m-white);
+  font-family: var(--m-font-display);
+  font-size: var(--m-text-xs);
+  font-weight: 800;
+}
+
+.copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.label {
+  display: block;
+  font-size: var(--m-text-sm);
+  font-weight: 600;
+  color: var(--m-white);
+}
+
+.match {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--m-text-xs);
+  color: var(--m-muted);
+}
+
+.chevron {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  color: var(--m-accent);
+}

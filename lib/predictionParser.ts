@@ -412,6 +412,35 @@ export function parsePrediction(
   );
 }
 
+/**
+ * True when a reply looks like a score prediction attempt but fails parsePrediction
+ * (e.g. "2-1", "France 2-1", both teams with malformed score). Skips hype/comments.
+ */
+export function looksLikeInvalidPredictionAttempt(
+  replyText: string,
+  fixture: Pick<Fixture, "home" | "away">,
+): boolean {
+  if (parsePrediction(replyText, fixture)) return false;
+
+  const text = normalizeText(replyText);
+  if (!text) return false;
+
+  const pairedScores = countPairedScorelines(text);
+  if (pairedScores === 0) return false;
+
+  const mentionsBoth = matchTeamsInOrder(text, fixture);
+  const mentionsHome =
+    findEarliestTeamMatch(text, getTeamAliases(fixture.home), fixture.home) !=
+    null;
+  const mentionsAway =
+    findEarliestTeamMatch(text, getTeamAliases(fixture.away), fixture.away) !=
+    null;
+
+  if (!mentionsBoth) return true;
+  if (mentionsHome && mentionsAway && pairedScores >= 1) return true;
+  return false;
+}
+
 /** Useful for tests/debugging. */
 export function explainPrediction(
   replyText: string,

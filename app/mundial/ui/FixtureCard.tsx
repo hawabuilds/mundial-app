@@ -24,6 +24,7 @@ import styles from "./FixtureCard.module.css";
 type FixtureCardProps = {
   fixture: MundialFixture;
   featured?: boolean;
+  glow?: boolean;
   /** Show the "tap to reply" example (upcoming matches only). */
   withReply?: boolean;
   /** Show TxLINE market odds (must be set explicitly for the current match only). */
@@ -219,6 +220,7 @@ function goalsDuringCelebration(
 export default function FixtureCard({
   fixture,
   featured = false,
+  glow,
   withReply = false,
   showMarketOdds = false,
   celebration = null,
@@ -688,10 +690,11 @@ export default function FixtureCard({
   };
 
   const penaltyKicks = penaltyShootout?.kicks ?? [];
+  const cardGlow = glow ?? featured;
 
   return (
     <Card
-      glow={featured}
+      glow={cardGlow}
       style={cardMoment ? goalCelebrationTimingStyle() : undefined}
       className={`${featured ? styles.featured : styles.compact}${
         cardMoment ? ` ${styles.cardGoalMoment}` : ""
