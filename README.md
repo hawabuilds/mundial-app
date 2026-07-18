@@ -40,8 +40,9 @@ Each day at **10:00 UTC** a snapshot locks the top 20 and posts that day’s sta
 ## How it works
 
 1. **Reply before kickoff.** Post your scoreline (e.g. `Argentina 2-1 Brazil`) as a reply to the match thread on X. Your first valid reply is the one that counts.
-2. **Points are automatic.** When the match finishes, points are awarded based on how accurate you were, and they add to your season total.
-3. **Daily snapshot.** Every day at 10:00 UTC a snapshot locks in the top 20, who can then claim a share of the USDC prize pool on Solana.
+2. **Double your points (optional).** Once you have a score prediction, sign in at [copamundial.app](https://copamundial.app) and pick who you think scores first — before kickoff. Get it right and your scoreline points for that match are doubled.
+3. **Points are automatic.** When the match finishes, points are awarded based on how accurate you were (and whether your first-goalscorer pick was correct), and they add to your season total.
+4. **Daily snapshot.** Every day at 10:00 UTC a snapshot locks in the top 20, who can then claim a share of the USDC prize pool on Solana.
 
 Free to play — you only need a wallet if you want to collect a payout.
 
@@ -66,7 +67,11 @@ points     = round(base × multiplier)
 
 **Worked example.** You predict an exact scoreline (base 5) for an underdog whose implied win chance was 25%. Multiplier = `min(3, 100 / 25) = 3`. Points = `round(5 × 3) = 15`. Backing a heavy favourite would earn a much smaller multiplier, so beating the odds is always worth more.
 
-Implementation: `lib/scoring.ts`.
+**First goalscorer bonus** — optional, in-app only. After your scoreline is locked in, pick the first goalscorer before kickoff. Call it correctly and your scoreline points for that match are doubled (`final = scoreline × 2`). A wrong pick, a 0-0, or no first goal leaves your scoreline points unchanged. If goal data is still incomplete when the match is scored, the bonus waits for backfill; if it never becomes settleable, the bonus is void and you keep your base scoreline points.
+
+**Worked example (bonus).** You earned 15 scoreline points and picked the first goalscorer correctly. Final points = `15 × 2 = 30`.
+
+Implementation: scoreline in `lib/scoring.ts`; first-goalscorer bonus in `lib/firstGoalscorerScoring.ts`.
 
 ## Built on TxLINE (the key integration)
 
