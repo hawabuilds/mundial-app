@@ -1,10 +1,10 @@
-# Copa Mundial
+# Mundial
 
 ![CI](https://github.com/hawabuilds/mundial-app/actions/workflows/ci.yml/badge.svg)
 
 Predict World Cup scorelines on X, earn odds-weighted points, and win USDC on Solana — with TxLINE proofs you can check against Solana.
 
-Copa Mundial is a football score-prediction game. You reply to a match thread on X (Twitter) with your scoreline before kickoff, points are awarded automatically when the match ends, and your score builds up on a season-long leaderboard. Once a day the top players can claim a share of a USDC prize pool paid out on Solana.
+Mundial is a football score-prediction game. You reply to a match thread on X (Twitter) with your scoreline before kickoff, points are awarded automatically when the match ends, and your score builds up on a season-long leaderboard. Once a day the top players can claim a share of a USDC prize pool paid out on Solana.
 
 The part that makes it different: results aren’t just trusted, they’re provable. Match data comes from TxLINE (by TxODDS), which publishes score proofs anchored on Solana. When a match settles, Copa Mundial stores that proof and only shows a “TxLINE verified” badge when the proof’s regulation score matches the score we settled in the database. Separately, you can run the same proof against the on-chain Merkle root with a CLI script — that chain check is for judges and ops, not something the live card does on every refresh.
 
@@ -39,7 +39,7 @@ Each day at **10:00 UTC** a snapshot locks the top 20 and posts that day’s sta
 
 ## How it works
 
-1. **Reply before kickoff.** Post your scoreline (e.g. `2-1`) as a reply to the match thread on X. Your first valid reply is the one that counts.
+1. **Reply before kickoff.** Post your scoreline (e.g. `Argentina 2-1 Brazil`) as a reply to the match thread on X. Your first valid reply is the one that counts.
 2. **Points are automatic.** When the match finishes, points are awarded based on how accurate you were, and they add to your season total.
 3. **Daily snapshot.** Every day at 10:00 UTC a snapshot locks in the top 20, who can then claim a share of the USDC prize pool on Solana.
 
