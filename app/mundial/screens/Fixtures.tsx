@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
   fetchBoardMatches,
+  fetchFirstGoalscorerOpportunities,
   fetchMyLeaderboardStats,
+  type FirstGoalscorerOpportunity,
   type UserScoreBreakdown,
 } from "@/app/lib/leaderboard-client";
 import { goalScorerDisplayName } from "@/lib/playerDisplayName";
@@ -15,6 +17,8 @@ import {
   type MundialFixture,
 } from "../lib/fixtures";
 import Card from "../ui/Card";
+import FirstGoalscorerBanner from "../ui/FirstGoalscorerBanner";
+import FirstGoalscorerPicker from "../ui/FirstGoalscorerPicker";
 import FixtureCard from "../ui/FixtureCard";
 import GoalMomentOverlay from "../ui/GoalMomentOverlay";
 import type { GoalCelebration } from "../ui/goalCelebration";
@@ -26,6 +30,21 @@ import styles from "./Fixtures.module.css";
 
 function scoreLine(home: number, away: number): string {
   return `${home}-${away}`;
+}
+
+function fixtureKickoffMs(fixture: MundialFixture): number {
+  if (fixture.kickoffUtcMs != null && Number.isFinite(fixture.kickoffUtcMs)) {
+    return fixture.kickoffUtcMs;
+  }
+  if (fixture.date && fixture.time) {
+    return Date.parse(`${fixture.date}T${fixture.time}:00Z`);
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+function isFixtureLocked(fixture: MundialFixture): boolean {
+  const kickoffMs = fixtureKickoffMs(fixture);
+  return Number.isFinite(kickoffMs) && Date.now() >= kickoffMs;
 }
 
 function findLiveMatch(fixtures: MundialFixture[]): MundialFixture | null {
@@ -171,6 +190,11 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     null,
   );
   const [statsLoading, setStatsLoading] = useState(true);
+  const [firstGoalscorerOps, setFirstGoalscorerOps] = useState<
+    FirstGoalscorerOpportunity[]
+  >([]);
+  const [firstGoalscorerOpsLoading, setFirstGoalscorerOpsLoading] = useState(true);
+  const [pickerMatchId, setPickerMatchId] = useState<number | null>(null);
   const liveScoreRef = useRef<LiveScoreSnapshot | null>(null);
   const [goalCelebration, setGoalCelebration] = useState<GoalCelebration | null>(
     null,
@@ -252,6 +276,80 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
     };
   }, [status]);
 
+  const refreshFirstGoalscorerOps = useCallback(() => {
+    if (status === "loading" || !loaded) return;
+
+    if (status !== "authenticated") {
+      setFirstGoalscorerOps([]);
+      setFirstGoalscorerOpsLoading(false);
+      return;
+    }
+
+    const upcomingIds = fixtures
+      .filter((f) => f.phase === "upcoming")
+      .map((f) => f.id);
+    if (upcomingIds.length === 0) {
+      setFirstGoalscorerOps([]);
+      setFirstGoalscorerOpsLoading(false);
+      return;
+    }
+
+    setFirstGoalscorerOpsLoading(true);
+    void fetchFirstGoalscorerOpportunities(upcomingIds)
+      .then(setFirstGoalscorerOps)
+      .catch(() => setFirstGoalscorerOps([]))
+      .finally(() => setFirstGoalscorerOpsLoading(false));
+  }, [fixtures, loaded, status]);
+
+  useEffect(() => {
+    refreshFirstGoalscorerOps();
+  }, [refreshFirstGoalscorerOps]);
+
+  const firstGoalscorerByMatchId = new Map(
+    firstGoalscorerOps.map((op) => [op.match_id, op]),
+  );
+
+  const pendingFirstGoalscorerFixtures = sortFixturesByKickoffAsc(
+    fixtures.filter((fixture) => {
+      if (fixture.phase !== "upcoming") return false;
+      const op = firstGoalscorerByMatchId.get(fixture.id);
+      if (!op?.hasScorePrediction || op.hasFirstGoalscorerPrediction) return false;
+      return !isFixtureLocked(fixture);
+    }),
+  );
+
+  const bannerFixture = pendingFirstGoalscorerFixtures[0] ?? null;
+  const bannerExtraCount = Math.max(0, pendingFirstGoalscorerFixtures.length - 1);
+  const hasBonusBanner = bannerFixture != null;
+
+  const lastPick = lastBreakdown
+    ? (() => {
+        const onBoard = fixtures.find((f) => f.id === lastBreakdown.match_id);
+        return {
+          ...lastBreakdown,
+          home: onBoard?.home ?? lastBreakdown.home,
+          away: onBoard?.away ?? lastBreakdown.away,
+        };
+      })()
+    : null;
+
+  const bonusEligibilityReady =
+    status !== "loading" &&
+    (status !== "authenticated" || (loaded && !firstGoalscorerOpsLoading));
+  const showLastPick = Boolean(lastPick && bonusEligibilityReady && !hasBonusBanner);
+
+  const renderBonusBanner = (fixture: MundialFixture, sticky = false) => {
+    if (pickerMatchId != null) return null;
+    if (!bannerFixture || bannerFixture.id !== fixture.id) return null;
+    return (
+      <FirstGoalscorerBanner
+        extraCount={bannerExtraCount}
+        sticky={sticky}
+        onOpen={() => setPickerMatchId(fixture.id)}
+      />
+    );
+  };
+
   const liveList = fixtures.filter(
     (f) => f.phase === "live" || f.phase === "recent",
   );
@@ -290,17 +388,6 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const ptsLabel =
     statsLoading ? "—" : points != null ? points.toLocaleString() : "0";
 
-  const lastPick = lastBreakdown
-    ? (() => {
-        const onBoard = fixtures.find((f) => f.id === lastBreakdown.match_id);
-        return {
-          ...lastBreakdown,
-          home: onBoard?.home ?? lastBreakdown.home,
-          away: onBoard?.away ?? lastBreakdown.away,
-        };
-      })()
-    : null;
-
   return (
     <AppShell
       tab="fixtures"
@@ -308,13 +395,20 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       vaultDot={vaultDot}
       headerTrailing={<ProfileMenu />}
     >
+      {pickerMatchId != null ? (
+        <FirstGoalscorerPicker
+          matchId={pickerMatchId}
+          onClose={() => setPickerMatchId(null)}
+          onSaved={refreshFirstGoalscorerOps}
+        />
+      ) : null}
       {goalCelebration ? (
         <GoalMomentOverlay
           event={goalCelebration}
           onDone={clearGoalCelebration}
         />
       ) : null}
-      <Card glow className={styles.stat}>
+      <Card glow={!hasBonusBanner} className={styles.stat}>
         <div className={styles.statBlock}>
           <p className="m-label">Your place</p>
           <p className={styles.statNum}>{rankLabel}</p>
@@ -328,7 +422,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
 
       <ScoringRules />
 
-      {lastPick ? (
+      {showLastPick && lastPick ? (
         <div className={styles.lastPick}>
           <p className={styles.lastPickLabel}>Last match scored</p>
           <p className={styles.lastPickMatch}>
@@ -383,9 +477,11 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
           {nextGame ? (
             <section className={styles.section}>
               <p className="m-label">Next whistle</p>
+              {renderBonusBanner(nextGame, true)}
               <FixtureCard
                 fixture={nextGame}
                 featured
+                glow={!hasBonusBanner || bannerFixture?.id !== nextGame.id}
                 withReply
                 showMarketOdds={showOddsFor(nextGame)}
               />
@@ -398,6 +494,7 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
               <ul className={styles.list}>
                 {comingUp.map((f) => (
                   <li key={f.id}>
+                    {renderBonusBanner(f)}
                     <FixtureCard fixture={f} />
                   </li>
                 ))}

@@ -238,3 +238,102 @@ export async function fetchNextMatchStatus(): Promise<string | null> {
   const data = await fetchNextMatch();
   return data.statusLabel ?? null;
 }
+
+export type FirstGoalscorerLineupPlayer = {
+  playerId: number;
+  name: string;
+  shortName: string;
+  side: "home" | "away";
+};
+
+export type FirstGoalscorerMatchState = {
+  matchId: number;
+  fixture: {
+    home: string;
+    away: string;
+    homeCode: string;
+    awayCode: string;
+  };
+  eligible: boolean;
+  locked: boolean;
+  kickoffAt: string;
+  scorePrediction: { home: number; away: number } | null;
+  prediction: {
+    playerId: number | null;
+    playerName: string;
+    playerSide: "home" | "away";
+    predictedAt: string;
+  } | null;
+  lineup: {
+    source: "txline" | "manual";
+    players: FirstGoalscorerLineupPlayer[];
+  };
+};
+
+export type FirstGoalscorerOpportunity = {
+  match_id: number;
+  hasScorePrediction: boolean;
+  hasFirstGoalscorerPrediction: boolean;
+};
+
+export async function fetchFirstGoalscorerOpportunities(
+  matchIds: number[],
+): Promise<FirstGoalscorerOpportunity[]> {
+  if (matchIds.length === 0) return [];
+  const query = encodeURIComponent(matchIds.join(","));
+  const response = await fetch(
+    `/api/me/first-goalscorer-opportunities?matchIds=${query}`,
+    { cache: "no-store" },
+  );
+  if (response.status === 401) return [];
+  if (!response.ok) {
+    throw new Error("Could not load first goalscorer opportunities");
+  }
+  const data = (await response.json()) as {
+    opportunities: FirstGoalscorerOpportunity[];
+  };
+  return data.opportunities ?? [];
+}
+
+export async function fetchFirstGoalscorerMatchState(
+  matchId: number,
+): Promise<FirstGoalscorerMatchState> {
+  const response = await fetch(`/api/me/first-goalscorer/${matchId}`, {
+    cache: "no-store",
+  });
+  if (response.status === 401) {
+    throw new Error("Sign in to pick a first goalscorer");
+  }
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(body?.error ?? "Could not load first goalscorer picker");
+  }
+  return (await response.json()) as FirstGoalscorerMatchState;
+}
+
+export async function saveFirstGoalscorerPrediction(input: {
+  matchId: number;
+  playerId: number | null;
+  playerName: string;
+  playerSide: "home" | "away";
+}): Promise<FirstGoalscorerMatchState["prediction"]> {
+  const response = await fetch(`/api/me/first-goalscorer/${input.matchId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      playerId: input.playerId,
+      playerName: input.playerName,
+      playerSide: input.playerSide,
+    }),
+  });
+  const body = (await response.json().catch(() => null)) as {
+    error?: string;
+    prediction?: FirstGoalscorerMatchState["prediction"];
+  } | null;
+  if (!response.ok) {
+    throw new Error(body?.error ?? "Could not save first goalscorer pick");
+  }
+  return body?.prediction ?? null;
+}

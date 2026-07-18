@@ -514,6 +514,9 @@ export type MatchGoal = {
   side: "home" | "away";
   player: string | null;
   playerShort: string | null;
+  playerId: number | null;
+  clockSeconds: number | null;
+  seq: number | null;
   ownGoal: boolean;
   penalty: boolean;
 };

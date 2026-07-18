@@ -293,6 +293,9 @@ export type TxGoal = {
   participant: 1 | 2;
   player: string | null;
   playerShort: string | null;
+  playerId: number | null;
+  clockSeconds: number | null;
+  seq: number | null;
   ownGoal: boolean;
   penalty: boolean;
 };
@@ -308,8 +311,12 @@ function isPenaltyGoalType(goalType: unknown): boolean {
 function scorerFromData(
   data: Record<string, unknown> | undefined,
   nameById: Map<number, string>,
-): { player: string | null; playerShort: string | null } {
-  if (!data) return { player: null, playerShort: null };
+): {
+  player: string | null;
+  playerShort: string | null;
+  playerId: number | null;
+} {
+  if (!data) return { player: null, playerShort: null, playerId: null };
   const inlineName =
     typeof data.PreferredName === "string"
       ? data.PreferredName
@@ -318,10 +325,13 @@ function scorerFromData(
         : null;
   const pid = typeof data.PlayerId === "number" ? data.PlayerId : null;
   const preferred = inlineName ?? (pid != null ? nameById.get(pid) : undefined);
-  if (!preferred) return { player: null, playerShort: null };
+  if (!preferred) {
+    return { player: null, playerShort: null, playerId: pid };
+  }
   return {
     player: formatPlayerFullName(preferred),
     playerShort: formatPlayerShortName(preferred),
+    playerId: pid,
   };
 }
 
@@ -385,6 +395,9 @@ function goalsFromPeriodStats(events: TxScoreEvent[]): TxGoal[] {
             participant,
             player: null,
             playerShort: null,
+            playerId: null,
+            clockSeconds: null,
+            seq: null,
             ownGoal: false,
             penalty: false,
           });
@@ -413,6 +426,9 @@ function mergeGoalLists(periodGoals: TxGoal[], actionGoals: TxGoal[]): TxGoal[] 
       penalty: goal.penalty || prev.penalty,
       player: goal.player ?? prev.player,
       playerShort: goal.playerShort ?? prev.playerShort,
+      playerId: goal.playerId ?? prev.playerId,
+      clockSeconds: goal.clockSeconds ?? prev.clockSeconds,
+      seq: goal.seq ?? prev.seq,
     });
   }
   return [...byKey.values()];
@@ -452,8 +468,14 @@ function goalsFromActions(
       penalty: next.penalty || prev.penalty,
       player: next.player ?? prev.player,
       playerShort: next.playerShort ?? prev.playerShort,
+      playerId: next.playerId ?? prev.playerId,
+      clockSeconds: next.clockSeconds ?? prev.clockSeconds,
+      seq: next.seq ?? prev.seq,
     });
   };
+
+  const eventSeq = (seq: number | undefined): number | null =>
+    typeof seq === "number" ? seq : null;
 
   for (const e of sorted) {
     const participant: 1 | 2 = e.Participant === 2 ? 2 : 1;
@@ -466,6 +488,8 @@ function goalsFromActions(
         minute: goalMinute(seconds),
         participant,
         ...scorer,
+        clockSeconds: typeof seconds === "number" ? seconds : null,
+        seq: eventSeq(e.Seq),
         ownGoal: isOwnGoalType(data?.GoalType),
         penalty: isPenaltyGoalType(data?.GoalType),
       });
@@ -482,6 +506,8 @@ function goalsFromActions(
         minute: goalMinute(seconds),
         participant,
         ...scorer,
+        clockSeconds: typeof seconds === "number" ? seconds : null,
+        seq: eventSeq(e.Seq),
         ownGoal: false,
         penalty: true,
       });
@@ -505,6 +531,8 @@ function goalsFromActions(
         minute: goalMinute(seconds),
         participant,
         ...scorer,
+        clockSeconds: typeof seconds === "number" ? seconds : null,
+        seq: eventSeq(e.Seq),
         ownGoal: false,
         penalty: true,
       });
@@ -528,6 +556,8 @@ function goalsFromActions(
       minute: goalMinute(seconds),
       participant: amendParticipant,
       ...scorer,
+      clockSeconds: typeof seconds === "number" ? seconds : null,
+      seq: eventSeq(e.Seq),
       ownGoal: isOwnGoalType(amend.New.GoalType),
       penalty: isPenaltyGoalType(amend.New.GoalType),
     });

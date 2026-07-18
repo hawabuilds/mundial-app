@@ -22,6 +22,9 @@ export function mapTxGoalsToMatchGoals(
     side: (goal.participant === 1 ? homeIsP1 : !homeIsP1) ? "home" : "away",
     player: goal.player,
     playerShort: goal.playerShort,
+    playerId: goal.playerId,
+    clockSeconds: goal.clockSeconds,
+    seq: goal.seq,
     ownGoal: goal.ownGoal,
     penalty: goal.penalty,
   }));
@@ -41,7 +44,12 @@ export function matchGoalsFromEvents(
 
 /** Play-by-play rows only — period-stat placeholders are not persisted. */
 export function isPersistableGoal(goal: MatchGoal): boolean {
-  return goal.minute != null || goal.player != null;
+  return (
+    goal.minute != null ||
+    goal.player != null ||
+    goal.clockSeconds != null ||
+    goal.playerId != null
+  );
 }
 
 export async function persistTxlineGoals(

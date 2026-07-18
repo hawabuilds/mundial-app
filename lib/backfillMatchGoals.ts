@@ -4,11 +4,14 @@ import {
   getMatchGoals,
   getMatchState,
   isMatchScored,
+  replaceMatchGoals,
   upsertMatchGoals,
   type StoredGoal,
 } from "@/app/lib/supabase";
 import { mapTxGoalsToMatchGoals } from "@/lib/matchGoalsPersist";
+import { needsGoalDataBackfill } from "@/lib/firstGoalscorerCompleteness";
 import {
+  extractActionGoals,
   extractGoals,
   fetchScoreSequence,
   fetchScoresSnapshot,
@@ -19,6 +22,9 @@ import {
 
 /** Re-check settled fixtures for missing scorer detail for up to 24h after settlement. */
 export const SCORER_BACKFILL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** TxLINE historical replay retention (~2 weeks after kickoff). */
+export const TXLINE_HISTORICAL_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 
 export function countGoalsBySide(goals: StoredGoal[]): { home: number; away: number } {
   return {
@@ -81,6 +87,18 @@ export function deriveMatchGoalsFromScoreSequence(
   return finalizeMatchGoals(mapped, homeScore, awayScore);
 }
 
+/** Play-by-play goals only — used for first-scorer backfill (preserves clock/seq/id). */
+export function derivePersistableMatchGoalsFromScoreSequence(
+  events: TxScoreEvent[],
+  homeIsP1: boolean,
+  homeScore: number,
+  awayScore: number,
+): StoredGoal[] {
+  const txGoals = extractActionGoals(events);
+  const mapped = mapTxGoalsToMatchGoals(txGoals, homeIsP1) as StoredGoal[];
+  return finalizeMatchGoals(mapped, homeScore, awayScore);
+}
+
 export type BackfillMatchGoalsResult =
   | {
       status: "skipped";
@@ -136,12 +154,12 @@ export async function backfillMatchGoalsByTxFixture(input: {
 
     const before = await getMatchGoals(txFixtureId).catch(() => [] as StoredGoal[]);
 
-    if (!isMatchGoalsInconsistentWithScore(before, homeScore, awayScore)) {
+    if (!needsGoalDataBackfill(before, homeScore, awayScore)) {
       return {
         status: "skipped",
         matchId: matchId ?? 0,
         txFixtureId,
-        reason: "match_goals already consistent with final score",
+        reason: "goal data complete for first-scorer settlement",
         before,
         after: before,
       };
@@ -156,7 +174,7 @@ export async function backfillMatchGoalsByTxFixture(input: {
       };
     }
 
-    const derived = deriveMatchGoalsFromScoreSequence(
+    const derived = derivePersistableMatchGoalsFromScoreSequence(
       events,
       homeIsP1,
       homeScore,
@@ -169,7 +187,7 @@ export async function backfillMatchGoalsByTxFixture(input: {
         error: `Score sequence has no recoverable goals for TxLINE fixture ${txFixtureId}`,
       };
     }
-    const { after } = await upsertMatchGoals(txFixtureId, derived);
+    const { after } = await replaceMatchGoals(txFixtureId, derived);
 
     return {
       status: "backfilled",
@@ -370,6 +388,10 @@ export async function retryIncompleteMatchGoalsBackfills(
         console.info(
           `[match-goals] Retry backfilled match ${fixture.id}: ${result.before.length} → ${result.after.length} rows`,
         );
+        const { settleFirstGoalscorerBonusForMatch } = await import(
+          "@/lib/settleFirstGoalscorerBonus"
+        );
+        await settleFirstGoalscorerBonusForMatch(fixture.id, fixture);
       } else if (result.status === "skipped") {
         summary.skipped += 1;
         summary.details.push({
@@ -391,6 +413,106 @@ export async function retryIncompleteMatchGoalsBackfills(
         matchId: fixture.id,
         status: "error",
         reason: error instanceof Error ? error.message : "retry failed",
+      });
+    }
+  }
+
+  return summary;
+}
+
+export function isWithinTxlineHistoricalWindow(fixture: Fixture): boolean {
+  const kickoffMs = fixtureDateTime(fixture).getTime();
+  if (!Number.isFinite(kickoffMs)) return false;
+  return Date.now() - kickoffMs <= TXLINE_HISTORICAL_RETENTION_MS;
+}
+
+export type RecentGoalDataBackfillResult = {
+  attempted: number;
+  backfilled: number;
+  skipped: number;
+  errors: number;
+  details: Array<{
+    matchId: number;
+    fixture: string;
+    status: "backfilled" | "skipped" | "error";
+    reason?: string;
+  }>;
+};
+
+/**
+ * Re-fetch TxLINE historical replay for recent settled matches and upsert
+ * play-by-play identity fields (player_id, clock_seconds, seq).
+ */
+export async function backfillRecentSettledGoalData(
+  fixtures: Fixture[],
+): Promise<RecentGoalDataBackfillResult> {
+  const summary: RecentGoalDataBackfillResult = {
+    attempted: 0,
+    backfilled: 0,
+    skipped: 0,
+    errors: 0,
+    details: [],
+  };
+
+  if (!isTxoddsConfigured()) return summary;
+
+  for (const fixture of fixtures) {
+    const label = `${fixture.home} vs ${fixture.away}`;
+    try {
+      if (!(await isMatchScored(fixture.id).catch(() => false))) continue;
+      if (!isWithinTxlineHistoricalWindow(fixture)) continue;
+
+      const state = await getMatchState(fixture.id);
+      const homeScore = state?.final_home_score;
+      const awayScore = state?.final_away_score;
+      if (typeof homeScore !== "number" || typeof awayScore !== "number") {
+        continue;
+      }
+
+      const txFixtureId = fixture.externalFixtureId;
+      if (txFixtureId == null || txFixtureId <= 0) continue;
+
+      const stored = await getMatchGoals(txFixtureId).catch(() => [] as StoredGoal[]);
+      if (!needsGoalDataBackfill(stored, homeScore, awayScore)) {
+        summary.skipped += 1;
+        summary.details.push({
+          matchId: fixture.id,
+          fixture: label,
+          status: "skipped",
+          reason: "already settleable for first-scorer",
+        });
+        continue;
+      }
+
+      summary.attempted += 1;
+      const result = await backfillMatchGoals(fixture.id);
+      if (result.status === "backfilled") {
+        summary.backfilled += 1;
+        summary.details.push({ matchId: fixture.id, fixture: label, status: "backfilled" });
+      } else if (result.status === "skipped") {
+        summary.skipped += 1;
+        summary.details.push({
+          matchId: fixture.id,
+          fixture: label,
+          status: "skipped",
+          reason: result.reason,
+        });
+      } else {
+        summary.errors += 1;
+        summary.details.push({
+          matchId: fixture.id,
+          fixture: label,
+          status: "error",
+          reason: result.error,
+        });
+      }
+    } catch (error) {
+      summary.errors += 1;
+      summary.details.push({
+        matchId: fixture.id,
+        fixture: label,
+        status: "error",
+        reason: error instanceof Error ? error.message : "backfill failed",
       });
     }
   }
@@ -422,6 +544,20 @@ export async function ensureMatchGoalsBackfilled(
     } else {
       console.warn(
         `[match-goals] Backfill failed for match ${matchId}: ${result.error}`,
+      );
+    }
+
+    const { settleFirstGoalscorerBonusForMatch } = await import(
+      "@/lib/settleFirstGoalscorerBonus"
+    );
+    const bonus = await settleFirstGoalscorerBonusForMatch(matchId, fullFixture);
+    if (bonus.status === "settled" && bonus.doubled > 0) {
+      console.info(
+        `[first-goalscorer] Match ${matchId}: doubled ${bonus.doubled} pick(s)`,
+      );
+    } else if (bonus.status === "settled_void") {
+      console.info(
+        `[first-goalscorer] Match ${matchId}: bonus voided (incomplete goal data)`,
       );
     }
   } catch (error) {

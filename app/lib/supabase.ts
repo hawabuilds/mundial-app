@@ -81,6 +81,7 @@ export type MatchStateRow = {
   scored_at: string | null;
   final_home_score: number | null;
   final_away_score: number | null;
+  first_goalscorer_settled_at?: string | null;
   match_tweet_id: string | null;
   match_fixture_key: string | null;
   home_team: string | null;
@@ -174,11 +175,19 @@ export async function resetMatchScoring(matchId: number): Promise<void> {
 
   const { error: pointsError } = await supabase
     .from("predictions")
-    .update({ points: null })
+    .update({ points: null, first_goalscorer_bonus: null })
     .eq("match_id", matchId);
 
   if (pointsError) {
-    throw new Error(pointsError.message);
+    if (pointsError.message.includes("first_goalscorer_bonus")) {
+      const { error: fallbackError } = await supabase
+        .from("predictions")
+        .update({ points: null })
+        .eq("match_id", matchId);
+      if (fallbackError) throw new Error(fallbackError.message);
+    } else {
+      throw new Error(pointsError.message);
+    }
   }
 
   const { error: stateError } = await supabase
@@ -187,11 +196,24 @@ export async function resetMatchScoring(matchId: number): Promise<void> {
       scored_at: null,
       final_home_score: null,
       final_away_score: null,
+      first_goalscorer_settled_at: null,
     })
     .eq("match_id", matchId);
 
   if (stateError) {
-    throw new Error(stateError.message);
+    if (stateError.message.includes("first_goalscorer_settled_at")) {
+      const { error: fallbackStateError } = await supabase
+        .from("match_state")
+        .update({
+          scored_at: null,
+          final_home_score: null,
+          final_away_score: null,
+        })
+        .eq("match_id", matchId);
+      if (fallbackStateError) throw new Error(fallbackStateError.message);
+    } else {
+      throw new Error(stateError.message);
+    }
   }
 }
 
@@ -250,17 +272,26 @@ export type StoredGoal = {
   side: "home" | "away";
   player: string | null;
   playerShort: string | null;
+  playerId: number | null;
+  clockSeconds: number | null;
+  seq: number | null;
   ownGoal: boolean;
   penalty: boolean;
 };
 
 /** Stable per-goal key — must not include player (name may arrive on a later poll). */
 function goalKey(goal: StoredGoal): string {
+  if (goal.clockSeconds != null) {
+    return `${goal.side}|s${goal.clockSeconds}|${goal.ownGoal ? 1 : 0}`;
+  }
   return `${goal.side}|${goal.minute ?? "?"}|${goal.ownGoal ? 1 : 0}`;
 }
 
 function goalQuality(goal: StoredGoal): number {
   let score = 0;
+  if (goal.clockSeconds != null) score += 20;
+  if (goal.playerId != null) score += 10;
+  if (goal.seq != null) score += 5;
   if (goal.player && goal.minute != null) score += 12;
   else if (goal.minute != null) score += 5;
   else if (goal.player) score += 3;
@@ -288,26 +319,36 @@ function mergeGoalFields(a: StoredGoal, b: StoredGoal): StoredGoal {
     penalty: a.penalty || b.penalty,
     player: a.player ?? b.player,
     playerShort: a.playerShort ?? b.playerShort,
+    playerId: a.playerId ?? b.playerId,
+    clockSeconds: a.clockSeconds ?? b.clockSeconds,
+    seq: a.seq ?? b.seq,
   };
 }
 
-/** One row per side+minute — keeps OG amends over the original scorer credit. */
+function goalTimeSlot(goal: StoredGoal): string {
+  if (goal.clockSeconds != null) {
+    return `${goal.side}|s${goal.clockSeconds}`;
+  }
+  return `${goal.side}|${goal.minute ?? "?"}`;
+}
+
+/** One row per side+time slot — keeps OG amends over the original scorer credit. */
 function collapseBySideMinute(goals: StoredGoal[]): StoredGoal[] {
   const timed = new Map<string, StoredGoal>();
   const untimed: StoredGoal[] = [];
 
   for (const goal of goals) {
-    if (goal.minute == null) {
+    if (goal.minute == null && goal.clockSeconds == null) {
       untimed.push(goal);
       continue;
     }
-    const slot = `${goal.side}|${goal.minute}`;
+    const slot = goalTimeSlot(goal);
     const prev = timed.get(slot);
     timed.set(slot, prev ? pickBetterGoal(prev, goal) : goal);
   }
 
   return [...untimed, ...timed.values()].sort(
-    (a, b) => (a.minute ?? 0) - (b.minute ?? 0),
+    (a, b) => (a.clockSeconds ?? a.minute ?? 0) - (b.clockSeconds ?? b.minute ?? 0),
   );
 }
 
@@ -374,7 +415,9 @@ export function fuseSplitGoalRows(goals: StoredGoal[]): StoredGoal[] {
     output.push(...namedUntimed, ...timedUnnamed, ...empty);
   }
 
-  return output.sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999));
+  return output.sort(
+    (a, b) => (a.clockSeconds ?? a.minute ?? 999) - (b.clockSeconds ?? b.minute ?? 999),
+  );
 }
 
 function untimedGoalKey(side: StoredGoal["side"], ownGoal: boolean): string {
@@ -389,10 +432,19 @@ function shouldPersistMergedGoal(
 ): boolean {
   const key = goalKey(goal);
   if (incomingKeys.has(key)) return true;
-  if (!goal.player || goal.minute == null) return false;
+  if (!goal.player || (goal.minute == null && goal.clockSeconds == null)) {
+    return false;
+  }
 
   const untimedKey = untimedGoalKey(goal.side, goal.ownGoal);
   if (incomingKeys.has(untimedKey)) return true;
+
+  if (goal.clockSeconds != null) {
+    const clockKey = `${goal.side}|s${goal.clockSeconds}|${goal.ownGoal ? 1 : 0}`;
+    if (incomingKeys.has(clockKey)) return true;
+  }
+
+  if (goal.minute == null) return false;
 
   const timedKey = `${goal.side}|${goal.minute}|${goal.ownGoal ? 1 : 0}`;
   if (!incomingKeys.has(timedKey)) return false;
@@ -439,7 +491,89 @@ async function pruneAbsorbedUntimedGoalKeys(
   if (deleteError) throw new Error(deleteError.message);
 }
 
+function supersededLegacyGoalKeys(canonical: StoredGoal[]): string[] {
+  const keys: string[] = [];
+  for (const goal of canonical) {
+    if (goal.clockSeconds == null || goal.minute == null) continue;
+    keys.push(`${goal.side}|${goal.minute}|${goal.ownGoal ? 1 : 0}`);
+  }
+  return [...new Set(keys)];
+}
+
+async function pruneSupersededLegacyGoalKeys(
+  fixtureId: number,
+  canonical: StoredGoal[],
+): Promise<void> {
+  const toDelete = supersededLegacyGoalKeys(canonical);
+  if (toDelete.length === 0) return;
+
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase
+    .from("match_goals")
+    .delete()
+    .eq("fixture_id", fixtureId)
+    .in("goal_key", toDelete);
+
+  if (error) throw new Error(error.message);
+}
+
+async function pruneStaleGoalKeys(
+  fixtureId: number,
+  canonicalKeys: string[],
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("match_goals")
+    .select("goal_key")
+    .eq("fixture_id", fixtureId);
+
+  if (error) throw new Error(error.message);
+
+  const keep = new Set(canonicalKeys);
+  const toDelete = (data ?? [])
+    .map((row) => String(row.goal_key))
+    .filter((key) => !keep.has(key));
+  if (toDelete.length === 0) return;
+
+  const { error: deleteError } = await supabase
+    .from("match_goals")
+    .delete()
+    .eq("fixture_id", fixtureId)
+    .in("goal_key", toDelete);
+
+  if (deleteError) throw new Error(deleteError.message);
+}
+
 /** Merge stored + fresh goals; prefer non-null scorer names and latest data. */
+export function collapseLegacyDuplicateGoals(goals: StoredGoal[]): StoredGoal[] {
+  const groups = new Map<string, StoredGoal[]>();
+
+  for (const goal of goals) {
+    const slot = `${goal.side}|${goal.minute ?? "?"}|${goal.ownGoal ? 1 : 0}`;
+    const list = groups.get(slot) ?? [];
+    list.push(goal);
+    groups.set(slot, list);
+  }
+
+  const output: StoredGoal[] = [];
+  for (const group of groups.values()) {
+    const withClock = group.filter((goal) => goal.clockSeconds != null);
+    if (withClock.length > 0) {
+      output.push(...withClock);
+      continue;
+    }
+    if (group.length === 1) {
+      output.push(group[0]!);
+      continue;
+    }
+    output.push(group.reduce(pickBetterGoal));
+  }
+
+  return output.sort(
+    (a, b) => (a.clockSeconds ?? a.minute ?? 0) - (b.clockSeconds ?? b.minute ?? 0),
+  );
+}
+
 export function mergeMatchGoals(
   stored: StoredGoal[],
   fresh: StoredGoal[],
@@ -456,7 +590,9 @@ export function mergeMatchGoals(
     byKey.set(key, pickBetterGoal(prev, goal));
   }
 
-  return fuseSplitGoalRows(collapseBySideMinute([...byKey.values()]));
+  return collapseLegacyDuplicateGoals(
+    fuseSplitGoalRows(collapseBySideMinute([...byKey.values()])),
+  );
 }
 
 /**
@@ -482,12 +618,15 @@ export function finalizeMatchGoals(
       });
 
     const picked: StoredGoal[] = [];
-    const usedMinutes = new Set<number>();
+    const usedSlots = new Set<string>();
 
     for (const goal of ranked) {
       if (picked.length >= target) break;
-      if (goal.minute != null && usedMinutes.has(goal.minute)) continue;
-      if (goal.minute != null) usedMinutes.add(goal.minute);
+      const slot = goalTimeSlot(goal);
+      if (goal.minute != null || goal.clockSeconds != null) {
+        if (usedSlots.has(slot)) continue;
+        usedSlots.add(slot);
+      }
       picked.push(goal);
     }
 
@@ -502,7 +641,9 @@ export function finalizeMatchGoals(
 
   const home = pickSide("home", homeScore);
   const away = pickSide("away", awayScore);
-  return [...home, ...away].sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+  return [...home, ...away].sort(
+    (a, b) => (a.clockSeconds ?? a.minute ?? 0) - (b.clockSeconds ?? b.minute ?? 0),
+  );
 }
 
 /**
@@ -534,6 +675,9 @@ export async function saveMatchGoals(
     minute: goal.minute,
     side: goal.side,
     player: goal.player,
+    player_id: goal.playerId,
+    clock_seconds: goal.clockSeconds,
+    seq: goal.seq,
     own_goal: goal.ownGoal,
     is_penalty: goal.penalty,
   }));
@@ -544,6 +688,15 @@ export async function saveMatchGoals(
 
   if (error?.message.includes("is_penalty")) {
     const legacyRows = rows.map(({ is_penalty: _ignored, ...row }) => row);
+    ({ error } = await supabase
+      .from("match_goals")
+      .upsert(legacyRows, { onConflict: "fixture_id,goal_key" }));
+  }
+
+  if (error?.message.includes("player_id") || error?.message.includes("clock_seconds")) {
+    const legacyRows = rows.map(
+      ({ player_id: _pid, clock_seconds: _cs, seq: _seq, ...row }) => row,
+    );
     ({ error } = await supabase
       .from("match_goals")
       .upsert(legacyRows, { onConflict: "fixture_id,goal_key" }));
@@ -575,6 +728,63 @@ export async function upsertMatchGoals(
     minute: goal.minute,
     side: goal.side,
     player: goal.player,
+    player_id: goal.playerId,
+    clock_seconds: goal.clockSeconds,
+    seq: goal.seq,
+    own_goal: goal.ownGoal,
+    is_penalty: goal.penalty,
+  }));
+
+  let { error } = await supabase
+    .from("match_goals")
+    .upsert(rows, { onConflict: "fixture_id,goal_key" });
+
+  if (error?.message.includes("is_penalty")) {
+    const legacyRows = rows.map(({ is_penalty: _ignored, ...row }) => row);
+    ({ error } = await supabase
+      .from("match_goals")
+      .upsert(legacyRows, { onConflict: "fixture_id,goal_key" }));
+  }
+
+  if (error?.message.includes("player_id") || error?.message.includes("clock_seconds")) {
+    const legacyRows = rows.map(
+      ({ player_id: _pid, clock_seconds: _cs, seq: _seq, ...row }) => row,
+    );
+    ({ error } = await supabase
+      .from("match_goals")
+      .upsert(legacyRows, { onConflict: "fixture_id,goal_key" }));
+  }
+
+  if (error) throw new Error(error.message);
+  await pruneAbsorbedUntimedGoalKeys(fixtureId, merged).catch(() => {});
+  await pruneSupersededLegacyGoalKeys(fixtureId, merged).catch(() => {});
+  return { before: existing, after: merged };
+}
+
+/**
+ * Replace the full goal list for a fixture (backfill). Upserts canonical rows
+ * and deletes stale keys including legacy minute-only shadows.
+ */
+export async function replaceMatchGoals(
+  fixtureId: number,
+  goals: StoredGoal[],
+): Promise<{ before: StoredGoal[]; after: StoredGoal[] }> {
+  const before = await getMatchGoals(fixtureId).catch(() => [] as StoredGoal[]);
+  const after = collapseLegacyDuplicateGoals(goals);
+  if (after.length === 0) {
+    return { before, after: before };
+  }
+
+  const supabase = getSupabaseAdminClient();
+  const rows = after.map((goal) => ({
+    fixture_id: fixtureId,
+    goal_key: goalKey(goal),
+    minute: goal.minute,
+    side: goal.side,
+    player: goal.player,
+    player_id: goal.playerId,
+    clock_seconds: goal.clockSeconds,
+    seq: goal.seq,
     own_goal: goal.ownGoal,
     is_penalty: goal.penalty,
   }));
@@ -591,27 +801,79 @@ export async function upsertMatchGoals(
   }
 
   if (error) throw new Error(error.message);
-  await pruneAbsorbedUntimedGoalKeys(fixtureId, merged).catch(() => {});
-  return { before: existing, after: merged };
+
+  const canonicalKeys = rows.map((row) => row.goal_key);
+  await pruneStaleGoalKeys(fixtureId, canonicalKeys).catch(() => {});
+  await pruneSupersededLegacyGoalKeys(fixtureId, after).catch(() => {});
+  return { before, after };
 }
 
-/** All goals accumulated for a fixture, ordered by minute. */
+/** All goals accumulated for a fixture, ordered by event time. */
 export async function getMatchGoals(fixtureId: number): Promise<StoredGoal[]> {
   const supabase = getSupabaseAdminClient();
-  const withPenalty = await supabase
+  const orderOpts = {
+    ascending: true,
+    nullsFirst: false,
+  } as const;
+
+  type MatchGoalDbRow = {
+    minute: number | null;
+    side: string;
+    player: string | null;
+    own_goal: boolean;
+    is_penalty?: boolean | null;
+    player_id?: number | null;
+    clock_seconds?: number | null;
+    seq?: number | null;
+  };
+
+  type MatchGoalQuery = {
+    data: MatchGoalDbRow[] | null;
+    error: { message: string } | null;
+  };
+
+  let loaded: MatchGoalQuery = await supabase
     .from("match_goals")
-    .select("minute, side, player, own_goal, is_penalty")
+    .select(
+      "minute, side, player, own_goal, is_penalty, player_id, clock_seconds, seq",
+    )
     .eq("fixture_id", fixtureId)
+    .order("clock_seconds", orderOpts)
+    .order("seq", orderOpts)
     .order("minute", { ascending: true });
 
-  const loaded =
-    withPenalty.error?.message.includes("is_penalty")
-      ? await supabase
-          .from("match_goals")
-          .select("minute, side, player, own_goal")
-          .eq("fixture_id", fixtureId)
-          .order("minute", { ascending: true })
-      : withPenalty;
+  if (loaded.error?.message.includes("is_penalty")) {
+    loaded = await supabase
+      .from("match_goals")
+      .select("minute, side, player, own_goal, player_id, clock_seconds, seq")
+      .eq("fixture_id", fixtureId)
+      .order("clock_seconds", orderOpts)
+      .order("seq", orderOpts)
+      .order("minute", { ascending: true });
+  }
+
+  if (
+    loaded.error?.message.includes("player_id") ||
+    loaded.error?.message.includes("clock_seconds")
+  ) {
+    loaded = await supabase
+      .from("match_goals")
+      .select("minute, side, player, own_goal, is_penalty")
+      .eq("fixture_id", fixtureId)
+      .order("minute", { ascending: true });
+  }
+
+  if (
+    loaded.error?.message.includes("player_id") ||
+    loaded.error?.message.includes("clock_seconds") ||
+    loaded.error?.message.includes("is_penalty")
+  ) {
+    loaded = await supabase
+      .from("match_goals")
+      .select("minute, side, player, own_goal")
+      .eq("fixture_id", fixtureId)
+      .order("minute", { ascending: true });
+  }
 
   if (loaded.error) throw new Error(loaded.error.message);
 
@@ -620,8 +882,11 @@ export async function getMatchGoals(fixtureId: number): Promise<StoredGoal[]> {
     side: (row.side as "home" | "away") ?? "home",
     player: (row.player as string | null) ?? null,
     playerShort: null,
+    playerId: row.player_id ?? null,
+    clockSeconds: row.clock_seconds ?? null,
+    seq: row.seq ?? null,
     ownGoal: Boolean(row.own_goal),
-    penalty: Boolean((row as { is_penalty?: boolean }).is_penalty),
+    penalty: Boolean(row.is_penalty),
   }));
 
   return mergeMatchGoals(rows, []);
@@ -1099,6 +1364,29 @@ export type ScoreMatchResult = {
   };
 };
 
+async function resetFirstGoalscorerBonusSettlement(
+  supabase: SupabaseClient,
+  matchId: number,
+): Promise<void> {
+  const { error: stateError } = await supabase
+    .from("match_state")
+    .update({ first_goalscorer_settled_at: null })
+    .eq("match_id", matchId);
+
+  if (stateError && !stateError.message.includes("first_goalscorer_settled_at")) {
+    throw new Error(stateError.message);
+  }
+
+  const { error: bonusError } = await supabase
+    .from("predictions")
+    .update({ first_goalscorer_bonus: null })
+    .eq("match_id", matchId);
+
+  if (bonusError && !bonusError.message.includes("first_goalscorer_bonus")) {
+    throw new Error(bonusError.message);
+  }
+}
+
 async function updatePredictionPoints(
   supabase: SupabaseClient,
   userId: string,
@@ -1279,6 +1567,7 @@ export async function scoreMatchPredictions(
   fixtureOverride?: Fixture,
 ): Promise<ScoreMatchResult> {
   const supabase = getSupabaseAdminClient();
+  await resetFirstGoalscorerBonusSettlement(supabase, matchId);
   const fixture = fixtureOverride ?? getFixtureById(matchId);
 
   if (!fixture) {

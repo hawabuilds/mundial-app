@@ -6,6 +6,21 @@ import {
 } from "./backfillMatchGoals";
 import type { StoredGoal } from "@/app/lib/supabase";
 import { parseScoreSequenceBody, extractGoals, type TxScoreEvent } from "./txodds";
+import { deriveFirstGoalscorer } from "./firstGoalscorer";
+
+function storedGoal(
+  partial: Partial<StoredGoal> & Pick<StoredGoal, "minute" | "side" | "ownGoal">,
+): StoredGoal {
+  return {
+    player: null,
+    playerShort: null,
+    playerId: null,
+    clockSeconds: null,
+    seq: null,
+    penalty: false,
+    ...partial,
+  };
+}
 
 /** Mock historical sequence: 2-1 FT with three named goals (per TxLINE Scores shape). */
 const MOCK_SEQUENCE: TxScoreEvent[] = [
@@ -110,23 +125,23 @@ function run(name: string, fn: () => void): void {
 
 run("isMatchGoalsInconsistentWithScore detects count mismatch", () => {
   const goals: StoredGoal[] = [
-    { minute: 23, side: "home", player: "Luis Rodriguez", ownGoal: false },
+    storedGoal({ minute: 23, side: "home", player: "Luis Rodriguez", ownGoal: false }),
   ];
   assert.equal(isMatchGoalsInconsistentWithScore(goals, 2, 1), true);
 });
 
 run("isMatchGoalsInconsistentWithScore detects missing scorers", () => {
   const goals: StoredGoal[] = [
-    { minute: 23, side: "home", player: "Luis Rodriguez", ownGoal: false },
-    { minute: 55, side: "away", player: null, ownGoal: false },
-    { minute: 78, side: "home", player: "Luis Rodriguez", ownGoal: false },
+    storedGoal({ minute: 23, side: "home", player: "Luis Rodriguez", ownGoal: false }),
+    storedGoal({ minute: 55, side: "away", player: null, ownGoal: false }),
+    storedGoal({ minute: 78, side: "home", player: "Luis Rodriguez", ownGoal: false }),
   ];
   assert.equal(isMatchGoalsInconsistentWithScore(goals, 2, 1), true);
 });
 
 run("isMatchGoalsInconsistentWithScore detects missing minutes", () => {
   const goals: StoredGoal[] = [
-    { minute: null, side: "away", player: "Salah", ownGoal: false },
+    storedGoal({ minute: null, side: "away", player: "Salah", ownGoal: false }),
   ];
   assert.equal(isMatchGoalsInconsistentWithScore(goals, 0, 1), true);
 });
@@ -149,9 +164,9 @@ run("deriveMatchGoalsFromScoreSequence fills minute from period stats when actio
 
 run("isMatchGoalsInconsistentWithScore passes when complete", () => {
   const goals: StoredGoal[] = [
-    { minute: 23, side: "home", player: "Luis Rodriguez", ownGoal: false },
-    { minute: 55, side: "away", player: "Mohammed Kudus", ownGoal: false },
-    { minute: 78, side: "home", player: "Luis Rodriguez", ownGoal: false },
+    storedGoal({ minute: 23, side: "home", player: "Luis Rodriguez", ownGoal: false }),
+    storedGoal({ minute: 55, side: "away", player: "Mohammed Kudus", ownGoal: false }),
+    storedGoal({ minute: 78, side: "home", player: "Luis Rodriguez", ownGoal: false }),
   ];
   assert.equal(isMatchGoalsInconsistentWithScore(goals, 2, 1), false);
 });
@@ -164,7 +179,11 @@ run("deriveMatchGoalsFromScoreSequence rebuilds 2-1 from mock historical sequenc
   assert.equal(goals.length, 3);
   assert.ok(goals.every((goal) => goal.player));
   assert.equal(goals[0]?.minute, 23);
+  assert.equal(goals[0]?.playerId, 101);
+  assert.equal(goals[0]?.clockSeconds, 23 * 60);
+  assert.equal(goals[0]?.seq, 10);
   assert.equal(goals[1]?.minute, 55);
+  assert.equal(goals[1]?.playerId, 201);
   assert.equal(goals[2]?.minute, 78);
 });
 
@@ -176,6 +195,9 @@ run("deriveMatchGoalsFromScoreSequence resolves scorer from penalty_outcome", ()
   assert.equal(goals[0]?.player, "Kylian Mbappe Lottin");
   assert.equal(goals[0]?.playerShort, "K. Mbappe");
   assert.equal(goals[0]?.penalty, true);
+  assert.equal(goals[0]?.playerId, 453928);
+  assert.equal(goals[0]?.clockSeconds, 69 * 60);
+  assert.equal(goals[0]?.seq, 693);
 });
 
 run("deriveMatchGoalsFromScoreSequence is idempotent on re-merge keys", () => {
@@ -233,6 +255,17 @@ run("extractGoals drops disallowed period-stat phantom after stat decrease", () 
   const derived = deriveMatchGoalsFromScoreSequence(events, true, 0, 1);
   assert.equal(derived.length, 1);
   assert.ok(derived[0]?.player?.includes("Haaland"));
+});
+
+run("deriveFirstGoalscorer from mock historical sequence", () => {
+  const goals = deriveMatchGoalsFromScoreSequence(MOCK_SEQUENCE, true, 2, 1);
+  const first = deriveFirstGoalscorer(goals);
+  assert.ok(first);
+  assert.equal(first.playerId, 101);
+  assert.equal(first.player, "Luis Rodriguez");
+  assert.equal(first.clockSeconds, 23 * 60);
+  assert.equal(first.seq, 10);
+  assert.equal(first.side, "home");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
