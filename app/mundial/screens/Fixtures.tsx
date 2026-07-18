@@ -193,7 +193,6 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
   const [firstGoalscorerOps, setFirstGoalscorerOps] = useState<
     FirstGoalscorerOpportunity[]
   >([]);
-  const [firstGoalscorerOpsLoading, setFirstGoalscorerOpsLoading] = useState(true);
   const [pickerMatchId, setPickerMatchId] = useState<number | null>(null);
   const liveScoreRef = useRef<LiveScoreSnapshot | null>(null);
   const [goalCelebration, setGoalCelebration] = useState<GoalCelebration | null>(
@@ -204,63 +203,58 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
 
   const liveOnBoard = fixtures.some((f) => f.phase === "live");
 
-  useEffect(() => {
-    let cancelled = false;
+  const applyBoardRows = useCallback((rows: Awaited<ReturnType<typeof fetchBoardMatches>>) => {
+    const mundial = rows.map(toMundialFixture);
+    const live = findLiveMatch(mundial);
+    const prev = liveScoreRef.current;
 
-    const load = () => {
-      void fetchBoardMatches()
-        .then((rows) => {
-          if (cancelled) return;
-          const mundial = rows.map(toMundialFixture);
-          const live = findLiveMatch(mundial);
-          const prev = liveScoreRef.current;
+    if (live) {
+      const home = live.homeScore ?? 0;
+      const away = live.awayScore ?? 0;
+      const goalCount = live.goals.length;
 
-          if (live) {
-            const home = live.homeScore ?? 0;
-            const away = live.awayScore ?? 0;
-            const goalCount = live.goals.length;
+      if (!prev || prev.id !== live.id) {
+        liveScoreRef.current = { id: live.id, home, away, goalCount };
+      } else {
+        setGoalCelebration((current) =>
+          syncGoalCelebration(live, prev, current),
+        );
+        liveScoreRef.current = { id: live.id, home, away, goalCount };
+      }
+    } else {
+      liveScoreRef.current = null;
+      setGoalCelebration(null);
+    }
 
-            if (!prev || prev.id !== live.id) {
-              liveScoreRef.current = { id: live.id, home, away, goalCount };
-            } else {
-              setGoalCelebration((current) =>
-                syncGoalCelebration(live, prev, current),
-              );
-              liveScoreRef.current = { id: live.id, home, away, goalCount };
-            }
-          } else {
-            liveScoreRef.current = null;
-            setGoalCelebration(null);
-          }
+    setFixtures(mundial);
+  }, []);
 
-          setFixtures(mundial);
-        })
-        .catch(() => {
-          /* keep whatever we last had */
-        })
-        .finally(() => {
-          if (!cancelled) setLoaded(true);
-        });
-    };
-
-    load();
-    const interval = window.setInterval(load, liveOnBoard ? 5_000 : 30_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [liveOnBoard]);
-
+  // First paint: board + leaderboard stats together so "Last match scored" lands with cards.
   useEffect(() => {
     if (status === "loading") return;
     let cancelled = false;
+    setLoaded(false);
     setStatsLoading(true);
-    void fetchMyLeaderboardStats()
-      .then((stats) => {
+
+    const boardPromise = fetchBoardMatches();
+    const statsPromise =
+      status === "authenticated"
+        ? fetchMyLeaderboardStats()
+        : Promise.resolve(null);
+
+    void Promise.all([boardPromise, statsPromise])
+      .then(([rows, stats]) => {
         if (cancelled) return;
-        setRank(stats.rank);
-        setPoints(stats.total_points);
-        setLastBreakdown(stats.last_breakdown);
+        applyBoardRows(rows);
+        if (stats) {
+          setRank(stats.rank);
+          setPoints(stats.total_points);
+          setLastBreakdown(stats.last_breakdown);
+        } else {
+          setRank(null);
+          setPoints(null);
+          setLastBreakdown(null);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -269,37 +263,67 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
         setLastBreakdown(null);
       })
       .finally(() => {
-        if (!cancelled) setStatsLoading(false);
+        if (cancelled) return;
+        setStatsLoading(false);
+        setLoaded(true);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [status]);
+  }, [status, applyBoardRows]);
+
+  // Live / idle board polling only (stats stay from the first paint / session).
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false;
+
+    const load = () => {
+      void fetchBoardMatches()
+        .then((rows) => {
+          if (cancelled) return;
+          applyBoardRows(rows);
+        })
+        .catch(() => {
+          /* keep whatever we last had */
+        });
+    };
+
+    const interval = window.setInterval(load, liveOnBoard ? 5_000 : 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [loaded, liveOnBoard, applyBoardRows]);
+
+  // Stable key so live score polls (same upcoming IDs) do not re-fetch ops.
+  const upcomingIdsKey = fixtures
+    .filter((f) => f.phase === "upcoming")
+    .map((f) => f.id)
+    .join(",");
 
   const refreshFirstGoalscorerOps = useCallback(() => {
     if (status === "loading" || !loaded) return;
 
     if (status !== "authenticated") {
       setFirstGoalscorerOps([]);
-      setFirstGoalscorerOpsLoading(false);
       return;
     }
 
-    const upcomingIds = fixtures
-      .filter((f) => f.phase === "upcoming")
-      .map((f) => f.id);
+    const upcomingIds = upcomingIdsKey
+      ? upcomingIdsKey.split(",").map((id) => Number(id))
+      : [];
     if (upcomingIds.length === 0) {
       setFirstGoalscorerOps([]);
-      setFirstGoalscorerOpsLoading(false);
       return;
     }
 
-    setFirstGoalscorerOpsLoading(true);
     void fetchFirstGoalscorerOpportunities(upcomingIds)
       .then(setFirstGoalscorerOps)
-      .catch(() => setFirstGoalscorerOps([]))
-      .finally(() => setFirstGoalscorerOpsLoading(false));
-  }, [fixtures, loaded, status]);
+      .catch(() => {
+        /* keep last good ops on transient failure */
+      });
+  }, [upcomingIdsKey, loaded, status]);
 
   useEffect(() => {
     refreshFirstGoalscorerOps();
@@ -333,10 +357,8 @@ export default function Fixtures({ onTabChange, vaultDot }: Props) {
       })()
     : null;
 
-  const bonusEligibilityReady =
-    status !== "loading" &&
-    (status !== "authenticated" || (loaded && !firstGoalscorerOpsLoading));
-  const showLastPick = Boolean(lastPick && bonusEligibilityReady && !hasBonusBanner);
+  // Show with the board once first paint is ready — do not wait on bonus-ops fetch.
+  const showLastPick = Boolean(lastPick && loaded && !hasBonusBanner);
 
   const renderBonusBanner = (fixture: MundialFixture, sticky = false) => {
     if (pickerMatchId != null) return null;
