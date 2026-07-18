@@ -46,6 +46,10 @@ yarn-error.log*
 cron-out.json
 scripts/_*.png
 
+# Hackathon form PDF/docs — host externally (e.g. Google Drive), not in git
+/docs/TECHNICAL_SUBMISSION.md
+/docs/TECHNICAL_SUBMISSION.pdf
+
 # Local IDE / workspace artifacts (not part of the app)
 /agent-tools/
 /agent-transcripts/

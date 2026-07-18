@@ -3,7 +3,10 @@ config({ path: ".env.local" });
 
 import { getSupabaseAdminClient } from "../app/lib/supabase";
 
-async function countTable(table: string, filter?: { column: string; op: string; value: string }) {
+async function countTable(
+  table: string,
+  filter?: { column: string; op: string; value: string },
+) {
   const supabase = getSupabaseAdminClient();
   let q = supabase.from(table).select("*", { count: "exact", head: true });
   if (filter) q = q.filter(filter.column, filter.op, filter.value);
@@ -14,6 +17,7 @@ async function countTable(table: string, filter?: { column: string; op: string; 
 
 async function main() {
   const supabase = getSupabaseAdminClient();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
   const predictions = await countTable("predictions");
   const scoredMatches = await countTable("match_state", {
@@ -22,6 +26,7 @@ async function main() {
     value: "null",
   });
   const proofs = await countTable("match_proofs");
+  const goalEvents = await countTable("match_goals");
 
   const { count: verifiedProofs } = await supabase
     .from("match_proofs")
@@ -32,7 +37,19 @@ async function main() {
     .from("predictions")
     .select("user_id, points")
     .gt("points", 0);
-  const distinctWithPoints = new Set((withPoints ?? []).map((r) => r.user_id)).size;
+  const distinctWithPoints = new Set(
+    (withPoints ?? []).map((r) => r.user_id),
+  ).size;
+  const totalPointsAwarded = (withPoints ?? []).reduce(
+    (sum, row) => sum + Number(row.points ?? 0),
+    0,
+  );
+  const pointsByUser = new Map<string, number>();
+  for (const row of withPoints ?? []) {
+    const id = String(row.user_id);
+    pointsByUser.set(id, (pointsByUser.get(id) ?? 0) + Number(row.points ?? 0));
+  }
+  const topScore = Math.max(0, ...pointsByUser.values());
 
   const { count: epochCount } = await supabase
     .from("payout_epochs")
@@ -53,12 +70,18 @@ async function main() {
     JSON.stringify(
       {
         queriedAt: new Date().toISOString(),
-        supabaseHost: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname,
+        supabaseUrl,
+        supabaseHost: supabaseUrl
+          ? new URL(supabaseUrl).hostname
+          : null,
         predictions,
         distinctPlayersWithPoints: distinctWithPoints,
+        topScore,
+        totalPointsAwarded,
         matchesSettledViaTxline: scoredMatches,
         proofsInMatchProofs: proofs,
         proofsWithVerifiedBadge: verifiedProofs ?? 0,
+        goalEventsInMatchGoals: goalEvents,
         payoutEpochs: epochCount ?? 0,
         solanaClaims: claimsCount,
         solanaClaimsError: claimsError,

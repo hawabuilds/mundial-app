@@ -2,36 +2,165 @@
 
 ![CI](https://github.com/hawabuilds/mundial-app/actions/workflows/ci.yml/badge.svg)
 
-Score-prediction game on X (Twitter): reply with a scoreline before kickoff, earn points from accuracy and market odds, climb a cumulative leaderboard. Daily snapshot at 10:00 UTC locks the top 20 for USDC payout on Solana.
+Predict World Cup scorelines on X, earn odds-weighted points, and win USDC on Solana — with TxLINE proofs you can check against Solana.
 
-**Live:** [copamundial.app](https://copamundial.app) · **Track:** Superteam × TxODDS — Consumer & Fan Experiences
+Copa Mundial is a football score-prediction game. You reply to a match thread on X (Twitter) with your scoreline before kickoff, points are awarded automatically when the match ends, and your score builds up on a season-long leaderboard. Once a day the top players can claim a share of a USDC prize pool paid out on Solana.
 
-![Live fixtures board at copamundial.app](docs/screenshots/cover.png)
+The part that makes it different: results aren’t just trusted, they’re provable. Match data comes from TxLINE (by TxODDS), which publishes score proofs anchored on Solana. When a match settles, Copa Mundial stores that proof and only shows a “TxLINE verified” badge when the proof’s regulation score matches the score we settled in the database. Separately, you can run the same proof against the on-chain Merkle root with a CLI script — that chain check is for judges and ops, not something the live card does on every refresh.
+
+**Live:** [copamundial.app](https://copamundial.app)  
+**Demo video:** [Watch on YouTube](https://www.youtube.com/watch?v=VF-6Uia6n-0) (~3–4 min)  
+**Network:** Solana devnet — rewards are test-USDC, not real money  
+**Track:** Superteam × TxODDS — Consumer & Fan Experiences  
+**Community:** [Discord](https://discord.gg/BS3q3aMFd)
+
+**Please read:** This is a devnet prototype. It runs end-to-end, but it is not audited and handles no real funds. See [Honesty & security](#honesty--security).
+
+![Live fixtures board — France vs England with TxLINE odds and reply CTA](docs/screenshots/cover.png)
 
 ## Live usage (production)
 
-Queried **2026-07-08** against production Supabase (`whuyptdtrwkzxeunouoo`) and the public leaderboard API.
+These are real figures from the live app, measured **2026-07-18** against the production Supabase instance (`whuyptdtrwkzxeunouoo.supabase.co`) and the public leaderboard API. Numbers grow as more matches are played.
 
 | Metric | Value |
 |--------|------:|
-| Predictions stored | 274 |
-| Players with scored points | 107 |
-| Matches settled via TxLINE | 8 |
-| Dual proofs in `match_proofs` | 8 (all verified badge) |
-| Goal rows in `match_goals` | 40 |
-| Payout epochs opened (devnet) | 4 |
-| USDC claims logged (`solana_claims`) | 4 |
-| Total points awarded | 872 |
+| Predictions stored | 823 |
+| Players with scored points | 393 |
+| Matches settled via TxLINE | 14 |
+| TxLINE proofs stored (`match_proofs`) | 14 (all earned the verified badge) |
+| Goal events recorded (`match_goals`) | 60 |
+| Payout epochs opened (devnet) | 9 |
+| USDC claims logged (`solana_claims`) | 53 |
+| Total points awarded | 2789 |
 
-Public leaderboard: `GET /api/leaderboard` → **107** ranked players (top score 33 pts as of query date).
+The public leaderboard is served from `GET /api/leaderboard` — **393** ranked players, with a top score of **61** points as of the query date.
 
-## Judge quickstart
+Each day at **10:00 UTC** a snapshot locks the top 20 and posts that day’s standings to Discord.
+
+## How it works
+
+1. **Reply before kickoff.** Post your scoreline (e.g. `2-1`) as a reply to the match thread on X. Your first valid reply is the one that counts.
+2. **Points are automatic.** When the match finishes, points are awarded based on how accurate you were, and they add to your season total.
+3. **Daily snapshot.** Every day at 10:00 UTC a snapshot locks in the top 20, who can then claim a share of the USDC prize pool on Solana.
+
+Free to play — you only need a wallet if you want to collect a payout.
+
+## Scoring formula
+
+Each match gives you points in two parts: an accuracy base and a market multiplier.
+
+**Accuracy base** — you get the single best tier that applies (one score per match):
+
+| Tier | Base points |
+|------|------------:|
+| Exact scoreline | 5 |
+| Correct result (win / draw / loss) | 3 |
+| Played (wrong result) | 1 |
+
+**Market multiplier** — rewards you for correctly backing an unlikely result. It uses the locked pre-match 1X2 odds and only applies when your result or exact score was right:
+
+```
+multiplier = min(3, 100 / impliedPct)
+points     = round(base × multiplier)
+```
+
+**Worked example.** You predict an exact scoreline (base 5) for an underdog whose implied win chance was 25%. Multiplier = `min(3, 100 / 25) = 3`. Points = `round(5 × 3) = 15`. Backing a heavy favourite would earn a much smaller multiplier, so beating the odds is always worth more.
+
+Implementation: `lib/scoring.ts`.
+
+## Built on TxLINE (the key integration)
+
+[TxLINE](https://txline.txodds.com/documentation/worldcup) (TxODDS) supplies fixtures, live scores, odds, stat-validation proofs, and score-event replay. It’s used across six surfaces:
+
+| # | Endpoint | Used for |
+|---|----------|----------|
+| 1 | `GET /api/fixtures/snapshot` | Schedule and kickoff times for the live board |
+| 2 | `GET /api/scores/snapshot/{fixtureId}` | Live score, clock, and match status |
+| 3 | `GET /api/odds/snapshot/{fixtureId}` | Pre-match odds, locked and used for the scoring multiplier |
+| 4 | `GET /api/scores/stat-validation` | Score proofs (Merkle payloads) used to gate the verified badge and for optional on-chain checks |
+| 5 | `GET /api/scores/historical/{fixtureId}` | Fills in goal details after a match ends |
+| 6 | `GET /api/scores/updates/{fixtureId}` | Real-time updates, including penalty shootouts |
+
+**Auth.** Two things are needed on each request:
+
+1. A guest JWT — `POST /auth/guest/start`, refreshed automatically (`lib/txodds.ts`).
+2. An API token — `X-Api-Token` from activation (`txodds/get-txodds-key.mjs` → `TXODDS_API_TOKEN`).
+
+```
+Authorization: Bearer <guest jwt>
+X-Api-Token:   <activated api token>
+```
+
+## Verified results (the standout feature)
+
+After a match settles via TxLINE, a scoring job fetches the stat-validation proofs and stores them in `match_proofs` (`lib/matchProofFetch.ts`). Each row holds two payloads: an official proof at the `game_finalised` event, and a regulation proof at the settlement basis. Copa Mundial scores predictions on the regulation total.
+
+The **TxLINE verified** badge on a full-time card appears only when the regulation proof exactly matches the settled score in `match_state`. Any mismatch hides the badge (`evaluateProofSemantics` in `lib/txScoreProofSemantics.ts`). The live card does not call Solana for that — it is a proof-vs-settled-score check. The system is self-healing: if only a terminal-whistle proof exists at first fetch, the row is upgraded when the finalised proof arrives (within 24 hours).
+
+![TxLINE verified badge — FT card after regulation settlement (proof-preview sandbox)](docs/screenshots/verified-badge.png)
+
+**Want the on-chain check?** `scripts/verify-proof.ts` fetches both proofs and runs TxOracle `validate_stat` against the devnet `daily_scores_roots` Merkle root (`lib/txlineValidateStat.ts`, IDL in `txodds/txoracle-devnet.json`). That is a CLI path for judges/ops — not part of the fan-facing app at runtime.
+
+## Penalty shootouts
+
+When a knockout goes to penalties, the score snapshot often trims individual kick rows after full time, so Copa Mundial merges three feeds: the snapshot (live tally and final status), updates (kick-by-kick replay with the scorer), and historical (fallback when updates are empty). Parsed kicks persist to `match_penalty_kicks` and render as ○/✗ marks under each side on the fixture card.
+
+UI sandboxes: [`/proof-preview`](https://copamundial.app/mundial/proof-preview) (verified badge) and [`/penalty-preview`](https://copamundial.app/mundial/penalty-preview) (shootout marks).
+
+## How it’s built
+
+- **App:** Next.js (App Router) + TypeScript
+- **Data:** TxLINE — fixtures, scores, odds, proofs
+- **Database:** Supabase (Postgres) — predictions, `match_odds`, `match_goals`, `match_proofs`, snapshots, payout epochs
+- **Sign-in:** NextAuth (X provider)
+- **Payouts:** Solana + USDC — signed, single-use claim vouchers on operator-opened epochs
+- **Jobs:** Vercel crons for kickoff collection, scoring, the daily snapshot, and fixture sync
+
+## Smart contract
+
+An Anchor program lives in [`solana-program/`](solana-program/). The operator opens each epoch with a USDC pot, the server signs a voucher for each winner, and claim verifies the ed25519 signature and keccak message hash on-chain before any transfer.
+
+**Devnet program ID:** [`2GvW9gBcFmmUcoQDoBVQe9rpR1dGzD4uTdaLzzwRzRz9`](https://explorer.solana.com/address/2GvW9gBcFmmUcoQDoBVQe9rpR1dGzD4uTdaLzzwRzRz9?cluster=devnet) (declared in `solana-program/programs/state/src/lib.rs`)
+
+### On-chain evidence (devnet)
+
+Devnet explorer history does not stick around. Transaction pages often go missing after a few hours, even when the open-epoch and claim really did land. So this README does not pin fixed explorer links.
+
+What stays put:
+
+- The **program** above — that is what opens each epoch and pays out USDC
+- The **claim log** in production — **53** confirmed rows in `solana_claims` (same figure as [Live usage](#live-usage-production); refresh anytime with `npx tsx scripts/query-live-usage.ts`)
+- A **local replay** if you want a live explorer URL right now:
+
+```bash
+npm run demo:epoch -- --pot 2000
+npm run e2e:solana-claim -- <epochId>
+```
+
+Those commands print fresh signatures when they finish.
+
+## Running it / reproducing the demo
+
+### Local setup
 
 ```bash
 npm install
-cp .env.example .env.local   # fill TxLINE, Supabase, Solana keys
+cp .env.example .env.local   # fill in your keys
+npm run dev
+```
 
-# Dual Merkle proof + on-chain validate_stat simulation (devnet)
+`.env.local` needs your X auth, Supabase, `TXODDS_API_TOKEN`, Solana RPC, and signer keys. No secrets are committed.
+
+Refresh the live usage stats above:
+
+```bash
+npx tsx scripts/query-live-usage.ts
+```
+
+### Judge quickstart
+
+```bash
+# Verify a dual Merkle proof + on-chain validity
 npx tsx scripts/verify-proof.ts 18202701
 
 # Solana payout loop (devnet only)
@@ -42,191 +171,16 @@ npm run e2e:solana-claim -- <epochId>
 npm run test:ci
 ```
 
-Example proof output for Argentina vs Egypt (TxFixtureId `18202701`): [`docs/PROOF_DEMO.md`](docs/PROOF_DEMO.md).
+### Devnet payout demo
 
-## How it works
-
-- Reply to a match thread on X with a scoreline before kickoff — your first valid reply is the one that counts.
-- Points from every match add to your season total on the leaderboard.
-- A daily snapshot at **10:00 UTC** locks the top 20 and opens on-chain USDC claims.
-
-## Built on TxLINE
-
-[TxLINE](https://txline.txodds.com/documentation/worldcup) (TxOdds) supplies fixtures, live scores, odds, stat-validation proofs, and score-event replay.
-
-**Documentation:** [TxLINE World Cup API](https://txline.txodds.com/documentation/worldcup)
-
-### Auth
-
-1. **Guest JWT** — `POST /auth/guest/start`, refreshed automatically (`lib/txodds.ts`).
-2. **API token** — `X-Api-Token` from activation (`txodds/get-txodds-key.mjs` → `TXODDS_API_TOKEN`).
-
-```
-Authorization: Bearer <guest jwt>
-X-Api-Token:   <activated api token>
-```
-
-### TxLINE integration — six surfaces
-
-| # | Endpoint | Role in Copa Mundial |
-|---|----------|----------------------|
-| 1 | `GET /api/fixtures/snapshot` | Live board schedule + kickoff (`lib/txScheduleBoard.ts`, `lib/syncNewFixturesFromTxline.ts`) |
-| 2 | `GET /api/scores/snapshot/{fixtureId}` | Live score, clock, scorers, terminal settlement on **regulation 90+stoppage** (`lib/txMatchSettlement.ts`, `lib/scoreFinishedMatches.ts`) |
-| 3 | `GET /api/odds/snapshot/{fixtureId}` | 1X2 implied % → locked to `match_odds` on first board fetch for upset multiplier (`lib/ensureMatchOdds.ts`, `lib/scoring.ts`) |
-| 4 | `GET /api/scores/stat-validation` | Dual Merkle proofs per settled match — official `game_finalised` (keys 1,2) + regulation basis (1001,1002,3001,3002) (`lib/matchProofFetch.ts`) |
-| 5 | `GET /api/scores/historical/{fixtureId}` | Score replay to backfill `match_goals` when post-FT snapshot trims events (`lib/backfillMatchGoals.ts`) |
-| 6 | `GET /api/scores/updates/{fixtureId}` | Full kick-by-kick penalty replay when snapshot drops shootout rows (`lib/penaltyShootout.ts`, `loadScoreEventsForMatch()` in `lib/txMatchSettlement.ts`) |
-
-### TxLINE integration map
-
-```mermaid
-flowchart LR
-  subgraph TxLINE
-    F[fixtures/snapshot]
-    S[scores/snapshot]
-    O[odds/snapshot]
-    V[stat-validation]
-    H[historical replay]
-    U[scores/updates]
-  end
-  F --> Board[Live board]
-  S --> Settlement[Match settlement]
-  O --> Odds[match_odds lock]
-  Settlement --> State[match_state]
-  V --> Proofs[match_proofs]
-  Proofs --> Badge[TxLINE verified badge]
-  H --> Goals[match_goals]
-  U --> Pens[match_penalty_kicks]
-  Pens --> Board
-  State --> Score[Prediction scoring]
-```
-
-### Penalty shootout pipeline
-
-When a knockout match goes to pens, the scores **snapshot** often trims individual kick rows after full time. Copa Mundial merges three feeds:
-
-1. **Snapshot** — live tally and terminal status
-2. **Updates** (`/api/scores/updates/{fixtureId}`) — kick-by-kick replay with `PlayerId` on scored pens
-3. **Historical** — fallback when updates are empty
-
-Parsed kicks persist to `match_penalty_kicks` and render as ○/× marks under each side on the fixture card (`app/mundial/ui/PenaltyKickMarks.tsx`). UI sandbox: [`/proof-preview`](https://copamundial.app/proof-preview) (verified badge), [`/penalty-preview`](https://copamundial.app/penalty-preview) (shootout marks).
-
-Live goal events accumulate in `match_goals` via the scores feed (`lib/matchGoalsPersist.ts`). Odds locking uses `match_odds`, not goal rows.
-
-### Scoring formula
-
-**Accuracy base** (best tier only — one score per match):
-
-| Tier | Base points |
-|------|-------------|
-| Exact scoreline | 5 |
-| Correct result (win/draw/loss) | 3 |
-| Played (wrong result) | 1 |
-
-**Market multiplier** (locked `match_odds` 1X2, only when exact or result is correct):
-
-```
-multiplier = min(3, 100 / impliedPct)
-points     = round(base × multiplier)
-```
-
-Implementation: `lib/scoring.ts`.
-
-### Settlement proofs
-
-After a match settles via TxLINE, the scoring cron fetches stat-validation proofs and stores them in `match_proofs` (`lib/matchProofFetch.ts`). Each row holds two payloads: an **official** proof at the `game_finalised` event (stat keys 1 and 2) and a **regulation** proof at the settlement basis (stat keys 1001, 1002, 3001, 3002). Mundial scores predictions on the regulation total.
-
-Event **seq** selection prefers the `game_finalised` record from the scores feed. If only a terminal whistle proof is available at first fetch, the row is stored with `seq_source=terminal_fallback` and upgraded when the finalised proof arrives (self-healing within 24 hours).
-
-The **TxLINE verified** badge on an FT card is shown only when the regulation proof exactly matches the settled score in `match_state`. Any mismatch suppresses the badge (`evaluateProofSemantics` in `lib/txScoreProofSemantics.ts`).
-
-![TxLINE verified badge — regulation FT fixture (proof-preview sandbox)](docs/screenshots/verified-badge.png)
-
-**On-chain verification** is reproducible via `scripts/verify-proof.ts`: fetches both proofs, then simulates TxOracle `validate_stat` + `equalTo` against the devnet `daily_scores_roots` Merkle root (`lib/txlineValidateStat.ts`, IDL in `txodds/txoracle-devnet.json`). This is a judge/ops CLI path — not triggered from the fan UI at runtime.
-
-## Stack
-
-- Next.js (App Router) + TypeScript
-- TxLINE — fixtures, scores, odds, proofs
-- Supabase (Postgres) — predictions, `match_odds`, `match_goals`, `match_proofs`, snapshots, payout epochs
-- NextAuth (X provider)
-- Solana + USDC — signed claim vouchers, operator-opened epochs
-- Vercel — crons for kickoff collection, scoring, daily snapshot, fixture sync
-
-## Smart contract
-
-Anchor program in [`solana-program/`](solana-program/). Operator opens each epoch with a USDC pot; server signs per-winner vouchers; `claim` checks ed25519 + keccak message hash on-chain before transfer.
-
-**Devnet program ID:** `2GvW9gBcFmmUcoQDoBVQe9rpR1dGzD4uTdaLzzwRzRz9` (`declare_id!` in `solana-program/programs/state/src/lib.rs`).
-
-### On-chain evidence (devnet)
-
-| Action | Explorer |
-|--------|----------|
-| **Open epoch** (`OpenEpoch`) | [321wRsoC…AzbyiLo](https://explorer.solana.com/tx/321wRsoCqZno98QZzUiagHjigVfXHKwmBnpe57c6nfEQt5cW6D8dNzQDyjiQ1EYuMc4uRapABtzEonhd7AzbyiLo?cluster=devnet) |
-| **USDC claim** (`Claim`) | [3KzPYxmn…BgQd4A](https://explorer.solana.com/tx/3KzPYxmnCebQ2Andavj828RyTwEPEv6dcT5hkxB8cLoTVshmySEyAmhxpNaa3CCnUqqyJyVqmw9u73JeCbBgQd4A?cluster=devnet) |
-
-## Database setup
-
-Apply migrations in order on a fresh Supabase project (Dashboard → SQL Editor), or use helper scripts where noted.
-
-| Order | File | Notes |
-|-------|------|-------|
-| 1 | `supabase/schema.sql` | Base tables: predictions, match_state, payout_epochs, leaderboard_snapshots |
-| 2 | `supabase/migrations/001_txline_tables.sql` | Or `npm run migrate:txline` |
-| 3 | `supabase/migrations/20260704000000_match_goals.sql` | Goal accumulation table |
-| 4 | `supabase/migrations/20260704153000_lock_rls.sql` | Remove anon write on `predictions` / `match_state` |
-| 5 | `supabase/migrations/20260704160000_match_proofs.sql` | Base proof storage |
-| 6 | `supabase/migrations/20260704163000_match_proofs_semantics.sql` | Semantics columns |
-| 7 | `supabase/migrations/20260704170000_match_proofs_dual.sql` | Official + regulation payloads |
-| 8 | `supabase/migrations/20260704224500_match_goals_penalty.sql` | Penalty flag on goal rows |
-| 9 | `supabase/migrations/20260707100000_match_state_tx_fixture.sql` | Tx fixture id + fixture sync columns |
-| 10 | `supabase/migrations/20260708010000_match_penalty_kicks.sql` | Penalty kick accumulator |
-| 11 | `supabase/migrations/20260708130000_solana_claims.sql` | Devnet USDC claim audit log |
-
-Steps 5–7 can also run via `npx tsx scripts/apply-match-proofs-migrations.ts` when `DATABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is set.
-
-Requires `SUPABASE_SERVICE_ROLE_KEY` for app and migration scripts.
-
-## Supabase access model
-
-The browser does not write to Postgres directly.
-
-```
-Browser  →  fetch("/api/…")  →  Next.js route / cron  →  getSupabaseAdminClient()  →  Postgres
-```
-
-- **Client:** `/api/matches`, `/api/leaderboard`, `/api/me/leaderboard-stats`
-- **Server:** collection, scoring, snapshots, claims — `SUPABASE_SERVICE_ROLE_KEY`
-- **RLS:** reward tables have no anon/authenticated write policies (step 4 above)
-
-See also [`docs/SUPABASE_RLS.md`](docs/SUPABASE_RLS.md).
-
-## Running locally
-
-```bash
-npm install
-npm run dev
-```
-
-Copy `.env.example` to `.env.local` (X auth, Supabase, `TXODDS_API_TOKEN`, Solana RPC and signer keys). No secrets are committed.
-
-Refresh live usage stats:
-
-```bash
-npx tsx scripts/query-live-usage.ts
-```
-
-## Devnet payout demo
-
-Requires `SOLANA_RPC_URL` containing `devnet`, operator/signer keys, and a funded rewards vault.
+Requires `SOLANA_RPC_URL` pointing at devnet, operator/signer keys, and a funded rewards vault.
 
 ```bash
 npm run demo:epoch -- --pot 2000
 npm run e2e:solana-claim -- <epochId>
 ```
 
-`open:solana-epoch` opens an on-chain epoch manually (positional args, no devnet guard).
+`open:solana-epoch` opens an epoch on-chain manually (positional args, no devnet guard).
 
 Goal and proof maintenance:
 
@@ -236,9 +190,31 @@ npm run backfill:proof
 npx tsx scripts/verify-proof.ts <txFixtureId>
 ```
 
+### Database setup
+
+Apply the migrations in filename order on a fresh Supabase project (Dashboard → SQL Editor), starting from `supabase/schema.sql`, then everything under `supabase/migrations/`.
+
+The match-proof migrations can also be applied with `npx tsx scripts/apply-match-proofs-migrations.ts` when `DATABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is set. The app and migration scripts require `SUPABASE_SERVICE_ROLE_KEY`.
+
 ## Demo video
 
-[`docs/DEMO_VIDEO_SCRIPT.md`](docs/DEMO_VIDEO_SCRIPT.md) — ~3–4 minute walkthrough.
+Watch the walkthrough on YouTube: [https://www.youtube.com/watch?v=VF-6Uia6n-0](https://www.youtube.com/watch?v=VF-6Uia6n-0)
+
+## Honesty & security
+
+- **Devnet only.** It runs on a test network, not mainnet, and the USDC is test-USDC, not real money.
+- **Not audited.** An independent security audit is the required next step before any real funds are handled.
+- **The browser never writes to the database directly.** All reads go through `/api/…` routes (`Browser → fetch("/api/…") → Next`). Client routes are read-only (`/api/matches`, `/api/leaderboard`, `/api/me/leaderboard-stats`); collection, scoring, snapshots, and claims run server-side with `SUPABASE_SERVICE_ROLE_KEY`.
+- **Reward tables are locked down.** They have no anon/authenticated write policies via RLS. See [`docs/SUPABASE_RLS.md`](docs/SUPABASE_RLS.md).
+- **Payout vouchers are signed on the server** and can each be claimed only once.
+
+This project was designed and led by the builder, and built hands-on with AI development tools — normal for a project at this stage.
+
+## Next steps
+
+- Independent security audit
+- Mainnet deployment and real-money licensing
+- More TxLINE data types and match coverage
 
 ## License
 
